@@ -31,6 +31,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -78,6 +79,7 @@ _AbsPathFilter(const std::string& path)
     return path;
 #endif
 }
+
 }
 
 static bool
@@ -88,8 +90,89 @@ TestArchAbsPath()
     ARCH_AXIOM(_AbsPathFilter(ArchAbsPath("/foo/bar")) == "/foo/bar");
     ARCH_AXIOM(_AbsPathFilter(ArchAbsPath("/foo/bar/../baz")) == "/foo/baz");
 
+    ARCH_AXIOM(_AbsPathFilter(ArchAbsPath("/foo/bar/../baz")) == "/foo/baz");
+
     return true;
 }
+
+#ifdef ARCH_OS_WINDOWS
+
+namespace {
+
+std::string _CreateLongWindowsPath(bool dir, bool dotted) {
+    std::string p = ArchGetTmpDir();
+    for (size_t i = 0; i < 20; ++i)
+        p += "\\abcdefghijklmnopqrs";
+    if (dotted)
+        p += "\\.\\..\\abcdefghijklmnopqrs";
+    if (!dir)
+        p += "\\foo.bar";
+    return p;
+}
+
+//void _CreateDirectories(std::string path) {
+//    std::string::size_type pos = 0;
+//    while (pos < path.size()) {
+//        pos = path.find_first_of('\\');
+//        std::string curDir = path.substr(0, pos);
+//        CreateDirectoryW
+//    }
+//}
+
+} // namespace
+
+static bool TestLongPaths()
+{
+    const std::string longFilePathDotted = _CreateLongWindowsPath(false, true);
+    const std::string longFilePath = _CreateLongWindowsPath(false, false);
+    const std::string longFilePathForwardSlash = [&longFilePath]() {
+        std::string t = longFilePath;
+        std::replace(t.begin(), t.end(), '\\', '/');
+        return t;
+    }();
+
+    {
+        const std::string actual = ArchNormPath(longFilePathDotted, false);
+        const std::string expected = [&longFilePathForwardSlash]() {
+            std::string e = longFilePathForwardSlash;
+            e[0] = std::tolower(e[0]);
+            return e;
+        }();
+        ARCH_AXIOM(actual == expected);
+    }
+    {
+        const std::string actual = ArchAbsPath(longFilePathDotted);
+        const std::string expected = longFilePath;
+        ARCH_AXIOM(actual == expected);
+    }
+    {
+        const std::string longDirPath = _CreateLongWindowsPath(true, false);
+        const std::string longTmpDirPath = ArchMakeTmpSubdir(longDirPath, "foo");
+        const std::string longTmpFilePath = longTmpDirPath + '\\' + "foo.bar";
+
+//        FILE *file;
+//        ARCH_AXIOM((file = ArchOpenFile(longTmpFilePath.c_str(), "wb")) != NULL);
+    }
+
+    {
+//        ARCH_AXIOM(ArchRmDir(longTmpDirPath.c_str()) != 0);
+    }
+
+    // ArchMakeTmpSubdir
+    //ARCH_AXIOM
+
+    // ArchMakeTmpFile
+    // ArchFileAccess
+    // ArchReadLink
+    // ArchGetModificationTime
+    // ArchGetStatMode
+    // ArchGetFileLength
+
+
+    return true;
+}
+
+#endif
 
 int main()
 {
@@ -151,6 +234,10 @@ int main()
     // Test other utilities
     TestArchNormPath();
     TestArchAbsPath();
+
+#ifdef ARCH_OS_WINDOWS
+    TestLongPaths();
+#endif
 
     return 0;
 }
