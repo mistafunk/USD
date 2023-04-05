@@ -44,6 +44,8 @@ pxr_toplevel_prologue()
 add_subdirectory(pxr)
 add_subdirectory(extras)
 
+add_subdirectory(third_party/cityengine)
+
 if (PXR_BUILD_PRMAN_PLUGIN)
     set(prmanPluginPath "third_party/renderman-${RENDERMAN_VERSION_MAJOR}")
 
