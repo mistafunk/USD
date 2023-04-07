@@ -59,7 +59,7 @@ endif()
 if(PXR_ENABLE_PYTHON_SUPPORT)
     # 1--Python.
     macro(setup_python_package package)
-        find_package(${package} COMPONENTS Interpreter Development REQUIRED)
+        find_package(${package} 3.9 EXACT COMPONENTS Interpreter Development REQUIRED)
 
         # Set up versionless variables so that downstream libraries don't
         # have to worry about which Python version is being used.
