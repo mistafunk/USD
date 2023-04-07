@@ -1,0 +1,22 @@
+{
+    "Plugins": [
+        {
+            "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@",
+            "Name": "hdGpPrt",
+            "ResourcePath": "@PLUG_INFO_RESOURCE_PATH@",
+            "Root": "@PLUG_INFO_ROOT@", 
+            "Type": "library",
+            "Info": {
+                "Types": {
+                    "PrtProceduralPlugin": {
+                        "bases": [
+                            "HdGpGenerativeProceduralPlugin"
+                        ], 
+                        "displayName": "PrtProcedural",
+                        "priority" : 0
+                    }
+                }
+            }
+        }
+    ]
+}
