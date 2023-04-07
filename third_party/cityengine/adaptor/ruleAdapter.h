@@ -9,15 +9,15 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 class PrtRuleAssignment;
 
-class PrtPrimAdaptor : public UsdImagingGprimAdapter {
+class UsdPrtImagingRuleAdapter : public UsdImagingGprimAdapter {
 public:
     typedef UsdImagingGprimAdapter BaseAdapter;
 
-    PrtPrimAdaptor() : UsdImagingGprimAdapter() {
+    UsdPrtImagingRuleAdapter() : UsdImagingGprimAdapter() {
     }
 
     USDIMAGING_API
-    virtual ~PrtPrimAdaptor() = delete;
+    virtual ~UsdPrtImagingRuleAdapter() = default;
 
     // ---------------------------------------------------------------------- //
     /// \name Scene Index Support
