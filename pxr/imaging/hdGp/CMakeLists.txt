@@ -12,6 +12,9 @@ pxr_library(hdGp
     INCLUDE_DIRS
         ${TBB_INCLUDE_DIRS}
 
+    PUBLIC_HEADERS
+        api.h
+
     PUBLIC_CLASSES
         generativeProcedural
         generativeProceduralPlugin
