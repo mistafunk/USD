@@ -13,8 +13,10 @@ pxr_library(hdGpPrt
     INCLUDE_DIRS
         ${TBB_INCLUDE_DIRS}
 
-    PUBLIC_CLASSES
-        prtProcedural
+	CPPFILES
+        prtProcedural.cpp
+		prtContext.cpp
+		prtUtilities.cpp
 
     RESOURCE_FILES
         plugInfo.json
@@ -22,3 +24,5 @@ pxr_library(hdGpPrt
 
 include(prt.cmake)
 prt_add_dependency(hdGpPrt)
+
+set_target_properties(hdGpPrt PROPERTIES CXX_STANDARD 17)

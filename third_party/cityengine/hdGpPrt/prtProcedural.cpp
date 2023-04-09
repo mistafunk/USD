@@ -1,6 +1,7 @@
-#include "prtProcedural.h"
+#include "prtContext.h"
 
 #include "pxr/base/tf/diagnostic.h"
+#include "pxr/base/tf/fileUtils.h"
 
 #include "pxr/imaging/hdGp/generativeProceduralPlugin.h"
 #include "pxr/imaging/hdGp/generativeProceduralPluginRegistry.h"
@@ -13,6 +14,38 @@
 #include "pxr/imaging/hd/xformSchema.h"
 
 #include "prt/API.h"
+#include "prt/AttributeMap.h"
+#include "prt/EncoderInfo.h"
+#include "prt/InitialShape.h"
+#include "prt/Object.h"
+#include "prt/OcclusionSet.h"
+#include "prt/RuleFileInfo.h"
+
+#ifdef _WIN32
+// workaround for  "combaseapi.h(229): error C2187: syntax error: 'identifier' was unexpected here" when using
+// /permissive-
+struct IUnknown;
+
+#	include <process.h>
+#	include <windows.h>
+#	include <shellapi.h>
+
+#else
+#	include <cerrno>
+#	include <dlfcn.h>
+#	include <unistd.h>
+#endif
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <ostream>
+#include <string>
+#include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -197,6 +230,11 @@ private:
 
 class PrtProceduralPlugin : public HdGpGenerativeProceduralPlugin {
 public:
+    PrtProceduralPlugin() {
+        if (!PRTContext::get().isAlive()) // this will implicitly load PRT
+            TF_FATAL_ERROR("Unable to load the ArcGIS Procedural Runtime PRT!");
+    }
+
     HdGpGenerativeProcedural *
     Construct(const SdfPath &proceduralPrimPath) override {
         return new PrtProcedural(proceduralPrimPath);
