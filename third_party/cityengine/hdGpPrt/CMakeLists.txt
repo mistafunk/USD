@@ -16,9 +16,6 @@ pxr_library(hdGpPrt
     PUBLIC_CLASSES
         prtProcedural
 
-    PYTHON_CPPFILES
-        moduleDeps.cpp
-
     RESOURCE_FILES
         plugInfo.json
 )
