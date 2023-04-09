@@ -40,7 +40,7 @@ TF_REGISTRY_FUNCTION(TfType)
     HdSceneIndexPluginRegistry::Define<HdGpSceneIndexPlugin>();
 }
 
-TF_DEFINE_ENV_SETTING(HDGP_INCLUDE_DEFAULT_RESOLVER, false,
+TF_DEFINE_ENV_SETTING(HDGP_INCLUDE_DEFAULT_RESOLVER, true,
     "Register a default hydra generative procedural resolver to the scene index"
     " chain.");
 
