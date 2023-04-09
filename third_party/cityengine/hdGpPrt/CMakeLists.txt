@@ -19,3 +19,6 @@ pxr_library(hdGpPrt
     RESOURCE_FILES
         plugInfo.json
 )
+
+include(prt.cmake)
+prt_add_dependency(hdGpPrt)

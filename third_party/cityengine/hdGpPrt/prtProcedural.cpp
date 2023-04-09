@@ -12,6 +12,8 @@
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/xformSchema.h"
 
+#include "prt/API.h"
+
 PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace {
@@ -67,6 +69,8 @@ public:
         }
         if (sourceMeshes.empty())
             return result;
+
+        TF_STATUS("Using PRT version %s%", prt::getVersion()->mVersion);
 
         // TODO: convert source meshes into prt initial shapes
 
