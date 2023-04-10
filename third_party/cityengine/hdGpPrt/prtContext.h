@@ -19,9 +19,9 @@
 
 #pragma once
 
-//#include "utils/AssetCache.h"
+// #include "utils/AssetCache.h"
 #include "prtLogHandler.h"
-//#include "utils/ResolveMapCache.h"
+// #include "utils/ResolveMapCache.h"
 #include "prtUtilities.h"
 
 #include <filesystem>
@@ -34,27 +34,22 @@ using PRTContextUPtr = std::unique_ptr<PRTContext>;
 
 class PRTContext final {
 public:
-    static PRTContext &get();
+//	static PRTContext& get();
 
-    explicit PRTContext(const std::vector<std::wstring> &addExtDirs = {});
+	explicit PRTContext(const std::vector<std::wstring>& addExtDirs = {});
+	PRTContext(const PRTContext&) = delete;
+	PRTContext(PRTContext&&) = delete;
+	PRTContext& operator=(PRTContext&) = delete;
+	PRTContext& operator=(PRTContext&&) = delete;
+	~PRTContext();
 
-    PRTContext(const PRTContext &) = delete;
+	bool isAlive() const;
 
-    PRTContext(PRTContext &&) = delete;
-
-    PRTContext &operator=(PRTContext &) = delete;
-
-    PRTContext &operator=(PRTContext &&) = delete;
-
-    ~PRTContext();
-
-    bool isAlive() const;
-
-    const std::filesystem::path mPluginRootPath;
-//	AssetCache mAssetCache;
-    ObjectUPtr mPRTHandle;
-    CacheObjectUPtr mPRTCache;
-    logging::LogHandlerUPtr mLogHandler;
-    prt::FileLogHandler *mFileLogHandler = nullptr;
-//	ResolveMapCacheUPtr mResolveMapCache;
+	const std::filesystem::path mPluginRootPath;
+	//	AssetCache mAssetCache;
+	ObjectUPtr mPRTHandle;
+	CacheObjectUPtr mPRTCache;
+	logging::LogHandlerUPtr mLogHandler;
+	prt::FileLogHandler* mFileLogHandler = nullptr;
+	//	ResolveMapCacheUPtr mResolveMapCache;
 };

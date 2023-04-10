@@ -1,4 +1,6 @@
+#include "prtCallbacks.h"
 #include "prtContext.h"
+#include "prtHydraEncoder.h"
 
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/fileUtils.h"
@@ -21,20 +23,7 @@
 #include "prt/OcclusionSet.h"
 #include "prt/RuleFileInfo.h"
 
-#ifdef _WIN32
-// workaround for  "combaseapi.h(229): error C2187: syntax error: 'identifier' was unexpected here" when using
-// /permissive-
-struct IUnknown;
-
-#	include <process.h>
-#	include <windows.h>
-#	include <shellapi.h>
-
-#else
-#	include <cerrno>
-#	include <dlfcn.h>
-#	include <unistd.h>
-#endif
+#include "prtx/ExtensionManager.h"
 
 #include <algorithm>
 #include <array>
@@ -43,6 +32,7 @@ struct IUnknown;
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -51,197 +41,233 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace {
 
-}
+constexpr const wchar_t* ENC_ID_ATTR_EVAL = L"com.esri.prt.core.AttributeEvalEncoder";
+constexpr const wchar_t* ENC_ID_CGA_ERROR = L"com.esri.prt.core.CGAErrorEncoder";
+constexpr const wchar_t* ENC_ID_CGA_PRINT = L"com.esri.prt.core.CGAPrintEncoder";
+
+std::unique_ptr<PRTContext> prtContext; // TODO: avoid global variable
+
+} // namespace
 
 TF_DEFINE_PRIVATE_TOKENS(prtTokens, (sourceMeshPath)(rpkPath));
 
 class PrtProcedural : public HdGpGenerativeProcedural {
 public:
-    PrtProcedural(const SdfPath &proceduralPrimPath)
-            : HdGpGenerativeProcedural(proceduralPrimPath) {
-    }
+	PrtProcedural(const SdfPath& proceduralPrimPath)
+	    : HdGpGenerativeProcedural(proceduralPrimPath) {}
 
-    virtual ~PrtProcedural() = default;
+	virtual ~PrtProcedural() = default;
 
-    DependencyMap
-    UpdateDependencies(const HdSceneIndexBaseRefPtr &inputScene) override {
-        DependencyMap result;
-        _Args args = _GetArgs(inputScene);
-        if (!args.sourceMeshPath.IsEmpty()) {
-            result[args.sourceMeshPath] = HdPrimvarsSchema::GetDefaultLocator();
-        }
-        return result;
-    }
+	DependencyMap UpdateDependencies(const HdSceneIndexBaseRefPtr& inputScene) override {
+		DependencyMap result;
+		_Args args = _GetArgs(inputScene);
+		if (!args.sourceMeshPath.IsEmpty()) {
+			result[args.sourceMeshPath] = HdPrimvarsSchema::GetDefaultLocator();
+		}
+		return result;
+	}
 
-    ChildPrimTypeMap Update(
-            const HdSceneIndexBaseRefPtr &inputScene,
-            const ChildPrimTypeMap &previousResult,
-            const DependencyMap &dirtiedDependencies,
-            HdSceneIndexObserver::DirtiedPrimEntries *outputDirtiedPrims) override {
-        TF_STATUS("PrtProcedural::Update");
+	ChildPrimTypeMap Update(const HdSceneIndexBaseRefPtr& inputScene,
+	                        const ChildPrimTypeMap& previousResult,
+	                        const DependencyMap& dirtiedDependencies,
+	                        HdSceneIndexObserver::DirtiedPrimEntries* outputDirtiedPrims) override {
+		ChildPrimTypeMap result;
 
-        ChildPrimTypeMap result;
+		_Args args = _GetArgs(inputScene);
+		TF_STATUS("PrtProcedural::Update:\n   source mesh: %s%\n   rpk: %s%",
+		          args.sourceMeshPath.GetText(), args.rpkPath.GetResolvedPath().c_str());
 
-        _Args args = _GetArgs(inputScene);
-        if (args.sourceMeshPath.IsEmpty()) {
-            return result;
-        }
+		if (args.sourceMeshPath.IsEmpty()) {
+			mGeneratedDataSourceHandle.reset();
+			return result;
+		}
 
-        // TODO: check if any work is needed at all compared to previous run
-        //       see pxr/usdImaging/usdImagingGL/testenv/TestUsdImagingGLHdGpProcedurals.cpp
+		HdSceneIndexPrim sourceMeshPrim = inputScene->GetPrim(args.sourceMeshPath);
+		if (sourceMeshPrim.primType != HdPrimTypeTokens->mesh) {
+			mGeneratedDataSourceHandle.reset();
+			return result;
+		}
 
-        // collect source meshes for PRT initial shapes
-        std::vector<std::pair<HdMeshSchema, TfToken>> sourceMeshes;
-        HdSceneIndexPrim sourceMeshPrim = inputScene->GetPrim(args.sourceMeshPath);
-        if (sourceMeshPrim.primType == HdPrimTypeTokens->mesh) {
-            TF_STATUS("source mesh path: %s%", args.sourceMeshPath.GetText());
-            HdMeshSchema mesh = HdMeshSchema::GetFromParent(sourceMeshPrim.dataSource);
-            if (mesh.IsDefined()) {
-                sourceMeshes.emplace_back(mesh, args.sourceMeshPath.GetNameToken());
-            }
-        }
-        if (sourceMeshes.empty())
-            return result;
+//		if (mGeneratedDataSourceHandle) {
+//			if (dirtiedDependencies.find())
+//		}
 
-        TF_STATUS("Using PRT version %s%", prt::getVersion()->mVersion);
+		TF_STATUS("source mesh path: %s%", args.sourceMeshPath.GetText());
+		HdMeshSchema sourceMeshSchema = HdMeshSchema::GetFromParent(sourceMeshPrim.dataSource);
+		if (!sourceMeshSchema)
+			return result;
+		TfToken sourcePrimName = args.sourceMeshPath.GetNameToken();
 
-        // TODO: convert source meshes into prt initial shapes
+		HdPrimvarsSchema primvarsSchema =
+		        HdPrimvarsSchema::GetFromParent(sourceMeshPrim.dataSource);
+		HdPrimvarSchema pointsPrimvarSchema =
+		        primvarsSchema.GetPrimvar(HdPrimvarsSchemaTokens->points);
+		HdSampledDataSourceHandle pointsHandle = pointsPrimvarSchema.GetPrimvarValue();
+		if (!pointsHandle)
+			return result;
+		VtValue pointsValue = pointsHandle->GetValue(0.0f);
+		if (!pointsValue.IsHolding<VtArray<GfVec3f>>())
+			return result;
+		const VtArray<GfVec3f>& points = pointsValue.UncheckedGet<VtArray<GfVec3f>>();
 
-        // TODO: setup PRT callbacks and encoder options
+		HdMeshTopologySchema topo = sourceMeshSchema.GetTopology();
+		VtArray<int> faceCounts = topo.GetFaceVertexCounts()->GetTypedValue(0);
+		VtArray<int> faceVertexIndices = topo.GetFaceVertexIndices()->GetTypedValue(0);
 
-        // TODO: run prt::generate
+		std::vector<double> prtPoints;
+		prtPoints.reserve(points.size() * 3);
+		for (const GfVec3f& v : points) {
+			prtPoints.push_back(v[0]);
+			prtPoints.push_back(v[1]);
+			prtPoints.push_back(v[2]);
+		}
 
-        // TODO: convert PRT geometry in callbacks to Hd data sources
+		// TODO: avoid these copies
+		std::vector<uint32_t> prtIndices(faceVertexIndices.begin(), faceVertexIndices.end());
+		std::vector<uint32_t> prtCounts(faceCounts.begin(), faceCounts.end());
 
-        // TODO: create one child mesh prim per source mesh
-        SdfPath prtPrimPath = _GetProceduralPrimPath();
-        for (auto mesh: sourceMeshes) { // TODO: use successfully generated PRT models
-            SdfPath prtChildPath = prtPrimPath.AppendChild(mesh.second);
-            result[prtChildPath] = HdPrimTypeTokens->mesh;
-        }
-        return result;
-    }
+		InitialShapeBuilderUPtr isb(prt::InitialShapeBuilder::create());
+		const prt::Status setGeoStatus =
+		        isb->setGeometry(prtPoints.data(), prtPoints.size(), prtIndices.data(),
+		                         prtIndices.size(), prtCounts.data(), prtCounts.size());
+		if (setGeoStatus != prt::STATUS_OK) {
+			LOG_ERR << "InitialShapeBuilder setGeometry failed with status = "
+			        << prt::getStatusDescription(setGeoStatus);
+			return result;
+		}
 
-    // called concurrently from multiple threads
-    HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr &inputScene,
-                                  const SdfPath &childPrimPath) override {
-        TF_STATUS("PrtProcedural::GetChildPrim");
+		const std::wstring rpkURI = prtu::toFileURIFromUtf8String(args.rpkPath.GetResolvedPath());
+		ResolveMapUPtr resolveMap(prt::createResolveMap(rpkURI.c_str(), nullptr));
 
-        HdSceneIndexPrim result;
+		const std::wstring ruleFileKey = prtu::getRuleFileEntry(*resolveMap);
+		const wchar_t* resolveMapUri = resolveMap->getString(ruleFileKey.c_str());
 
-        result.primType = HdPrimTypeTokens->mesh;
-        result.dataSource = HdRetainedContainerDataSource::New(
-                HdMeshSchemaTokens->mesh, _GetChildMeshDs(),
-                HdPrimvarsSchemaTokens->primvars, _GetChildPrimvarsDs());
+		RuleFileInfoUPtr ruleFileInfo(prt::createRuleFileInfo(resolveMapUri));
+		const std::wstring startRule = prtu::detectStartRule(ruleFileInfo);
 
-        return result;
-    }
+
+		HdSceneIndexPrim myPrim = inputScene->GetPrim(_GetProceduralPrimPath());
+		HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(myPrim.dataSource);
+		AttributeMapBuilderUPtr amb(prt::AttributeMapBuilder::create());
+		for (const auto& primvarName: primvars.GetPrimvarNames()) {
+			HdPrimvarSchema primvarSchema = primvars.GetPrimvar(primvarName);
+			HdSampledDataSourceHandle dataSourceHandle = primvarSchema.GetPrimvarValue();
+			VtValue value = dataSourceHandle->GetValue(0);
+			LOG_DBG << "attr: " << primvarName.GetString() << ", type: " <<	value.GetTypeName();
+			if (value.IsHolding<float>()) {
+				LOG_DBG << "    value: " << value.UncheckedGet<float>();
+				amb->setFloat(prtu::toUTF16FromUTF8(primvarName.GetString()).c_str(), value.UncheckedGet<float>());
+			}
+		}
+		AttributeMapUPtr initialShapeAttributes(amb->createAttributeMapAndReset());
+		isb->setAttributes(ruleFileKey.c_str(), startRule.c_str(), 0, L"sourceMesh",
+		                   initialShapeAttributes.get(), resolveMap.get());
+
+		InitialShapeUPtr initialShape(isb->createInitialShapeAndReset());
+
+		AttributeMapUPtr hydraEncOpts = prtu::createValidatedOptions(ENC_ID_HYDRA);
+		const std::vector<const wchar_t*> encIDs = {ENC_ID_HYDRA};
+		const AttributeMapNOPtrVector encOpts = {hydraEncOpts.get()};
+		assert(encIDs.size() == encOpts.size());
+
+		std::unique_ptr<PrtCallbacks> outputHandler(
+		        new PrtCallbacks(mGeneratedDataSourceHandle, amb));
+		InitialShapeNOPtrVector initialShapes = {initialShape.get()};
+		const prt::Status generateStatus = prt::generate(
+		        initialShapes.data(), initialShapes.size(), nullptr, encIDs.data(), encIDs.size(),
+		        encOpts.data(), outputHandler.get(), prtContext->mPRTCache.get(), nullptr);
+		if (generateStatus != prt::STATUS_OK) {
+			LOG_ERR << "PRT generate failed with status = "
+			        << prt::getStatusDescription(generateStatus);
+			return result;
+		}
+
+		SdfPath prtPrimPath = _GetProceduralPrimPath();
+		SdfPath prtChildPath = prtPrimPath.AppendChild(sourcePrimName);
+		result[prtChildPath] = HdPrimTypeTokens->mesh;
+
+		if (outputDirtiedPrims != nullptr) {
+			outputDirtiedPrims->emplace_back(prtChildPath, HdMeshSchema::GetDefaultLocator());
+		}
+
+		return result;
+	}
+
+	// called concurrently from multiple threads
+	HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr& inputScene,
+	                              const SdfPath& childPrimPath) override {
+		HdSceneIndexPrim result;
+		if (mGeneratedDataSourceHandle) {
+			result.primType = HdPrimTypeTokens->mesh;
+			result.dataSource = mGeneratedDataSourceHandle;
+		}
+		return result;
+	}
 
 private:
-    struct _Args {
-        _Args() = default;
+	HdContainerDataSourceHandle mGeneratedDataSourceHandle;
 
-        SdfPath sourceMeshPath;
-        std::string rpkPath; // TODO: should be an asset path
-    };
+	struct _Args {
+		_Args() = default;
 
-    _Args _GetArgs(const HdSceneIndexBaseRefPtr &inputScene) {
-        _Args result;
+		SdfPath sourceMeshPath;
+		SdfAssetPath rpkPath;
+	};
 
-        HdSceneIndexPrim myPrim = inputScene->GetPrim(_GetProceduralPrimPath());
+	_Args _GetArgs(const HdSceneIndexBaseRefPtr& inputScene) {
+		_Args result;
 
-        HdPrimvarsSchema primvars =
-                HdPrimvarsSchema::GetFromParent(myPrim.dataSource);
+		HdSceneIndexPrim myPrim = inputScene->GetPrim(_GetProceduralPrimPath());
 
-        if (HdSampledDataSourceHandle sourceMeshDs =
-                primvars.GetPrimvar(prtTokens->sourceMeshPath).GetPrimvarValue()) {
-            VtValue v = sourceMeshDs->GetValue(0.0f);
+		HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(myPrim.dataSource);
 
-            if (v.IsHolding<VtArray<SdfPath>>()) {
-                VtArray<SdfPath> a = v.UncheckedGet<VtArray<SdfPath>>();
-                if (a.size() == 1) {
-                    result.sourceMeshPath = a[0];
-                }
-            }
-        }
+		if (HdSampledDataSourceHandle sourceMeshDs =
+		            primvars.GetPrimvar(prtTokens->sourceMeshPath).GetPrimvarValue()) {
+			VtValue v = sourceMeshDs->GetValue(0.0f);
 
-        if (HdSampledDataSourceHandle ds =
-                primvars.GetPrimvar(prtTokens->rpkPath).GetPrimvarValue()) {
-            VtValue v = ds->GetValue(0.0f);
-            if (v.IsHolding<std::string>()) {
-                result.rpkPath = v.UncheckedGet<std::string>();
-            }
-        }
+			if (v.IsHolding<VtArray<SdfPath>>()) {
+				VtArray<SdfPath> a = v.UncheckedGet<VtArray<SdfPath>>();
+				if (a.size() == 1) {
+					result.sourceMeshPath = a[0];
+				}
+			}
+		}
 
-        return result;
-    }
+		if (HdSampledDataSourceHandle ds =
+		            primvars.GetPrimvar(prtTokens->rpkPath).GetPrimvarValue()) {
+			VtValue v = ds->GetValue(0.0f);
+			if (v.IsHolding<SdfAssetPath>()) {
+				result.rpkPath = v.UncheckedGet<SdfAssetPath>();
+			}
+		}
 
-    HdContainerDataSourceHandle _GetChildMeshDs() {
-        static const VtIntArray faceVertexCounts = {4, 4, 4, 4, 4, 4};
-
-        static const VtIntArray faceVertexIndices = {
-                0, 1, 3, 2, 2, 3, 5, 4, 4, 5, 7, 6, 6, 7, 1, 0, 1, 7, 5, 3, 6, 0, 2, 4};
-
-        using _IntArrayDs = HdRetainedTypedSampledDataSource<VtIntArray>;
-
-        static const _IntArrayDs::Handle fvcDs = _IntArrayDs::New(faceVertexCounts);
-
-        static const _IntArrayDs::Handle fviDs =
-                _IntArrayDs::New(faceVertexIndices);
-
-        static const HdContainerDataSourceHandle meshDs =
-                HdMeshSchema::Builder()
-                        .SetTopology(HdMeshTopologySchema::Builder()
-                                             .SetFaceVertexCounts(fvcDs)
-                                             .SetFaceVertexIndices(fviDs)
-                                             .Build())
-                        .Build();
-
-        return meshDs;
-    }
-
-    HdContainerDataSourceHandle _GetChildPrimvarsDs() {
-        static const VtArray<GfVec3f> points = {
-                {-0.1f, -0.1f, 0.1f},
-                {0.1f,  -0.1f, 0.1f},
-                {-0.1f, 0.1f,  0.1f},
-                {0.1f,  0.1f,  0.1f},
-                {-0.1f, 0.1f,  -0.1f},
-                {0.1f,  0.1f,  -0.1f},
-                {-0.1f, -0.1f, -0.1f},
-                {0.1f,  -0.1f, -0.1f}};
-
-        using _PointArrayDs = HdRetainedTypedSampledDataSource<VtArray<GfVec3f>>;
-
-        static const HdContainerDataSourceHandle primvarsDs =
-                HdRetainedContainerDataSource::New(
-                        HdPrimvarsSchemaTokens->points,
-                        HdPrimvarSchema::Builder()
-                                .SetPrimvarValue(_PointArrayDs::New(points))
-                                .SetInterpolation(HdPrimvarSchema::BuildInterpolationDataSource(
-                                        HdPrimvarSchemaTokens->vertex))
-                                .SetRole(HdPrimvarSchema::BuildRoleDataSource(
-                                        HdPrimvarSchemaTokens->point))
-                                .Build());
-
-        return primvarsDs;
-    }
+		return result;
+	}
 };
 
 class PrtProceduralPlugin : public HdGpGenerativeProceduralPlugin {
 public:
-    PrtProceduralPlugin() {
-        if (!PRTContext::get().isAlive()) // this will implicitly load PRT
-            TF_FATAL_ERROR("Unable to load the ArcGIS Procedural Runtime PRT!");
-    }
+	PrtProceduralPlugin() {
+		prtContext = std::make_unique<PRTContext>();
+		if (prtContext && prtContext->isAlive()) {
+			// shortcut: we avoid creating an extra dll for the encoder
+			prtx::ExtensionManager::instance().addFactory(HydraEncoderFactory::createInstance());
+			LOG_INF << "Registered Hydra Encoder.";
+		}
+		else
+			LOG_ERR << "Unable to load the ArcGIS Procedural Runtime PRT!";
+	}
 
-    HdGpGenerativeProcedural *
-    Construct(const SdfPath &proceduralPrimPath) override {
-        return new PrtProcedural(proceduralPrimPath);
-    }
+	~PrtProceduralPlugin() override {
+		prtContext.reset();
+	}
+
+	HdGpGenerativeProcedural* Construct(const SdfPath& proceduralPrimPath) override {
+		return new PrtProcedural(proceduralPrimPath);
+	}
 };
 
 TF_REGISTRY_FUNCTION(TfType) {
-    HdGpGenerativeProceduralPluginRegistry::Define<
-            PrtProceduralPlugin, HdGpGenerativeProceduralPlugin>();
+	HdGpGenerativeProceduralPluginRegistry::Define<PrtProceduralPlugin,
+	                                               HdGpGenerativeProceduralPlugin>();
 }

@@ -40,12 +40,12 @@
 #include <vector>
 
 // PRT version >= VERSION_MAJOR.VERSION_MINOR
-#define PRT_VERSION_GTE(VERSION_MAJOR, VERSION_MINOR)                                                                  \
-	((PRT_VERSION_MAJOR >= (VERSION_MAJOR)) &&                                                                         \
+#define PRT_VERSION_GTE(VERSION_MAJOR, VERSION_MINOR)                                              \
+	((PRT_VERSION_MAJOR >= (VERSION_MAJOR)) &&                                                     \
 	 ((PRT_VERSION_MAJOR > (VERSION_MAJOR)) || (PRT_VERSION_MINOR >= (VERSION_MINOR))))
 // PRT version <= VERSION_MAJOR.VERSION_MINOR
-#define PRT_VERSION_LTE(VERSION_MAJOR, VERSION_MINOR)                                                                  \
-	((PRT_VERSION_MAJOR <= (VERSION_MAJOR)) &&                                                                         \
+#define PRT_VERSION_LTE(VERSION_MAJOR, VERSION_MINOR)                                              \
+	((PRT_VERSION_MAJOR <= (VERSION_MAJOR)) &&                                                     \
 	 ((PRT_VERSION_MAJOR < (VERSION_MAJOR)) || (PRT_VERSION_MINOR <= (VERSION_MINOR))))
 
 #if defined(_MSC_VER) && (_MSC_VER <= 1700)
@@ -75,7 +75,7 @@ using ResolveMapBuilderUPtr = std::unique_ptr<prt::ResolveMapBuilder, PRTDestroy
 using RuleFileInfoUPtr = std::unique_ptr<const prt::RuleFileInfo, PRTDestroyer>;
 using EncoderInfoUPtr = std::unique_ptr<const prt::EncoderInfo, PRTDestroyer>;
 using OcclusionSetUPtr = std::unique_ptr<prt::OcclusionSet, PRTDestroyer>;
-using ResolveMapSPtr = std::shared_ptr<const prt::ResolveMap>;
+using ResolveMapUPtr = std::unique_ptr<const prt::ResolveMap, PRTDestroyer>;
 
 namespace prtu {
 
@@ -91,11 +91,13 @@ std::vector<const C*> toPtrVec(const std::vector<std::basic_string<C>>& sv) {
 template <typename C, typename D>
 std::vector<const C*> toPtrVec(const std::vector<std::unique_ptr<C, D>>& sv) {
 	std::vector<const C*> pv(sv.size());
-	std::transform(sv.begin(), sv.end(), pv.begin(), [](const std::unique_ptr<C, D>& s) { return s.get(); });
+	std::transform(sv.begin(), sv.end(), pv.begin(),
+	               [](const std::unique_ptr<C, D>& s) { return s.get(); });
 	return pv;
 }
 
-//hash_combine function from boost library: https://www.boost.org/doc/libs/1_73_0/boost/container_hash/hash.hpp
+// hash_combine function from boost library:
+// https://www.boost.org/doc/libs/1_73_0/boost/container_hash/hash.hpp
 template <class SizeT>
 inline void hash_combine(SizeT& seed, SizeT value) {
 	seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -134,6 +136,7 @@ std::wstring toUTF16FromUTF8(const std::string& u8String);
 std::string toUTF8FromUTF16(const std::wstring& u16String);
 
 std::wstring toFileURI(const std::wstring& p);
+std::wstring toFileURIFromUtf8String(const std::string& p);
 std::string percentEncode(const std::string& utf8String);
 
 std::string objectToXML(prt::Object const* obj);
@@ -146,13 +149,14 @@ std::string objectToXML(std::unique_ptr<T, PRTDestroyer>& ptr) {
 	return objectToXML(ptr.get());
 }
 
-AttributeMapUPtr createValidatedOptions(const wchar_t* encID, const prt::AttributeMap* unvalidatedOptions = nullptr);
+AttributeMapUPtr createValidatedOptions(const wchar_t* encID,
+                                        const prt::AttributeMap* unvalidatedOptions = nullptr);
 
-inline std::wstring getRuleFileEntry(ResolveMapSPtr resolveMap) {
+inline std::wstring getRuleFileEntry(const prt::ResolveMap& resolveMap) {
 	const std::wstring sCGB(L".cgb");
 
 	size_t nKeys;
-	wchar_t const* const* keys = resolveMap->getKeys(&nKeys);
+	wchar_t const* const* keys = resolveMap.getKeys(&nKeys);
 	for (size_t k = 0; k < nKeys; k++) {
 		const std::wstring key(keys[k]);
 		if (std::equal(sCGB.rbegin(), sCGB.rend(), key.rbegin()))
@@ -221,7 +225,7 @@ inline std::wstring getImport(const std::wstring& fqRuleName) {
 void replaceCGACWithCEVersion(std::wstring& errorString);
 
 std::wstring getDuplicateCountSuffix(const std::wstring& name,
-                                                          std::map<std::wstring, int>& duplicateCountMap);
+                                     std::map<std::wstring, int>& duplicateCountMap);
 } // namespace prtu
 
 inline void replaceAllNotOf(std::wstring& s, const std::wstring& allowedChars) {
@@ -246,7 +250,7 @@ inline void replaceAllOf(std::wstring& s, const std::wstring& bannedChars) {
 
 template <typename C>
 void replaceAllSubstrings(std::basic_string<C>& str, const std::basic_string<C>& oldStr,
-                                 const std::basic_string<C>& newStr) {
+                          const std::basic_string<C>& newStr) {
 	typename std::basic_string<C>::size_type pos = 0;
 	while ((pos = str.find(oldStr, pos)) != std::basic_string<C>::npos) {
 		str.replace(pos, oldStr.length(), newStr);
@@ -285,7 +289,8 @@ std::basic_string<C> join(Container const& container, const std::basic_string<C>
 #endif
 
 template <typename M, typename K, typename F, typename... ARGS,
-          std::enable_if_t<std::is_convertible<std::decay_t<K>, typename M::key_type>::value>* = nullptr>
+          std::enable_if_t<std::is_convertible<std::decay_t<K>, typename M::key_type>::value>* =
+                  nullptr>
 auto getCachedValue(M& cache, K&& key, F valueFunc, ARGS&&... valueFuncArgs) {
 	auto p = cache.find(key);
 	if (p == cache.end()) {

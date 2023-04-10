@@ -34,70 +34,69 @@
 
 namespace logging {
 
-    struct Logger {
-    };
+struct Logger {};
 
 // log through the prt logger
-    template<prt::LogLevel L>
-    struct PRTLogger : Logger {
-        PRTLogger() : Logger() {}
+template <prt::LogLevel L>
+struct PRTLogger : Logger {
+	PRTLogger() : Logger() {}
 
-        virtual ~PRTLogger() {
-            prt::log(wstr.str().c_str(), L);
-        }
+	virtual ~PRTLogger() {
+		prt::log(wstr.str().c_str(), L);
+	}
 
-        PRTLogger<L> &operator<<(std::wostream &(*x)(std::wostream &)) {
-            wstr << x;
-            return *this;
-        }
+	PRTLogger<L>& operator<<(std::wostream& (*x)(std::wostream&)) {
+		wstr << x;
+		return *this;
+	}
 
-        PRTLogger<L> &operator<<(const std::string &x) {
-            wstr << prtu::toUTF16FromOSNarrow(x);
-            return *this;
-        }
+	PRTLogger<L>& operator<<(const std::string& x) {
+		wstr << prtu::toUTF16FromOSNarrow(x);
+		return *this;
+	}
 
-        template<typename T>
-        PRTLogger<L> &operator<<(const std::vector<T> &v) {
-            wstr << L"[ ";
-            for (const T &x: v) {
-                wstr << x << L" ";
-            }
-            wstr << L"]";
-            return *this;
-        }
+	template <typename T>
+	PRTLogger<L>& operator<<(const std::vector<T>& v) {
+		wstr << L"[ ";
+		for (const T& x : v) {
+			wstr << x << L" ";
+		}
+		wstr << L"]";
+		return *this;
+	}
 
-        template<typename T>
-        PRTLogger<L> &operator<<(const T &x) {
-            wstr << x;
-            return *this;
-        }
+	template <typename T>
+	PRTLogger<L>& operator<<(const T& x) {
+		wstr << x;
+		return *this;
+	}
 
-        std::wostringstream wstr;
-    };
+	std::wostringstream wstr;
+};
 
-    class LogHandler : public prt::LogHandler {
-    public:
-        void handleLogEvent(const wchar_t *msg, prt::LogLevel) override {
-            std::cout << prtu::toOSNarrowFromUTF16(msg) << std::endl;
-        }
+class LogHandler : public prt::LogHandler {
+public:
+	void handleLogEvent(const wchar_t* msg, prt::LogLevel) override {
+		std::cout << prtu::toOSNarrowFromUTF16(msg) << std::endl;
+	}
 
-        const prt::LogLevel *getLevels(size_t *count) override {
-            *count = prt::LogHandler::ALL_COUNT;
-            return prt::LogHandler::ALL;
-        }
+	const prt::LogLevel* getLevels(size_t* count) override {
+		*count = prt::LogHandler::ALL_COUNT;
+		return prt::LogHandler::ALL;
+	}
 
-        void getFormat(bool *dateTime, bool *level) override {
-            *dateTime = true;
-            *level = true;
-        }
-    };
+	void getFormat(bool* dateTime, bool* level) override {
+		*dateTime = true;
+		*level = true;
+	}
+};
 
-    using LogHandlerUPtr = std::unique_ptr<LogHandler>;
+using LogHandlerUPtr = std::unique_ptr<LogHandler>;
 
 } // namespace logging
 
 // switch logger here
-template<prt::LogLevel L>
+template <prt::LogLevel L>
 using LT = logging::PRTLogger<L>;
 
 using _LOG_DBG = LT<prt::LOG_DEBUG>;

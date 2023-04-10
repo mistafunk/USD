@@ -17,6 +17,8 @@ pxr_library(hdGpPrt
         prtProcedural.cpp
 		prtContext.cpp
 		prtUtilities.cpp
+		prtCallbacks.cpp
+		prtHydraEncoder.cpp
 
     RESOURCE_FILES
         plugInfo.json
