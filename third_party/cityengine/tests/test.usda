@@ -20,7 +20,7 @@ def Scope "World"
     {
         token primvars:hdGp:proceduralType = "PrtProcedural"
         rel primvars:sourceMeshPath = </World/myQuad>
-        string primvars:rpkPath = "./extrude.rpk"
+        asset primvars:rpkPath = @./extrude.rpk@
         float primvars:height = 1.0
     }
 }
