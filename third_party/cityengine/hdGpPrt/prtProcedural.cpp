@@ -2,6 +2,7 @@
 #include "prtContext.h"
 #include "prtHydraEncoder.h"
 
+#include "pxr/base/arch/fileSystem.h"
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/fileUtils.h"
 
@@ -14,6 +15,8 @@
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
 #include "pxr/imaging/hd/xformSchema.h"
+
+#include "pxr/usd/ar/packageUtils.h"
 
 #include "prt/API.h"
 #include "prt/AttributeMap.h"
@@ -136,15 +139,44 @@ public:
 			return result;
 		}
 
-		const std::wstring rpkURI = prtu::toFileURIFromUtf8String(args.rpkPath.GetResolvedPath());
-		ResolveMapUPtr resolveMap(prt::createResolveMap(rpkURI.c_str(), nullptr));
+		const std::string resolvedRpkPath = ArchNormPath(args.rpkPath.GetResolvedPath());
+		LOG_DBG << "resolved RPK path: " << resolvedRpkPath;
+
+		ResolveMapUPtr resolveMap;
+		if (ArIsPackageRelativePath(resolvedRpkPath)) {
+			auto [packagePath, packagedPath] = ArSplitPackageRelativePathOuter(resolvedRpkPath);
+			LOG_DBG << "detected RPK within USDZ package: " << packagePath;
+
+			// workaround for PRT limitation: PRT does not recursively create a resolvemap from RPK within USDZ
+			// TODO: cleanup/cache unpack location
+			std::string tmpDir(ArchGetTmpDir());
+			std::string subTmpDir = ArchMakeTmpSubdir(tmpDir, "hdGpPrt");
+			std::wstring unpackTmpDir = prtu::toUTF16FromUTF8(subTmpDir);
+			const std::wstring packageFileUri = prtu::toFileURIFromUtf8String(packagePath);
+			ResolveMapUPtr packageResolveMap(prt::createResolveMap(packageFileUri.c_str(), unpackTmpDir.c_str()));
+
+			const std::wstring outerUriPath = prtu::toUTF16FromUTF8(packagedPath);
+			resolveMap.reset(prt::createResolveMap(packageResolveMap->getString(outerUriPath.c_str())));
+		}
+		else {
+			const std::wstring rpkURI = prtu::toFileURIFromUtf8String(resolvedRpkPath);
+			resolveMap.reset(prt::createResolveMap(rpkURI.c_str(), nullptr));
+		}
+
+		if (!resolveMap)
+			return result;
+
+		LOG_DBG << prtu::objectToXML(resolveMap.get());
 
 		const std::wstring ruleFileKey = prtu::getRuleFileEntry(*resolveMap);
-		const wchar_t* resolveMapUri = resolveMap->getString(ruleFileKey.c_str());
+		const wchar_t* ruleFileUri = resolveMap->getString(ruleFileKey.c_str());
+		if (ruleFileUri == nullptr) {
+			LOG_ERR << "Unable to find ruleFileUri, aborting.";
+			return result;
+		}
 
-		RuleFileInfoUPtr ruleFileInfo(prt::createRuleFileInfo(resolveMapUri));
+		RuleFileInfoUPtr ruleFileInfo(prt::createRuleFileInfo(ruleFileUri));
 		const std::wstring startRule = prtu::detectStartRule(ruleFileInfo);
-
 
 		HdSceneIndexPrim myPrim = inputScene->GetPrim(_GetProceduralPrimPath());
 		HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(myPrim.dataSource);
