@@ -9,6 +9,7 @@
 #include "pxr/imaging/hdGp/generativeProceduralPlugin.h"
 #include "pxr/imaging/hdGp/generativeProceduralPluginRegistry.h"
 
+#include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/meshSchema.h"
 #include "pxr/imaging/hd/meshTopologySchema.h"
 #include "pxr/imaging/hd/primvarsSchema.h"
@@ -81,19 +82,19 @@ public:
 		          args.sourceMeshPath.GetText(), args.rpkPath.GetResolvedPath().c_str());
 
 		if (args.sourceMeshPath.IsEmpty()) {
-			mGeneratedDataSourceHandle.reset();
+			mGeneratedData.clear();
 			return result;
 		}
 
 		HdSceneIndexPrim sourceMeshPrim = inputScene->GetPrim(args.sourceMeshPath);
 		if (sourceMeshPrim.primType != HdPrimTypeTokens->mesh) {
-			mGeneratedDataSourceHandle.reset();
+			mGeneratedData.clear();
 			return result;
 		}
 
-//		if (mGeneratedDataSourceHandle) {
-//			if (dirtiedDependencies.find())
-//		}
+		//		if (mGeneratedDataSourceHandle) {
+		//			if (dirtiedDependencies.find())
+		//		}
 
 		TF_STATUS("source mesh path: %s%", args.sourceMeshPath.GetText());
 		HdMeshSchema sourceMeshSchema = HdMeshSchema::GetFromParent(sourceMeshPrim.dataSource);
@@ -147,16 +148,19 @@ public:
 			auto [packagePath, packagedPath] = ArSplitPackageRelativePathOuter(resolvedRpkPath);
 			LOG_DBG << "detected RPK within USDZ package: " << packagePath;
 
-			// workaround for PRT limitation: PRT does not recursively create a resolvemap from RPK within USDZ
+			// workaround for PRT limitation: PRT does not recursively create a resolvemap from RPK
+			// within USDZ
 			// TODO: cleanup/cache unpack location
 			std::string tmpDir(ArchGetTmpDir());
 			std::string subTmpDir = ArchMakeTmpSubdir(tmpDir, "hdGpPrt");
 			std::wstring unpackTmpDir = prtu::toUTF16FromUTF8(subTmpDir);
 			const std::wstring packageFileUri = prtu::toFileURIFromUtf8String(packagePath);
-			ResolveMapUPtr packageResolveMap(prt::createResolveMap(packageFileUri.c_str(), unpackTmpDir.c_str()));
+			ResolveMapUPtr packageResolveMap(
+			        prt::createResolveMap(packageFileUri.c_str(), unpackTmpDir.c_str()));
 
 			const std::wstring outerUriPath = prtu::toUTF16FromUTF8(packagedPath);
-			resolveMap.reset(prt::createResolveMap(packageResolveMap->getString(outerUriPath.c_str())));
+			resolveMap.reset(
+			        prt::createResolveMap(packageResolveMap->getString(outerUriPath.c_str())));
 		}
 		else {
 			const std::wstring rpkURI = prtu::toFileURIFromUtf8String(resolvedRpkPath);
@@ -181,14 +185,15 @@ public:
 		HdSceneIndexPrim myPrim = inputScene->GetPrim(_GetProceduralPrimPath());
 		HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(myPrim.dataSource);
 		AttributeMapBuilderUPtr amb(prt::AttributeMapBuilder::create());
-		for (const auto& primvarName: primvars.GetPrimvarNames()) {
+		for (const auto& primvarName : primvars.GetPrimvarNames()) {
 			HdPrimvarSchema primvarSchema = primvars.GetPrimvar(primvarName);
 			HdSampledDataSourceHandle dataSourceHandle = primvarSchema.GetPrimvarValue();
 			VtValue value = dataSourceHandle->GetValue(0);
-			LOG_DBG << "attr: " << primvarName.GetString() << ", type: " <<	value.GetTypeName();
+			LOG_DBG << "attr: " << primvarName.GetString() << ", type: " << value.GetTypeName();
 			if (value.IsHolding<float>()) {
 				LOG_DBG << "    value: " << value.UncheckedGet<float>();
-				amb->setFloat(prtu::toUTF16FromUTF8(primvarName.GetString()).c_str(), value.UncheckedGet<float>());
+				amb->setFloat(prtu::toUTF16FromUTF8(primvarName.GetString()).c_str(),
+				              value.UncheckedGet<float>());
 			}
 		}
 		AttributeMapUPtr initialShapeAttributes(amb->createAttributeMapAndReset());
@@ -202,8 +207,11 @@ public:
 		const AttributeMapNOPtrVector encOpts = {hydraEncOpts.get()};
 		assert(encIDs.size() == encOpts.size());
 
+		SdfPath prtPrimPath = _GetProceduralPrimPath();
+		SdfPath prtChildPath = prtPrimPath.AppendChild(sourcePrimName);
+
 		std::unique_ptr<PrtCallbacks> outputHandler(
-		        new PrtCallbacks(mGeneratedDataSourceHandle, amb));
+		        new PrtCallbacks(prtChildPath, result, mGeneratedData, amb));
 		InitialShapeNOPtrVector initialShapes = {initialShape.get()};
 		const prt::Status generateStatus = prt::generate(
 		        initialShapes.data(), initialShapes.size(), nullptr, encIDs.data(), encIDs.size(),
@@ -213,10 +221,6 @@ public:
 			        << prt::getStatusDescription(generateStatus);
 			return result;
 		}
-
-		SdfPath prtPrimPath = _GetProceduralPrimPath();
-		SdfPath prtChildPath = prtPrimPath.AppendChild(sourcePrimName);
-		result[prtChildPath] = HdPrimTypeTokens->mesh;
 
 		if (outputDirtiedPrims != nullptr) {
 			outputDirtiedPrims->emplace_back(prtChildPath, HdMeshSchema::GetDefaultLocator());
@@ -228,16 +232,18 @@ public:
 	// called concurrently from multiple threads
 	HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr& inputScene,
 	                              const SdfPath& childPrimPath) override {
+		TF_STATUS("GetChildPrim: %s%", childPrimPath.GetText());
 		HdSceneIndexPrim result;
-		if (mGeneratedDataSourceHandle) {
-			result.primType = HdPrimTypeTokens->mesh;
-			result.dataSource = mGeneratedDataSourceHandle;
+		auto it = mGeneratedData.find(childPrimPath);
+		if (it != mGeneratedData.end()) {
+			result.primType = it->second.second;
+			result.dataSource = it->second.first;
 		}
 		return result;
 	}
 
 private:
-	HdContainerDataSourceHandle mGeneratedDataSourceHandle;
+	 GeneratedData mGeneratedData;
 
 	struct _Args {
 		_Args() = default;

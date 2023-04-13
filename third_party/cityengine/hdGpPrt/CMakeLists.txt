@@ -8,6 +8,7 @@ pxr_library(hdGpPrt
         hd
 		hdGp
         hf
+		usdImaging
         ${TBB_tbb_LIBRARY}
 
     INCLUDE_DIRS

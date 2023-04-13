@@ -25,6 +25,8 @@
 #include "prt/Callbacks.h"
 
 #include "pxr/imaging/hd/retainedDataSource.h"
+#include "pxr/imaging/hdGp/generativeProcedural.h"
+#include "pxr/usd/sdf/path.h"
 
 #include <iostream>
 #include <map>
@@ -43,10 +45,14 @@ struct CGACError {
 };
 using CGACErrors = std::vector<CGACError>;
 
+using GeneratedData = std::map<pxr::SdfPath, std::pair<pxr::HdContainerDataSourceHandle, pxr::TfToken>>;
+
 class PrtCallbacks : public prt::Callbacks {
 public:
-	PrtCallbacks(pxr::HdContainerDataSourceHandle& dataSourceHandle, AttributeMapBuilderUPtr& amb)
-	    : mGeneratedDataSourceHandle(dataSourceHandle), mAttributeMapBuilder(amb) {}
+	PrtCallbacks(pxr::SdfPath primPath, pxr::HdGpGenerativeProcedural::ChildPrimTypeMap& childPrims,
+	             GeneratedData& generatedData, AttributeMapBuilderUPtr& amb)
+	    : mPrimPath(primPath), mChildPrims(childPrims), mGeneratedData(generatedData),
+	      mAttributeMapBuilder(amb) {}
 
 	// -- prt::Callbacks interface
 	prt::Status generateError(size_t /*isIndex*/, prt::Status /*status*/,
@@ -104,10 +110,12 @@ public:
 	// clang-format on
 
 	//	void addAsset(const wchar_t* uri, const wchar_t* fileName, const uint8_t* buffer, size_t
-	//size, wchar_t* result, 	              size_t& resultSize) override;
+	// size, wchar_t* result, 	              size_t& resultSize) override;
 
 private:
 	CGACErrors cgacErrors;
-	pxr::HdContainerDataSourceHandle& mGeneratedDataSourceHandle;
+	pxr::HdGpGenerativeProcedural::ChildPrimTypeMap& mChildPrims;
+	pxr::SdfPath mPrimPath;
+	GeneratedData& mGeneratedData;
 	AttributeMapBuilderUPtr& mAttributeMapBuilder;
 };
