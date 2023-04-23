@@ -45,13 +45,14 @@ struct CGACError {
 };
 using CGACErrors = std::vector<CGACError>;
 
-using GeneratedData = std::map<pxr::SdfPath, std::pair<pxr::HdContainerDataSourceHandle, pxr::TfToken>>;
+using GeneratedData =
+        std::map<pxr::SdfPath, std::pair<pxr::HdContainerDataSourceHandle, pxr::TfToken>>;
 
 class PrtCallbacks : public prt::Callbacks {
 public:
 	PrtCallbacks(pxr::SdfPath primPath, pxr::HdGpGenerativeProcedural::ChildPrimTypeMap& childPrims,
 	             GeneratedData& generatedData, AttributeMapBuilderUPtr& amb)
-	    : mPrimPath(primPath), mChildPrims(childPrims), mGeneratedData(generatedData),
+	    : mChildPrims(childPrims), mPrimPath(primPath), mGeneratedData(generatedData),
 	      mAttributeMapBuilder(amb) {}
 
 	// -- prt::Callbacks interface

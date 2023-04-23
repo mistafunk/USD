@@ -78,7 +78,7 @@ public:
 		ChildPrimTypeMap result;
 
 		_Args args = _GetArgs(inputScene);
-		TF_STATUS("PrtProcedural::Update:\n   source mesh: %s%\n   rpk: %s%",
+		TF_STATUS("PrtProcedural::Update:\n   source mesh: %s\n   rpk: %s",
 		          args.sourceMeshPath.GetText(), args.rpkPath.GetResolvedPath().c_str());
 
 		if (args.sourceMeshPath.IsEmpty()) {
@@ -96,7 +96,7 @@ public:
 		//			if (dirtiedDependencies.find())
 		//		}
 
-		TF_STATUS("source mesh path: %s%", args.sourceMeshPath.GetText());
+		TF_STATUS("source mesh path: %s", args.sourceMeshPath.GetText());
 		HdMeshSchema sourceMeshSchema = HdMeshSchema::GetFromParent(sourceMeshPrim.dataSource);
 		if (!sourceMeshSchema)
 			return result;
@@ -232,7 +232,7 @@ public:
 	// called concurrently from multiple threads
 	HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr& inputScene,
 	                              const SdfPath& childPrimPath) override {
-		TF_STATUS("GetChildPrim: %s%", childPrimPath.GetText());
+		TF_STATUS("GetChildPrim: %s", childPrimPath.GetText());
 		HdSceneIndexPrim result;
 		auto it = mGeneratedData.find(childPrimPath);
 		if (it != mGeneratedData.end()) {
