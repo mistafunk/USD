@@ -150,7 +150,7 @@ const CGACErrors& PrtCallbacks::getCGACErrors() const {
 
 namespace {
 
-using PointArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtArray<pxr::GfVec3f>>;
+using Vec3fArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtArray<pxr::GfVec3f>>;
 using IntArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtIntArray>;
 using TokenDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>;
 
@@ -167,21 +167,41 @@ pxr::HdContainerDataSourceHandle createMeshTopologyDataSource(const uint32_t* fa
 	        .Build();
 }
 
-pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, size_t vtxSize) {
+pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, size_t vtxSize,
+                                                             const double* nrm, size_t nrmSize,
+                                                             const uint32_t* normalIndices,
+                                                             size_t normalIndicesSize) {
 	pxr::VtArray<pxr::GfVec3f> points;
 	points.reserve(vtxSize / 3);
 	for (size_t i = 0; i < vtxSize; i += 3) {
 		points.emplace_back(vtx[i], vtx[i + 1], vtx[i + 2]);
 	}
 
+	pxr::VtArray<pxr::GfVec3f> normals;
+	normals.reserve(nrmSize / 3);
+	for (size_t i = 0; i < nrmSize; i += 3) {
+		normals.emplace_back(nrm[i], nrm[i + 1], nrm[i + 2]);
+	}
+
+	pxr::VtIntArray normalIndicesArray(normalIndices, normalIndices + normalIndicesSize);
+
 	pxr::HdContainerDataSourceHandle primvarsDs = pxr::HdRetainedContainerDataSource::New(
 	        pxr::HdPrimvarsSchemaTokens->points,
 	        pxr::HdPrimvarSchema::Builder()
-	                .SetPrimvarValue(PointArrayDataSource::New(points))
+	                .SetPrimvarValue(Vec3fArrayDataSource::New(points))
 	                .SetInterpolation(pxr::HdPrimvarSchema::BuildInterpolationDataSource(
 	                        pxr::HdPrimvarSchemaTokens->vertex))
 	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(
 	                        pxr::HdPrimvarSchemaTokens->point))
+	                .Build(),
+	        pxr::HdPrimvarsSchemaTokens->normals,
+	        pxr::HdPrimvarSchema::Builder()
+	                .SetPrimvarValue(Vec3fArrayDataSource::New(normals))
+	                .SetIndices(IntArrayDataSource::New(normalIndicesArray))
+	                .SetInterpolation(pxr::HdPrimvarSchema::BuildInterpolationDataSource(
+	                        pxr::HdPrimvarSchemaTokens->vertex))
+	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(
+	                        pxr::HdPrimvarSchemaTokens->normal))
 	                .Build());
 
 	return primvarsDs;
@@ -233,8 +253,8 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 	const pxr::HdTokenDataSourceHandle nodePathName =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(previewSurfaceNodeName);
 
-	pxr::TfToken terminalName("surface");
-	const pxr::HdTokenDataSourceHandle outputName =
+	static pxr::TfToken terminalName("surface");
+	static const pxr::HdTokenDataSourceHandle outputName =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(terminalName);
 
 	pxr::HdContainerDataSourceHandle terminalNode = pxr::HdMaterialConnectionSchema::Builder()
@@ -302,7 +322,8 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
                            const int32_t* shapeIDs) {
 	pxr::HdContainerDataSourceHandle meshTopologyDs = createMeshTopologyDataSource(
 	        faceCounts, faceCountsSize, vertexIndices, vertexIndicesSize);
-	pxr::HdContainerDataSourceHandle primvarDs = createMeshPrimvarDataSource(vtx, vtxSize);
+	pxr::HdContainerDataSourceHandle primvarDs = createMeshPrimvarDataSource(
+	        vtx, vtxSize, nrm, nrmSize, normalIndices, normalIndicesSize);
 
 	std::vector<pxr::TfToken> subsetNames;
 	std::vector<pxr::HdDataSourceBaseHandle> subsets;
