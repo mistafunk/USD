@@ -215,8 +215,6 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 	static const pxr::HdTokenDataSourceHandle nodeIdentifierDataSource =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(
 	                pxr::UsdImagingTokens->UsdPreviewSurface);
-	static const pxr::HdDataSourceBaseHandle one =
-	        pxr::HdRetainedTypedSampledDataSource<float>::New(1.0f);
 
 	// details: pxr/usdImaging/usdImaging/drawModeStandin.cpp
 	std::vector<pxr::TfToken> parameterNames;
@@ -225,15 +223,18 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 	size_t diffuseColorSize = 0;
 	const double* rawDiffuseColor = material->getFloatArray(L"diffuseColor", &diffuseColorSize);
 	assert(diffuseColorSize == 3);
-
 	pxr::HdVec3fDataSourceHandle diffuseColor =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::GfVec3f>::New(
 	                pxr::GfVec3f(rawDiffuseColor[0], rawDiffuseColor[1], rawDiffuseColor[2]));
 
+	const double rawOpacity = material->getFloat(L"opacity");
+	const pxr::HdDataSourceBaseHandle opacity =
+	        pxr::HdRetainedTypedSampledDataSource<float>::New(rawOpacity);
+
 	parameterNames.emplace_back("diffuseColor");
 	parameters.push_back(diffuseColor);
 	parameterNames.emplace_back("opacity");
-	parameters.push_back(one);
+	parameters.push_back(opacity);
 
 	pxr::HdContainerDataSourceHandle materialNodeParameters =
 	        pxr::HdRetainedContainerDataSource::New(parameterNames.size(), parameterNames.data(),
@@ -330,12 +331,10 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	for (size_t fri = 0; fri < faceRangesSize - 1; fri++) {
 		auto [materialPath, materialDs] = createMaterialDataSource(mPrimPath, materials[fri]);
 
-		// store generated material prim for the procedural
-		// TODO: do we need the additional wrapping here?
-		auto matDsHandle = pxr::HdRetainedContainerDataSource::New(
+		auto materialContainerDs = pxr::HdRetainedContainerDataSource::New(
 		        pxr::HdMaterialSchemaTokens->material, materialDs);
 		mGeneratedData.emplace(materialPath,
-		                       std::make_pair(matDsHandle, pxr::HdMaterialSchemaTokens->material));
+		                       std::make_pair(materialContainerDs, pxr::HdMaterialSchemaTokens->material));
 		mChildPrims[materialPath] = pxr::HdMaterialSchemaTokens->material;
 
 		const uint32_t faceIndexStart = faceRanges[fri];
