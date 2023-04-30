@@ -215,7 +215,7 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	                .SetParameters(materialNodeParameters)
 	                .Build();
 
-	pxr::TfToken previewSurfaceNodeName("IHaveNoClue");
+	pxr::TfToken previewSurfaceNodeName = prtMaterialsPath.GetAsToken();
 	pxr::TfTokenVector nodeNames = {previewSurfaceNodeName};
 	std::vector<pxr::HdDataSourceBaseHandle> nodeValues = {materialNode};
 	pxr::HdContainerDataSourceHandle nodesDataSources = pxr::HdRetainedContainerDataSource::New(
@@ -244,17 +244,19 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	                .SetTerminals(terminalDataSources)
 	                .Build();
 
-	pxr::TfTokenVector materialTokens = {pxr::TfToken()};
+	pxr::TfTokenVector materialTokens = {pxr::HdMaterialSchemaTokens->universalRenderContext};
 	std::vector<pxr::HdDataSourceBaseHandle> materialValues = {materialNetworkDataSource};
 	assert(materialTokens.size() == materialValues.size());
 	pxr::HdContainerDataSourceHandle materialDataSource = pxr::HdMaterialSchema::BuildRetained(
 	        materialTokens.size(), materialTokens.data(), materialValues.data());
 
-	pxr::TfTokenVector bindingTokens = {pxr::HdMaterialBindingSchemaTokens->materialBinding};
+	pxr::TfTokenVector bindingTokens = {pxr::HdMaterialBindingSchemaTokens->allPurpose};
 	pxr::HdPathDataSourceHandle bindingPathDataSource =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::SdfPath>::New(prtMaterialsPath);
+
 	std::vector<pxr::HdDataSourceBaseHandle> bindingValues = {
 	        std::static_pointer_cast<pxr::HdDataSourceBase>(bindingPathDataSource)};
+
 	assert(bindingTokens.size() == bindingValues.size());
 	pxr::HdContainerDataSourceHandle materialBindingDataSource =
 	        pxr::HdMaterialBindingSchema::BuildRetained(bindingTokens.size(), bindingTokens.data(),
@@ -270,8 +272,11 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	mChildPrims[prtMaterialsPath] = pxr::HdMaterialSchemaTokens->material;
 
 	mGeneratedData.emplace(prtMeshPath, std::make_pair(geoDataSource, pxr::HdPrimTypeTokens->mesh));
-	mGeneratedData.emplace(prtMaterialsPath, std::make_pair(materialDataSource,
-	                                                        pxr::HdMaterialSchemaTokens->material));
+
+	auto matDs = pxr::HdRetainedContainerDataSource::New(pxr::HdMaterialSchemaTokens->material,
+	                                                     materialDataSource);
+	mGeneratedData.emplace(prtMaterialsPath,
+	                       std::make_pair(matDs, pxr::HdMaterialSchemaTokens->material));
 }
 
 // void PrtCallbacks::addAsset(const wchar_t* uri, const wchar_t* fileName, const uint8_t* buffer,
