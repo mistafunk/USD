@@ -57,7 +57,7 @@ constexpr const wchar_t* ENC_DESCRIPTION = L"Encodes generated geometry into Hyd
 const prtx::EncodePreparator::PreparationFlags PREP_FLAGS =
         prtx::EncodePreparator::PreparationFlags()
                 .instancing(false)
-                .meshMerging(prtx::MeshMerging::ALL_OF_SAME_TYPE)
+                .meshMerging(prtx::MeshMerging::ALL_OF_SAME_MATERIAL_AND_TYPE)
                 .triangulate(false)
                 .processHoles(prtx::HoleProcessor::TRIANGULATE_FACES_WITH_HOLES)
                 .mergeVertices(true)
@@ -111,7 +111,8 @@ private:
 
 				const prtx::MaterialPtr& mat = *matIt;
 				const uint32_t requiredUVSetsByMaterial = scanValidTextures(mat);
-				maxNumUVSets = std::max(maxNumUVSets, std::max(mesh->getUVSetsCount(), requiredUVSetsByMaterial));
+				maxNumUVSets = std::max(maxNumUVSets,
+				                        std::max(mesh->getUVSetsCount(), requiredUVSetsByMaterial));
 				++matIt;
 			}
 			++matsIt;
@@ -136,8 +137,8 @@ private:
 
 					const auto& faceUVCounts = mesh->getFaceUVCounts(uvSet);
 					numUvCounts[uvSet] += static_cast<uint32_t>(faceUVCounts.size());
-					numUvIndices[uvSet] =
-					        std::accumulate(faceUVCounts.begin(), faceUVCounts.end(), numUvIndices[uvSet]);
+					numUvIndices[uvSet] = std::accumulate(faceUVCounts.begin(), faceUVCounts.end(),
+					                                      numUvIndices[uvSet]);
 				}
 			}
 		}
@@ -153,7 +154,8 @@ private:
 		}
 	}
 
-	void serialize(const prtx::GeometryPtrVector& geometries, const std::vector<prtx::MaterialPtrVector>& materials) {
+	void serialize(const prtx::GeometryPtrVector& geometries,
+	               const std::vector<prtx::MaterialPtrVector>& materials) {
 		const uint32_t maxNumUVSets = static_cast<uint32_t>(mUvs.size());
 
 		const prtx::DoubleVector EMPTY_UVS;
@@ -175,41 +177,49 @@ private:
 				mNormals.insert(mNormals.end(), norms.begin(), norms.end());
 
 				// append uv sets (uv coords, counts, indices) with special cases:
-				// - if mesh has no uv sets but maxNumUVSets is > 0, insert "0" uv face counts to keep in sync
-				// - if mesh has less uv sets than maxNumUVSets, copy uv set 0 to the missing higher sets
+				// - if mesh has no uv sets but maxNumUVSets is > 0, insert "0" uv face counts to
+				// keep in sync
+				// - if mesh has less uv sets than maxNumUVSets, copy uv set 0 to the missing higher
+				// sets
 				const uint32_t numUVSets = mesh->getUVSetsCount();
 				const prtx::DoubleVector& uvs0 = (numUVSets > 0) ? mesh->getUVCoords(0) : EMPTY_UVS;
 				const prtx::IndexVector faceUVCounts0 =
-				        (numUVSets > 0) ? mesh->getFaceUVCounts(0) : prtx::IndexVector(mesh->getFaceCount(), 0);
+				        (numUVSets > 0) ? mesh->getFaceUVCounts(0)
+				                        : prtx::IndexVector(mesh->getFaceCount(), 0);
 				if constexpr (DBG)
 					log_debug("-- mesh: numUVSets = %1%") % numUVSets;
 
 				for (uint32_t uvSet = 0; uvSet < mUvs.size(); uvSet++) {
 					// append texture coordinates
-					const prtx::DoubleVector& uvs = (uvSet < numUVSets) ? mesh->getUVCoords(uvSet) : EMPTY_UVS;
+					const prtx::DoubleVector& uvs =
+					        (uvSet < numUVSets) ? mesh->getUVCoords(uvSet) : EMPTY_UVS;
 					const auto& src = uvs.empty() ? uvs0 : uvs;
 					auto& tgt = mUvs[uvSet];
 					tgt.insert(tgt.end(), src.begin(), src.end());
 
 					// append uv face counts
-					const prtx::IndexVector& faceUVCounts =
-					        (uvSet < numUVSets && !uvs.empty()) ? mesh->getFaceUVCounts(uvSet) : faceUVCounts0;
+					const prtx::IndexVector& faceUVCounts = (uvSet < numUVSets && !uvs.empty())
+					                                                ? mesh->getFaceUVCounts(uvSet)
+					                                                : faceUVCounts0;
 					assert(faceUVCounts.size() == mesh->getFaceCount());
 					auto& tgtCnts = mUvCounts[uvSet];
 					tgtCnts.insert(tgtCnts.end(), faceUVCounts.begin(), faceUVCounts.end());
 					if constexpr (DBG)
-						log_debug("   -- uvset %1%: face counts size = %2%") % uvSet % faceUVCounts.size();
+						log_debug("   -- uvset %1%: face counts size = %2%") % uvSet %
+						        faceUVCounts.size();
 
 					// append uv vertex indices
-					for (uint32_t fi = 0, faceCount = static_cast<uint32_t>(faceUVCounts.size()); fi < faceCount;
-					     ++fi) {
-						const uint32_t* faceUVIdx0 = (numUVSets > 0) ? mesh->getFaceUVIndices(fi, 0) : EMPTY_IDX.data();
-						const uint32_t* faceUVIdx =
-						        (uvSet < numUVSets && !uvs.empty()) ? mesh->getFaceUVIndices(fi, uvSet) : faceUVIdx0;
+					for (uint32_t fi = 0, faceCount = static_cast<uint32_t>(faceUVCounts.size());
+					     fi < faceCount; ++fi) {
+						const uint32_t* faceUVIdx0 =
+						        (numUVSets > 0) ? mesh->getFaceUVIndices(fi, 0) : EMPTY_IDX.data();
+						const uint32_t* faceUVIdx = (uvSet < numUVSets && !uvs.empty())
+						                                    ? mesh->getFaceUVIndices(fi, uvSet)
+						                                    : faceUVIdx0;
 						const uint32_t faceUVCnt = faceUVCounts[fi];
 						if constexpr (DBG)
-							log_debug("      fi %1%: faceUVCnt = %2%, faceVtxCnt = %3%") % fi % faceUVCnt %
-							        mesh->getFaceVertexCount(fi);
+							log_debug("      fi %1%: faceUVCnt = %2%, faceVtxCnt = %3%") % fi %
+							        faceUVCnt % mesh->getFaceVertexCount(fi);
 						for (uint32_t vi = 0; vi < faceUVCnt; vi++)
 							mUvIndices[uvSet].push_back(uvIndexBases[uvSet] + faceUVIdx[vi]);
 					}
@@ -298,7 +308,8 @@ std::vector<const wchar_t*> toPtrVec(const prtx::WStringVector& wsv) {
 }
 
 template <typename T>
-std::pair<std::vector<const T*>, std::vector<size_t>> toPtrVec(const std::vector<std::vector<T>>& v) {
+std::pair<std::vector<const T*>, std::vector<size_t>>
+toPtrVec(const std::vector<std::vector<T>>& v) {
 	std::vector<const T*> pv(v.size());
 	std::vector<size_t> ps(v.size());
 	for (size_t i = 0; i < v.size(); i++) {
@@ -306,6 +317,177 @@ std::pair<std::vector<const T*>, std::vector<size_t>> toPtrVec(const std::vector
 		ps[i] = v[i].size();
 	}
 	return std::make_pair(pv, ps);
+}
+
+// we blacklist all CGA-style material attribute keys, see prtx/Material.h
+const std::set<std::wstring> MATERIAL_ATTRIBUTE_BLACKLIST = {
+        L"ambient.b",
+        L"ambient.g",
+        L"ambient.r",
+        L"bumpmap.rw",
+        L"bumpmap.su",
+        L"bumpmap.sv",
+        L"bumpmap.tu",
+        L"bumpmap.tv",
+        L"color.a",
+        L"color.b",
+        L"color.g",
+        L"color.r",
+        L"color.rgb",
+        L"colormap.rw",
+        L"colormap.su",
+        L"colormap.sv",
+        L"colormap.tu",
+        L"colormap.tv",
+        L"dirtmap.rw",
+        L"dirtmap.su",
+        L"dirtmap.sv",
+        L"dirtmap.tu",
+        L"dirtmap.tv",
+        L"normalmap.rw",
+        L"normalmap.su",
+        L"normalmap.sv",
+        L"normalmap.tu",
+        L"normalmap.tv",
+        L"opacitymap.rw",
+        L"opacitymap.su",
+        L"opacitymap.sv",
+        L"opacitymap.tu",
+        L"opacitymap.tv",
+        L"specular.b",
+        L"specular.g",
+        L"specular.r",
+        L"specularmap.rw",
+        L"specularmap.su",
+        L"specularmap.sv",
+        L"specularmap.tu",
+        L"specularmap.tv",
+        L"bumpmap",
+        L"colormap",
+        L"dirtmap",
+        L"normalmap",
+        L"opacitymap",
+        L"specularmap"
+
+#if PRT_VERSION_MAJOR > 1
+        // also blacklist CGA-style PBR attrs from CE 2019.0, PRT 2.x
+        ,
+        L"opacitymap.mode",
+        L"emissive.b",
+        L"emissive.g",
+        L"emissive.r",
+        L"emissivemap.rw",
+        L"emissivemap.su",
+        L"emissivemap.sv",
+        L"emissivemap.tu",
+        L"emissivemap.tv",
+        L"metallicmap.rw",
+        L"metallicmap.su",
+        L"metallicmap.sv",
+        L"metallicmap.tu",
+        L"metallicmap.tv",
+        L"occlusionmap.rw",
+        L"occlusionmap.su",
+        L"occlusionmap.sv",
+        L"occlusionmap.tu",
+        L"occlusionmap.tv",
+        L"roughnessmap.rw",
+        L"roughnessmap.su",
+        L"roughnessmap.sv",
+        L"roughnessmap.tu",
+        L"roughnessmap.tv",
+        L"emissivemap",
+        L"metallicmap",
+        L"occlusionmap",
+        L"roughnessmap"
+#endif
+};
+
+void convertMaterialToAttributeMap(prtx::PRTUtils::AttributeMapBuilderPtr& aBuilder,
+                                   const prtx::Material& prtxAttr,
+                                   const prtx::WStringVector& keys) {
+	if (DBG)
+		log_debug(L"-- converting material: %1%") % prtxAttr.name();
+	for (const auto& key : keys) {
+		if (MATERIAL_ATTRIBUTE_BLACKLIST.count(key) > 0)
+			continue;
+
+		if (DBG)
+			log_debug(L"   key: %1%") % key;
+
+		switch (prtxAttr.getType(key)) {
+			case prt::Attributable::PT_BOOL:
+				aBuilder->setBool(key.c_str(), prtxAttr.getBool(key) == prtx::PRTX_TRUE);
+				break;
+
+			case prt::Attributable::PT_FLOAT:
+				aBuilder->setFloat(key.c_str(), prtxAttr.getFloat(key));
+				break;
+
+			case prt::Attributable::PT_INT:
+				aBuilder->setInt(key.c_str(), prtxAttr.getInt(key));
+				break;
+
+			case prt::Attributable::PT_STRING: {
+				const std::wstring& v = prtxAttr.getString(key); // explicit copy
+				aBuilder->setString(key.c_str(), v.c_str());     // also passing on empty strings
+				break;
+			}
+
+			case prt::Attributable::PT_BOOL_ARRAY: {
+				const std::vector<uint8_t>& ba = prtxAttr.getBoolArray(key);
+				auto boo = std::unique_ptr<bool[]>(new bool[ba.size()]);
+				for (size_t i = 0; i < ba.size(); i++)
+					boo[i] = (ba[i] == prtx::PRTX_TRUE);
+				aBuilder->setBoolArray(key.c_str(), boo.get(), ba.size());
+				break;
+			}
+
+			case prt::Attributable::PT_INT_ARRAY: {
+				const std::vector<int32_t>& array = prtxAttr.getIntArray(key);
+				aBuilder->setIntArray(key.c_str(), &array[0], array.size());
+				break;
+			}
+
+			case prt::Attributable::PT_FLOAT_ARRAY: {
+				const std::vector<double>& array = prtxAttr.getFloatArray(key);
+				aBuilder->setFloatArray(key.c_str(), array.data(), array.size());
+				break;
+			}
+
+			case prt::Attributable::PT_STRING_ARRAY: {
+				const prtx::WStringVector& a = prtxAttr.getStringArray(key);
+				std::vector<const wchar_t*> pw = toPtrVec(a);
+				aBuilder->setStringArray(key.c_str(), pw.data(), pw.size());
+				break;
+			}
+
+			case prtx::Material::PT_TEXTURE: {
+				const auto& t = prtxAttr.getTexture(key);
+				const std::wstring p = t->getURI()->wstring();
+				aBuilder->setString(key.c_str(), p.c_str());
+				break;
+			}
+
+			case prtx::Material::PT_TEXTURE_ARRAY: {
+				const auto& ta = prtxAttr.getTextureArray(key);
+
+				prtx::WStringVector pa(ta.size());
+				std::transform(ta.begin(), ta.end(), pa.begin(),
+				               [](const prtx::TexturePtr& t) { return t->getURI()->wstring(); });
+
+				std::vector<const wchar_t*> ppa = toPtrVec(pa);
+				aBuilder->setStringArray(key.c_str(), ppa.data(), ppa.size());
+				break;
+			}
+
+			default:
+				if (DBG)
+					log_debug(L"ignored atttribute '%s' with type %d") % key %
+					        prtxAttr.getType(key);
+				break;
+		}
+	}
 }
 
 } // namespace
@@ -384,6 +566,9 @@ void HydraEncoder::convertGeometry(const prtx::InitialShape& initialShape,
 		for (size_t mi = 0; mi < meshes.size(); mi++) {
 			const prtx::MeshPtr& m = meshes.at(mi);
 			const prtx::MaterialPtr& mat = matIt->at(mi);
+
+			convertMaterialToAttributeMap(amb, *(mat.get()), mat->getKeys());
+			matAttrMaps.v.push_back(amb->createAttributeMapAndReset());
 
 			faceRanges.push_back(faceCount);
 			faceCount += m->getFaceCount();

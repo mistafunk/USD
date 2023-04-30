@@ -20,6 +20,7 @@
 #include "prtCallbacks.h"
 #include "prtContext.h"
 
+#include "pxr/imaging/hd/geomSubset.h"
 #include "pxr/imaging/hd/material.h"
 #include "pxr/imaging/hd/materialBindingSchema.h"
 #include "pxr/imaging/hd/materialConnectionSchema.h"
@@ -28,6 +29,7 @@
 #include "pxr/imaging/hd/materialSchema.h"
 #include "pxr/imaging/hd/meshSchema.h"
 #include "pxr/imaging/hd/meshTopologySchema.h"
+#include "pxr/imaging/hd/overlayContainerDataSource.h"
 #include "pxr/imaging/hd/primvarsSchema.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
 #include "pxr/imaging/hd/tokens.h"
@@ -38,7 +40,10 @@
 
 #include "prt/StringUtils.h"
 
+#include <algorithm>
+#include <array>
 #include <cassert>
+#include <numeric>
 #include <sstream>
 
 namespace {
@@ -143,19 +148,26 @@ const CGACErrors& PrtCallbacks::getCGACErrors() const {
 	return cgacErrors;
 }
 
-void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, const double* nrm,
-                           size_t nrmSize, const uint32_t* faceCounts, size_t faceCountsSize,
-                           const uint32_t* vertexIndices, size_t vertexIndicesSize,
-                           const uint32_t* normalIndices, size_t normalIndicesSize,
-                           double const* const* uvs, size_t const* uvsSizes,
-                           uint32_t const* const* uvCounts, size_t const* uvCountsSizes,
-                           uint32_t const* const* uvIndices, size_t const* uvIndicesSizes,
-                           size_t uvSetsCount, const uint32_t* faceRanges, size_t faceRangesSize,
-                           const prt::AttributeMap** materials, const prt::AttributeMap** reports,
-                           const int32_t*) {
-	using PointArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtArray<pxr::GfVec3f>>;
-	using IntArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtIntArray>;
+namespace {
 
+using PointArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtArray<pxr::GfVec3f>>;
+using IntArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtIntArray>;
+using TokenDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>;
+
+pxr::HdContainerDataSourceHandle createMeshTopologyDataSource(const uint32_t* faceCounts,
+                                                              size_t faceCountsSize,
+                                                              const uint32_t* vertexIndices,
+                                                              size_t vertexIndicesSize) {
+	pxr::VtIntArray faceVertexCounts(faceCounts, faceCounts + faceCountsSize);
+	pxr::VtIntArray faceVertexIndices(vertexIndices, vertexIndices + vertexIndicesSize);
+
+	return pxr::HdMeshTopologySchema::Builder()
+	        .SetFaceVertexCounts(IntArrayDataSource::New(faceVertexCounts))
+	        .SetFaceVertexIndices(IntArrayDataSource::New(faceVertexIndices))
+	        .Build();
+}
+
+pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, size_t vtxSize) {
 	pxr::VtArray<pxr::GfVec3f> points;
 	points.reserve(vtxSize / 3);
 	for (size_t i = 0; i < vtxSize; i += 3) {
@@ -172,21 +184,13 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	                        pxr::HdPrimvarSchemaTokens->point))
 	                .Build());
 
-	pxr::VtIntArray faceVertexCounts(faceCounts, faceCounts + faceCountsSize);
-	pxr::VtIntArray faceVertexIndices(vertexIndices, vertexIndices + vertexIndicesSize);
+	return primvarsDs;
+}
 
-	pxr::HdContainerDataSourceHandle meshDs =
-	        pxr::HdMeshSchema::Builder()
-	                .SetTopology(
-	                        pxr::HdMeshTopologySchema::Builder()
-	                                .SetFaceVertexCounts(IntArrayDataSource::New(faceVertexCounts))
-	                                .SetFaceVertexIndices(
-	                                        IntArrayDataSource::New(faceVertexIndices))
-	                                .Build())
-	                .Build();
-
-	pxr::SdfPath prtMeshPath = mPrimPath.AppendChild(pxr::HdPrimTypeTokens->mesh);
-	pxr::SdfPath prtMaterialsPath = mPrimPath.AppendChild(pxr::HdMaterialSchemaTokens->material);
+auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::AttributeMap* material) {
+	const wchar_t* rawMaterialName = material->getString(L"name");
+	std::string materialName = prtu::toUTF8FromUTF16(rawMaterialName);
+	pxr::SdfPath prtMaterialsPath = primPath.AppendChild(pxr::TfToken(materialName));
 
 	static const pxr::HdTokenDataSourceHandle nodeIdentifierDataSource =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(
@@ -198,8 +202,13 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	std::vector<pxr::TfToken> parameterNames;
 	std::vector<pxr::HdDataSourceBaseHandle> parameters;
 
+	size_t diffuseColorSize = 0;
+	const double* rawDiffuseColor = material->getFloatArray(L"diffuseColor", &diffuseColorSize);
+	assert(diffuseColorSize == 3);
+
 	pxr::HdVec3fDataSourceHandle diffuseColor =
-	        pxr::HdRetainedTypedSampledDataSource<pxr::GfVec3f>::New(pxr::GfVec3f(1, 0, 0));
+	        pxr::HdRetainedTypedSampledDataSource<pxr::GfVec3f>::New(
+	                pxr::GfVec3f(rawDiffuseColor[0], rawDiffuseColor[1], rawDiffuseColor[2]));
 
 	parameterNames.emplace_back("diffuseColor");
 	parameters.push_back(diffuseColor);
@@ -250,61 +259,87 @@ void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, co
 	pxr::HdContainerDataSourceHandle materialDataSource = pxr::HdMaterialSchema::BuildRetained(
 	        materialTokens.size(), materialTokens.data(), materialValues.data());
 
-	pxr::TfTokenVector bindingTokens = {pxr::HdMaterialBindingSchemaTokens->allPurpose};
-	pxr::HdPathDataSourceHandle bindingPathDataSource =
-	        pxr::HdRetainedTypedSampledDataSource<pxr::SdfPath>::New(prtMaterialsPath);
-
-	std::vector<pxr::HdDataSourceBaseHandle> bindingValues = {
-	        std::static_pointer_cast<pxr::HdDataSourceBase>(bindingPathDataSource)};
-
-	assert(bindingTokens.size() == bindingValues.size());
-	pxr::HdContainerDataSourceHandle materialBindingDataSource =
-	        pxr::HdMaterialBindingSchema::BuildRetained(bindingTokens.size(), bindingTokens.data(),
-	                                                    bindingValues.data());
-
-	pxr::HdRetainedContainerDataSourceHandle geoDataSource =
-	        pxr::HdRetainedContainerDataSource::New(
-	                pxr::HdMeshSchemaTokens->mesh, meshDs, pxr::HdPrimvarsSchemaTokens->primvars,
-	                primvarsDs, pxr::HdMaterialBindingSchemaTokens->materialBinding,
-	                materialBindingDataSource);
-
-	mChildPrims[prtMeshPath] = pxr::HdPrimTypeTokens->mesh;
-	mChildPrims[prtMaterialsPath] = pxr::HdMaterialSchemaTokens->material;
-
-	mGeneratedData.emplace(prtMeshPath, std::make_pair(geoDataSource, pxr::HdPrimTypeTokens->mesh));
-
-	auto matDs = pxr::HdRetainedContainerDataSource::New(pxr::HdMaterialSchemaTokens->material,
-	                                                     materialDataSource);
-	mGeneratedData.emplace(prtMaterialsPath,
-	                       std::make_pair(matDs, pxr::HdMaterialSchemaTokens->material));
+	return std::make_tuple(prtMaterialsPath, materialDataSource);
 }
 
-// void PrtCallbacks::addAsset(const wchar_t* uri, const wchar_t* fileName, const uint8_t* buffer,
-// size_t size,
-//                              wchar_t* result, size_t& resultSize) {
-//	if (uri == nullptr || std::wcslen(uri) == 0 || fileName == nullptr || std::wcslen(fileName) ==
-// 0) { 		LOG_WRN << "Skipping asset caching for invalid uri '" << uri << "' or filename '" <<
-// fileName
-//<< '"'; 		resultSize = 0; 		return;
-//	}
-//
-//	std::filesystem::path assetDir = getAssetDir();
-//
-//	const std::filesystem::path& assetPath =
-//	        (!assetDir.empty()) ? PRTContext::get().mAssetCache.put(uri, fileName, assetDir, buffer,
-// size) 	                            : std::filesystem::path();
-//
-//	if (assetPath.empty()) {
-//		resultSize = 0;
-//		return;
-//	}
-//
-//	const std::wstring pathStr = assetPath.generic_wstring();
-//
-//	if (resultSize <= pathStr.size()) {  // also check for null-terminator
-//		resultSize = pathStr.size() + 1; // ask for space for null-terminator
-//		return;
-//	}
-//
-//	copyStringToWCharPtr(pathStr, result, resultSize);
-// }
+pxr::HdOverlayContainerDataSourceHandle createGeomSubsetDataSource(pxr::SdfPath materialId,
+                                                                   uint32_t faceIndexStart,
+                                                                   size_t faceIndexCount) {
+	pxr::VtIntArray geomSubsetIndices;
+	geomSubsetIndices.resize(faceIndexCount);
+	std::iota(geomSubsetIndices.begin(), geomSubsetIndices.end(), faceIndexStart);
+
+	auto geomSubsetTypeDs = TokenDataSource::New(pxr::HdGeomSubsetSchemaTokens->typeFaceSet);
+	auto geomSubsetIndicesDs = IntArrayDataSource::New(geomSubsetIndices);
+	auto geomSubsetDs =
+	        pxr::HdGeomSubsetSchema::BuildRetained(geomSubsetTypeDs, geomSubsetIndicesDs);
+
+	std::array<pxr::TfToken, 1> purposeTokens = {pxr::HdMaterialBindingSchemaTokens->allPurpose};
+	std::array<pxr::HdDataSourceBaseHandle, 1> materialPaths = {
+	        pxr::HdRetainedTypedSampledDataSource<pxr::SdfPath>::New(materialId)};
+	static_assert(purposeTokens.size() == materialPaths.size());
+	std::array<pxr::HdContainerDataSourceHandle, 2> containers = {
+	        geomSubsetDs,
+	        pxr::HdRetainedContainerDataSource::New(
+	                pxr::HdMaterialBindingSchemaTokens->materialBinding,
+	                pxr::HdMaterialBindingSchema::BuildRetained(
+	                        materialPaths.size(), purposeTokens.data(), materialPaths.data()))};
+
+	return pxr::HdOverlayContainerDataSource::New(containers.size(), containers.data());
+}
+
+} // namespace
+
+void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, const double* nrm,
+                           size_t nrmSize, const uint32_t* faceCounts, size_t faceCountsSize,
+                           const uint32_t* vertexIndices, size_t vertexIndicesSize,
+                           const uint32_t* normalIndices, size_t normalIndicesSize,
+                           double const* const* uvs, size_t const* uvsSizes,
+                           uint32_t const* const* uvCounts, size_t const* uvCountsSizes,
+                           uint32_t const* const* uvIndices, size_t const* uvIndicesSizes,
+                           size_t uvSetsCount, const uint32_t* faceRanges, size_t faceRangesSize,
+                           const prt::AttributeMap** materials, const prt::AttributeMap** reports,
+                           const int32_t* shapeIDs) {
+	pxr::HdContainerDataSourceHandle meshTopologyDs = createMeshTopologyDataSource(
+	        faceCounts, faceCountsSize, vertexIndices, vertexIndicesSize);
+	pxr::HdContainerDataSourceHandle primvarDs = createMeshPrimvarDataSource(vtx, vtxSize);
+
+	std::vector<pxr::TfToken> subsetNames;
+	std::vector<pxr::HdDataSourceBaseHandle> subsets;
+	for (size_t fri = 0; fri < faceRangesSize - 1; fri++) {
+		auto [materialPath, materialDs] = createMaterialDataSource(mPrimPath, materials[fri]);
+
+		// store generated material prim for the procedural
+		// TODO: do we need the additional wrapping here?
+		auto matDsHandle = pxr::HdRetainedContainerDataSource::New(
+		        pxr::HdMaterialSchemaTokens->material, materialDs);
+		mGeneratedData.emplace(materialPath,
+		                       std::make_pair(matDsHandle, pxr::HdMaterialSchemaTokens->material));
+		mChildPrims[materialPath] = pxr::HdMaterialSchemaTokens->material;
+
+		const uint32_t faceIndexStart = faceRanges[fri];
+		const size_t faceIndexCount = faceRanges[fri + 1] - faceRanges[fri];
+		auto geomSubsetDs =
+		        createGeomSubsetDataSource(materialPath, faceIndexStart, faceIndexCount);
+
+		subsetNames.push_back(materialPath.GetNameToken());
+		subsets.push_back(geomSubsetDs);
+	}
+
+	auto geomSubsetsDs = pxr::HdRetainedContainerDataSource::New(
+	        subsetNames.size(), subsetNames.data(), subsets.data());
+
+	auto meshDs = pxr::HdMeshSchema::Builder()
+	                      .SetTopology(meshTopologyDs)
+	                      .SetGeomSubsets(geomSubsetsDs)
+	                      .Build();
+
+	auto geoDs = pxr::HdRetainedContainerDataSource::New(pxr::HdMeshSchemaTokens->mesh, meshDs,
+	                                                     pxr::HdPrimvarsSchemaTokens->primvars,
+	                                                     primvarDs);
+
+	pxr::SdfPath prtMeshPath = mPrimPath.AppendChild(pxr::HdPrimTypeTokens->mesh);
+
+	mGeneratedData.emplace(prtMeshPath, std::make_pair(geoDs, pxr::HdPrimTypeTokens->mesh));
+	mChildPrims[prtMeshPath] = pxr::HdPrimTypeTokens->mesh;
+}
