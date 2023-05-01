@@ -118,22 +118,23 @@ public:
 		VtArray<int> faceCounts = topo.GetFaceVertexCounts()->GetTypedValue(0);
 		VtArray<int> faceVertexIndices = topo.GetFaceVertexIndices()->GetTypedValue(0);
 
+		auto xformSchema = HdXformSchema::GetFromParent(sourceMeshPrim.dataSource);
+		const auto matrixDs = xformSchema.GetMatrix();
+		const GfMatrix4d xformMatrix = matrixDs->GetTypedValue(0.0);
+
 		std::vector<double> prtPoints;
 		prtPoints.reserve(points.size() * 3);
 		for (const GfVec3f& v : points) {
-			prtPoints.push_back(v[0]);
-			prtPoints.push_back(v[1]);
-			prtPoints.push_back(v[2]);
+			GfVec3f vw = xformMatrix.Transform(v);
+			prtPoints.push_back(vw[0]);
+			prtPoints.push_back(vw[1]);
+			prtPoints.push_back(vw[2]);
 		}
 
-		// TODO: avoid these copies
-		std::vector<uint32_t> prtIndices(faceVertexIndices.begin(), faceVertexIndices.end());
-		std::vector<uint32_t> prtCounts(faceCounts.begin(), faceCounts.end());
-
 		InitialShapeBuilderUPtr isb(prt::InitialShapeBuilder::create());
-		const prt::Status setGeoStatus =
-		        isb->setGeometry(prtPoints.data(), prtPoints.size(), prtIndices.data(),
-		                         prtIndices.size(), prtCounts.data(), prtCounts.size());
+		const prt::Status setGeoStatus = isb->setGeometry(
+		        prtPoints.data(), prtPoints.size(), (const uint32_t*)faceVertexIndices.cdata(),
+		        faceVertexIndices.size(), (const uint32_t*)faceCounts.cdata(), faceCounts.size());
 		if (setGeoStatus != prt::STATUS_OK) {
 			LOG_ERR << "InitialShapeBuilder setGeometry failed with status = "
 			        << prt::getStatusDescription(setGeoStatus);
