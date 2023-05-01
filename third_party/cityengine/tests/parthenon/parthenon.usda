@@ -20,7 +20,7 @@ def Scope "World"
     {
         token primvars:hdGp:proceduralType = "PrtProcedural"
         rel primvars:sourceMeshPath = </World/parthenonFootprint>
-        asset primvars:rpkPath = @./parthenon.rpk@
+        asset primvars:rpkPath = @../rpks/parthenon.rpk@
         float primvars:Spacing = 4.29
     }
 }

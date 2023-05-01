@@ -1,0 +1,81 @@
+#usda 1.0
+(
+    framesPerSecond = 24
+    metersPerUnit = 1
+    timeCodesPerSecond = 24
+)
+
+def Scope "World"
+{
+    over "Flattened_Prototype_1"
+    {
+        def Mesh "mesh"
+        {
+            float3[] extent = [(-15.249999, 0, -15.908753), (15.249999, 0, 15.908753)]
+            int[] faceVertexCounts = [8]
+            int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
+            rel material:binding = </World/Flattened_Prototype_1/material>
+            normal3f[] normals = [(0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0)] (
+                interpolation = "varying"
+            )
+            point3f[] points = [(-15.249999, 0, 15.908753), (3.4243135, 0, 15.908753), (15.249999, 0, -13.553092), (5.8667784, 0, -15.695319), (-2.050003, 0, 3.9087543), (-5.25, 0, 3.9087543), (-5.25, 0, -15.908753), (-15.249999, 0, -15.908753)]
+            uniform token subdivisionScheme = "none"
+        }
+
+        def Material "material"
+        {
+            token outputs:surface.connect = </World/Flattened_Prototype_1/material/PBRShader.outputs:surface>
+
+            def Shader "PBRShader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (1, 1, 1)
+                float inputs:opacity = 1
+                float inputs:opacityThreshold = 0
+                token outputs:surface
+            }
+        }
+
+        def GenerativeProcedural "candlerRule" (
+            prepend apiSchemas = ["HydraGenerativeProceduralAPI"]
+        )
+        {
+            token primvars:hdGp:proceduralType = "PrtProcedural"
+            rel primvars:sourceMeshPath = </World/Flattened_Prototype_1/mesh>
+            asset primvars:rpkPath = @../rpks/Candler Building.rpk@
+            //float primvars:Spacing = 4.29
+        }
+    }
+
+    def Xform "candler" (
+        customData = {
+            int[] HoudiniPrimEditorNodes = [27]
+        }
+        kind = "group"
+    )
+    {
+        matrix4d xformOp:transform:transform1 = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (-80, 0, -9112.06200000085, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform:transform1"]
+
+        def Xform "Candler_Building" (
+            kind = "group"
+        )
+        {
+            def Xform "Footprint" (
+                kind = "assembly"
+            )
+            {
+                def Xform "IDENTITY" (
+                    instanceable = true
+                    kind = "component"
+                    add references = </World/Flattened_Prototype_1>
+                )
+                {
+                    matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (129.9999994635582, 0, 9113.852896934226, 1) )
+                    uniform token[] xformOpOrder = ["xformOp:transform"]
+                }
+            }
+        }
+    }
+
+}
