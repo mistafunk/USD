@@ -7,14 +7,19 @@
 
 def Scope "World"
 {
-    over "Flattened_Prototype_1"
+    def Xform "candler" (
+        kind = "group"
+    )
     {
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+
         def Mesh "mesh"
         {
             float3[] extent = [(-15.249999, 0, -15.908753), (15.249999, 0, 15.908753)]
             int[] faceVertexCounts = [8]
             int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
-            rel material:binding = </World/Flattened_Prototype_1/material>
+            rel material:binding = </World/candler/material>
             normal3f[] normals = [(0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0), (0, 1, 0)] (
                 interpolation = "varying"
             )
@@ -24,7 +29,7 @@ def Scope "World"
 
         def Material "material"
         {
-            token outputs:surface.connect = </World/Flattened_Prototype_1/material/PBRShader.outputs:surface>
+            token outputs:surface.connect = </World/candler/material/PBRShader.outputs:surface>
 
             def Shader "PBRShader"
             {
@@ -41,40 +46,8 @@ def Scope "World"
         )
         {
             token primvars:hdGp:proceduralType = "PrtProcedural"
-            rel primvars:sourceMeshPath = </World/Flattened_Prototype_1/mesh>
+            rel primvars:sourceMeshPath = </World/candler/mesh>
             asset primvars:rpkPath = @../rpks/Candler Building.rpk@
         }
-    }
-
-    def Xform "candler" (
-        customData = {
-            int[] HoudiniPrimEditorNodes = [27]
-        }
-        kind = "group"
-    )
-    {
-        matrix4d xformOp:transform:transform1 = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (-80, 0, -9112.06200000085, 1) )
-        uniform token[] xformOpOrder = ["xformOp:transform:transform1"]
-
-        def Xform "Candler_Building" (
-            kind = "group"
-        )
-        {
-            def Xform "Footprint" (
-                kind = "assembly"
-            )
-            {
-                def Xform "IDENTITY" (
-                    instanceable = true
-                    kind = "component"
-                    add references = </World/Flattened_Prototype_1>
-                )
-                {
-                    matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (129.9999994635582, 0, 9113.852896934226, 1) )
-                    uniform token[] xformOpOrder = ["xformOp:transform"]
-                }
-            }
-        }
-    }
-
+   }
 }

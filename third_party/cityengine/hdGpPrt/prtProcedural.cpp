@@ -189,12 +189,21 @@ public:
 		for (const auto& primvarName : primvars.GetPrimvarNames()) {
 			HdPrimvarSchema primvarSchema = primvars.GetPrimvar(primvarName);
 			HdSampledDataSourceHandle dataSourceHandle = primvarSchema.GetPrimvarValue();
+			const std::wstring u16Key = prtu::toUTF16FromUTF8(primvarName.GetString());
 			VtValue value = dataSourceHandle->GetValue(0);
 			LOG_DBG << "attr: " << primvarName.GetString() << ", type: " << value.GetTypeName();
 			if (value.IsHolding<float>()) {
 				LOG_DBG << "    value: " << value.UncheckedGet<float>();
-				amb->setFloat(prtu::toUTF16FromUTF8(primvarName.GetString()).c_str(),
-				              value.UncheckedGet<float>());
+				amb->setFloat(u16Key.c_str(), value.UncheckedGet<float>());
+			}
+			else if (value.IsHolding<std::string>()) {
+				LOG_DBG << "    value: " << value.UncheckedGet<std::string>();
+				amb->setString(u16Key.c_str(),
+				               prtu::toUTF16FromUTF8(value.UncheckedGet<std::string>()).c_str());
+			}
+			else if (value.IsHolding<bool>()) {
+				LOG_DBG << "    value: " << value.UncheckedGet<bool>();
+				amb->setBool(u16Key.c_str(), value.UncheckedGet<bool>());
 			}
 		}
 		AttributeMapUPtr initialShapeAttributes(amb->createAttributeMapAndReset());
