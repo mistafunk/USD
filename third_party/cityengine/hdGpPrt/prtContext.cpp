@@ -32,32 +32,10 @@ constexpr prt::LogLevel PRT_LOG_LEVEL = prt::LOG_DEBUG;
 constexpr bool ENABLE_LOG_CONSOLE = true;
 constexpr bool ENABLE_LOG_FILE = false;
 
-bool verifyHydraEncoder() {
-	constexpr const wchar_t* ENC_ID_HYDRA = L"HydraEncoder";
-	const auto mayaEncOpts = prtu::createValidatedOptions(ENC_ID_HYDRA);
-	return true; // static_cast<bool>(mayaEncOpts);
-}
 } // namespace
-
-//PRTContext& PRTContext::get() {
-//	static PRTContext prtCtx;
-//	return prtCtx;
-//}
 
 PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs)
     : mPluginRootPath(prtu::getPluginRoot()) {
-	if (ENABLE_LOG_CONSOLE) {
-		mLogHandler = std::make_unique<logging::LogHandler>();
-		prt::addLogHandler(mLogHandler.get());
-	}
-
-	if (ENABLE_LOG_FILE) {
-		const std::wstring logPath = (mPluginRootPath / L"serlio.log").wstring();
-		mFileLogHandler = prt::FileLogHandler::create(prt::LogHandler::ALL,
-		                                              prt::LogHandler::ALL_COUNT, logPath.c_str());
-		prt::addLogHandler(mFileLogHandler);
-	}
-
 	if (DBG)
 		LOG_DBG << "initialized prt logger, plugin root path is " << mPluginRootPath.wstring();
 
@@ -70,11 +48,6 @@ PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs)
 	const auto extensionPathPtrs = prtu::toPtrVec(extensionPaths);
 	mPRTHandle.reset(
 	        prt::init(extensionPathPtrs.data(), extensionPathPtrs.size(), PRT_LOG_LEVEL, &status));
-
-	if (!verifyHydraEncoder()) {
-		LOG_FTL << "Unable to load Maya encoder extension!";
-		status = prt::STATUS_ENCODER_NOT_FOUND;
-	}
 
 	if (!mPRTHandle || status != prt::STATUS_OK) {
 		LOG_FTL << "Could not initialize PRT: " << prt::getStatusDescription(status);
@@ -90,15 +63,33 @@ bool PRTContext::isAlive() const {
 	return static_cast<bool>(mPRTHandle);
 }
 
-PRTContext::~PRTContext() {
+void PRTContext::registerClient() {
+	std::lock_guard<std::mutex> lock(mClientMutex);
+	mClientCount++;
 
-	// the cache needs to be destructed before PRT, so reset them explicitely in the right order
-	// here
-	mPRTCache.reset();
-	mPRTHandle.reset();
+	if (ENABLE_LOG_CONSOLE && !mLogHandler) {
+		mLogHandler = std::make_unique<logging::LogHandler>();
+		prt::addLogHandler(mLogHandler.get());
+	}
 
-	if (ENABLE_LOG_CONSOLE && (mLogHandler != nullptr)) {
-		prt::removeLogHandler(mLogHandler.get());
+//	if (ENABLE_LOG_FILE) {
+//		const std::wstring logPath = (mPluginRootPath / L"serlio.log").wstring();
+//		mFileLogHandler = prt::FileLogHandler::create(prt::LogHandler::ALL,
+//		                                              prt::LogHandler::ALL_COUNT, logPath.c_str());
+//		prt::addLogHandler(mFileLogHandler);
+//	}
+
+}
+
+void PRTContext::unregisterClient() {
+	std::lock_guard<std::mutex> lock(mClientMutex);
+	mClientCount--;
+
+	if (ENABLE_LOG_CONSOLE && mClientCount == 0) {
+		if (mLogHandler) {
+			prt::removeLogHandler(mLogHandler.get());
+			mLogHandler.reset(); // bit of a workaround to prevent boost log related hangers at e.g. usdview exit
+		}
 	}
 
 	if (ENABLE_LOG_FILE && (mFileLogHandler != nullptr)) {
@@ -106,4 +97,10 @@ PRTContext::~PRTContext() {
 		mFileLogHandler->destroy();
 		mFileLogHandler = nullptr;
 	}
+}
+
+PRTContext::~PRTContext() {
+	// the cache needs to be destructed before PRT
+	mPRTCache.reset();
+	mPRTHandle.reset();
 }

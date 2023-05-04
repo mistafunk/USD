@@ -26,6 +26,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 class PRTContext;
@@ -34,8 +35,6 @@ using PRTContextUPtr = std::unique_ptr<PRTContext>;
 
 class PRTContext final {
 public:
-//	static PRTContext& get();
-
 	explicit PRTContext(const std::vector<std::wstring>& addExtDirs = {});
 	PRTContext(const PRTContext&) = delete;
 	PRTContext(PRTContext&&) = delete;
@@ -45,6 +44,9 @@ public:
 
 	bool isAlive() const;
 
+	void registerClient();
+	void unregisterClient();
+
 	const std::filesystem::path mPluginRootPath;
 	//	AssetCache mAssetCache;
 	ObjectUPtr mPRTHandle;
@@ -52,4 +54,8 @@ public:
 	logging::LogHandlerUPtr mLogHandler;
 	prt::FileLogHandler* mFileLogHandler = nullptr;
 	//	ResolveMapCacheUPtr mResolveMapCache;
+
+private:
+	std::mutex mClientMutex;
+	size_t mClientCount = 0;
 };

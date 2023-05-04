@@ -3,6 +3,8 @@
 #include "prtHydraEncoder.h"
 
 #include "pxr/base/arch/fileSystem.h"
+#include "pxr/base/arch/stackTrace.h"
+
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/fileUtils.h"
 
@@ -33,12 +35,15 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <iterator>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <ostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 PXR_NAMESPACE_USING_DIRECTIVE
@@ -49,18 +54,22 @@ constexpr const wchar_t* ENC_ID_ATTR_EVAL = L"com.esri.prt.core.AttributeEvalEnc
 constexpr const wchar_t* ENC_ID_CGA_ERROR = L"com.esri.prt.core.CGAErrorEncoder";
 constexpr const wchar_t* ENC_ID_CGA_PRINT = L"com.esri.prt.core.CGAPrintEncoder";
 
-std::unique_ptr<PRTContext> prtContext; // TODO: avoid global variable
-
 } // namespace
 
 TF_DEFINE_PRIVATE_TOKENS(prtTokens, (sourceMeshPath)(rpkPath));
 
 class PrtProcedural : public HdGpGenerativeProcedural {
 public:
-	PrtProcedural(const SdfPath& proceduralPrimPath)
-	    : HdGpGenerativeProcedural(proceduralPrimPath) {}
+	PrtProcedural(PRTContext& prtContext, const SdfPath& proceduralPrimPath)
+	    : HdGpGenerativeProcedural(proceduralPrimPath), mPRTContext(prtContext) {
+		TF_STATUS("PrtProcedural c'tor");
+		mPRTContext.registerClient();
+	}
 
-	virtual ~PrtProcedural() = default;
+	virtual ~PrtProcedural() override {
+		TF_STATUS("PrtProcedural d'tor");
+		mPRTContext.unregisterClient();
+	}
 
 	DependencyMap UpdateDependencies(const HdSceneIndexBaseRefPtr& inputScene) override {
 		DependencyMap result;
@@ -92,14 +101,13 @@ public:
 			return result;
 		}
 
-		//		if (mGeneratedDataSourceHandle) {
-		//			if (dirtiedDependencies.find())
-		//		}
-
 		TF_STATUS("source mesh path: %s", args.sourceMeshPath.GetText());
 		HdMeshSchema sourceMeshSchema = HdMeshSchema::GetFromParent(sourceMeshPrim.dataSource);
-		if (!sourceMeshSchema)
+		if (!sourceMeshSchema) {
+			TF_WARN("cannot get mesh schema from %s", args.sourceMeshPath.GetText());
+			mGeneratedData.clear();
 			return result;
+		}
 		TfToken sourcePrimName = args.sourceMeshPath.GetNameToken();
 
 		HdPrimvarsSchema primvarsSchema =
@@ -225,7 +233,7 @@ public:
 		InitialShapeNOPtrVector initialShapes = {initialShape.get()};
 		const prt::Status generateStatus = prt::generate(
 		        initialShapes.data(), initialShapes.size(), nullptr, encIDs.data(), encIDs.size(),
-		        encOpts.data(), outputHandler.get(), prtContext->mPRTCache.get(), nullptr);
+		        encOpts.data(), outputHandler.get(), mPRTContext.mPRTCache.get(), nullptr);
 		if (generateStatus != prt::STATUS_OK) {
 			LOG_ERR << "PRT generate failed with status = "
 			        << prt::getStatusDescription(generateStatus);
@@ -253,7 +261,8 @@ public:
 	}
 
 private:
-	 GeneratedData mGeneratedData;
+	PRTContext& mPRTContext;
+	GeneratedData mGeneratedData;
 
 	struct _Args {
 		_Args() = default;
@@ -293,25 +302,38 @@ private:
 	}
 };
 
+namespace {
+
+std::once_flag prtContextInitializationFlag;
+PRTContextUPtr prtContext;
+
+} // namespace
+
 class PrtProceduralPlugin : public HdGpGenerativeProceduralPlugin {
 public:
 	PrtProceduralPlugin() {
-		prtContext = std::make_unique<PRTContext>();
-		if (prtContext && prtContext->isAlive()) {
-			// shortcut: we avoid creating an extra dll for the encoder
-			prtx::ExtensionManager::instance().addFactory(HydraEncoderFactory::createInstance());
-			LOG_INF << "Registered Hydra Encoder.";
-		}
-		else
-			LOG_ERR << "Unable to load the ArcGIS Procedural Runtime PRT!";
+		TF_STATUS("PrtProceduralPlugin c'tor");
+		std::call_once(prtContextInitializationFlag, []() {
+			if (prtContext)
+				TF_CODING_ERROR("Unexpected state of PRT context!");
+			prtContext = std::make_unique<PRTContext>();
+			if (prtContext && prtContext->isAlive()) {
+				// shortcut: we avoid creating an extra dll for the encoder
+				prtx::ExtensionManager::instance().addFactory(
+				        HydraEncoderFactory::createInstance());
+				LOG_INF << "Registered Hydra Encoder.";
+			}
+			else
+				LOG_ERR << "Unable to load the ArcGIS Procedural Runtime PRT!";
+		});
 	}
 
-	~PrtProceduralPlugin() override {
-		prtContext.reset();
+	virtual ~PrtProceduralPlugin() override {
+		TF_STATUS("PrtProceduralPlugin d'tor"); // this is not called by default
 	}
 
 	HdGpGenerativeProcedural* Construct(const SdfPath& proceduralPrimPath) override {
-		return new PrtProcedural(proceduralPrimPath);
+		return new PrtProcedural(*prtContext, proceduralPrimPath);
 	}
 };
 
