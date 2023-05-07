@@ -64,8 +64,7 @@ const prtx::EncodePreparator::PreparationFlags PREP_FLAGS =
                 .cleanupVertexNormals(true)
                 .cleanupUVs(true)
                 .processVertexNormals(prtx::VertexNormalProcessor::SET_MISSING_TO_FACE_NORMALS)
-                .indexSharing(prtx::EncodePreparator::PreparationFlags::
-                                      INDICES_SEPARATE_FOR_ALL_VERTEX_ATTRIBUTES);
+                .indexSharing(prtx::EncodePreparator::PreparationFlags::INDICES_SEPARATE_FOR_ALL_VERTEX_ATTRIBUTES);
 
 using AttributeMapNOPtrVector = std::vector<const prt::AttributeMap*>;
 
@@ -111,8 +110,7 @@ private:
 
 				const prtx::MaterialPtr& mat = *matIt;
 				const uint32_t requiredUVSetsByMaterial = scanValidTextures(mat);
-				maxNumUVSets = std::max(maxNumUVSets,
-				                        std::max(mesh->getUVSetsCount(), requiredUVSetsByMaterial));
+				maxNumUVSets = std::max(maxNumUVSets, std::max(mesh->getUVSetsCount(), requiredUVSetsByMaterial));
 				++matIt;
 			}
 			++matsIt;
@@ -137,8 +135,8 @@ private:
 
 					const auto& faceUVCounts = mesh->getFaceUVCounts(uvSet);
 					numUvCounts[uvSet] += static_cast<uint32_t>(faceUVCounts.size());
-					numUvIndices[uvSet] = std::accumulate(faceUVCounts.begin(), faceUVCounts.end(),
-					                                      numUvIndices[uvSet]);
+					numUvIndices[uvSet] =
+					        std::accumulate(faceUVCounts.begin(), faceUVCounts.end(), numUvIndices[uvSet]);
 				}
 			}
 		}
@@ -154,8 +152,7 @@ private:
 		}
 	}
 
-	void serialize(const prtx::GeometryPtrVector& geometries,
-	               const std::vector<prtx::MaterialPtrVector>& materials) {
+	void serialize(const prtx::GeometryPtrVector& geometries, const std::vector<prtx::MaterialPtrVector>& materials) {
 		const uint32_t maxNumUVSets = static_cast<uint32_t>(mUvs.size());
 
 		const prtx::DoubleVector EMPTY_UVS;
@@ -184,42 +181,36 @@ private:
 				const uint32_t numUVSets = mesh->getUVSetsCount();
 				const prtx::DoubleVector& uvs0 = (numUVSets > 0) ? mesh->getUVCoords(0) : EMPTY_UVS;
 				const prtx::IndexVector faceUVCounts0 =
-				        (numUVSets > 0) ? mesh->getFaceUVCounts(0)
-				                        : prtx::IndexVector(mesh->getFaceCount(), 0);
+				        (numUVSets > 0) ? mesh->getFaceUVCounts(0) : prtx::IndexVector(mesh->getFaceCount(), 0);
 				if constexpr (DBG)
 					log_debug("-- mesh: numUVSets = %1%") % numUVSets;
 
 				for (uint32_t uvSet = 0; uvSet < mUvs.size(); uvSet++) {
 					// append texture coordinates
-					const prtx::DoubleVector& uvs =
-					        (uvSet < numUVSets) ? mesh->getUVCoords(uvSet) : EMPTY_UVS;
+					const prtx::DoubleVector& uvs = (uvSet < numUVSets) ? mesh->getUVCoords(uvSet) : EMPTY_UVS;
 					const auto& src = uvs.empty() ? uvs0 : uvs;
 					auto& tgt = mUvs[uvSet];
 					tgt.insert(tgt.end(), src.begin(), src.end());
 
 					// append uv face counts
-					const prtx::IndexVector& faceUVCounts = (uvSet < numUVSets && !uvs.empty())
-					                                                ? mesh->getFaceUVCounts(uvSet)
-					                                                : faceUVCounts0;
+					const prtx::IndexVector& faceUVCounts =
+					        (uvSet < numUVSets && !uvs.empty()) ? mesh->getFaceUVCounts(uvSet) : faceUVCounts0;
 					assert(faceUVCounts.size() == mesh->getFaceCount());
 					auto& tgtCnts = mUvCounts[uvSet];
 					tgtCnts.insert(tgtCnts.end(), faceUVCounts.begin(), faceUVCounts.end());
 					if constexpr (DBG)
-						log_debug("   -- uvset %1%: face counts size = %2%") % uvSet %
-						        faceUVCounts.size();
+						log_debug("   -- uvset %1%: face counts size = %2%") % uvSet % faceUVCounts.size();
 
 					// append uv vertex indices
-					for (uint32_t fi = 0, faceCount = static_cast<uint32_t>(faceUVCounts.size());
-					     fi < faceCount; ++fi) {
-						const uint32_t* faceUVIdx0 =
-						        (numUVSets > 0) ? mesh->getFaceUVIndices(fi, 0) : EMPTY_IDX.data();
-						const uint32_t* faceUVIdx = (uvSet < numUVSets && !uvs.empty())
-						                                    ? mesh->getFaceUVIndices(fi, uvSet)
-						                                    : faceUVIdx0;
+					for (uint32_t fi = 0, faceCount = static_cast<uint32_t>(faceUVCounts.size()); fi < faceCount;
+					     ++fi) {
+						const uint32_t* faceUVIdx0 = (numUVSets > 0) ? mesh->getFaceUVIndices(fi, 0) : EMPTY_IDX.data();
+						const uint32_t* faceUVIdx =
+						        (uvSet < numUVSets && !uvs.empty()) ? mesh->getFaceUVIndices(fi, uvSet) : faceUVIdx0;
 						const uint32_t faceUVCnt = faceUVCounts[fi];
 						if constexpr (DBG)
-							log_debug("      fi %1%: faceUVCnt = %2%, faceVtxCnt = %3%") % fi %
-							        faceUVCnt % mesh->getFaceVertexCount(fi);
+							log_debug("      fi %1%: faceUVCnt = %2%, faceVtxCnt = %3%") % fi % faceUVCnt %
+							        mesh->getFaceVertexCount(fi);
 						for (uint32_t vi = 0; vi < faceUVCnt; vi++)
 							mUvIndices[uvSet].push_back(uvIndexBases[uvSet] + faceUVIdx[vi]);
 					}
@@ -308,8 +299,7 @@ std::vector<const wchar_t*> toPtrVec(const prtx::WStringVector& wsv) {
 }
 
 template <typename T>
-std::pair<std::vector<const T*>, std::vector<size_t>>
-toPtrVec(const std::vector<std::vector<T>>& v) {
+std::pair<std::vector<const T*>, std::vector<size_t>> toPtrVec(const std::vector<std::vector<T>>& v) {
 	std::vector<const T*> pv(v.size());
 	std::vector<size_t> ps(v.size());
 	for (size_t i = 0; i < v.size(); i++) {
@@ -403,8 +393,7 @@ const std::set<std::wstring> MATERIAL_ATTRIBUTE_BLACKLIST = {
 #endif
 };
 
-void convertMaterialToAttributeMap(prtx::PRTUtils::AttributeMapBuilderPtr& aBuilder,
-                                   const prtx::Material& prtxAttr,
+void convertMaterialToAttributeMap(prtx::PRTUtils::AttributeMapBuilderPtr& aBuilder, const prtx::Material& prtxAttr,
                                    const prtx::WStringVector& keys) {
 	if (DBG)
 		log_debug(L"-- converting material: %1%") % prtxAttr.name();
@@ -483,8 +472,7 @@ void convertMaterialToAttributeMap(prtx::PRTUtils::AttributeMapBuilderPtr& aBuil
 
 			default:
 				if (DBG)
-					log_debug(L"ignored atttribute '%s' with type %d") % key %
-					        prtxAttr.getType(key);
+					log_debug(L"ignored atttribute '%s' with type %d") % key % prtxAttr.getType(key);
 				break;
 		}
 	}
@@ -492,8 +480,7 @@ void convertMaterialToAttributeMap(prtx::PRTUtils::AttributeMapBuilderPtr& aBuil
 
 } // namespace
 
-HydraEncoder::HydraEncoder(const std::wstring& id, const prt::AttributeMap* options,
-                           prt::Callbacks* callbacks)
+HydraEncoder::HydraEncoder(const std::wstring& id, const prt::AttributeMap* options, prt::Callbacks* callbacks)
     : prtx::GeometryEncoder(id, options, callbacks) {}
 
 void HydraEncoder::init(prtx::GenerateContext&) {
@@ -510,12 +497,11 @@ void HydraEncoder::encode(prtx::GenerateContext& context, size_t initialShapeInd
 	prtx::DefaultNamePreparator namePrep;
 	prtx::NamePreparator::NamespacePtr nsMesh = namePrep.newNamespace();
 	prtx::NamePreparator::NamespacePtr nsMaterial = namePrep.newNamespace();
-	prtx::EncodePreparatorPtr encPrep =
-	        prtx::EncodePreparator::create(true, namePrep, nsMesh, nsMaterial);
+	prtx::EncodePreparatorPtr encPrep = prtx::EncodePreparator::create(true, namePrep, nsMesh, nsMaterial);
 
 	prtx::ReportsAccumulatorPtr reportsAccumulator{prtx::WriteFirstReportsAccumulator::create()};
-	prtx::ReportingStrategyPtr reportsCollector{prtx::LeafShapeReportingStrategy::create(
-	        context, initialShapeIndex, reportsAccumulator)};
+	prtx::ReportingStrategyPtr reportsCollector{
+	        prtx::LeafShapeReportingStrategy::create(context, initialShapeIndex, reportsAccumulator)};
 	prtx::LeafIteratorPtr li = prtx::LeafIterator::create(context, initialShapeIndex);
 	for (prtx::ShapePtr shape = li->getNext(); shape; shape = li->getNext()) {
 		prtx::ReportsPtr r = reportsCollector->getReports(shape->getID());
@@ -529,8 +515,8 @@ void HydraEncoder::encode(prtx::GenerateContext& context, size_t initialShapeInd
 }
 
 void HydraEncoder::convertGeometry(const prtx::InitialShape& initialShape,
-                                   const prtx::EncodePreparator::InstanceVector& instances,
-                                   PrtCallbacks* cb, prt::Cache* cache) {
+                                   const prtx::EncodePreparator::InstanceVector& instances, PrtCallbacks* cb,
+                                   prt::Cache* cache) {
 	prtx::GeometryPtrVector geometries;
 	std::vector<prtx::MaterialPtrVector> materials;
 	std::vector<prtx::ReportsPtr> reports;
@@ -587,16 +573,14 @@ void HydraEncoder::convertGeometry(const prtx::InitialShape& initialShape,
 	auto puvCounts = toPtrVec(sg.mUvCounts);
 	auto puvIndices = toPtrVec(sg.mUvIndices);
 
-	cb->addMesh(initialShape.getName(), sg.mCoords.data(), sg.mCoords.size(), sg.mNormals.data(),
-	            sg.mNormals.size(), sg.mCounts.data(), sg.mCounts.size(), sg.mVertexIndices.data(),
-	            sg.mVertexIndices.size(), sg.mNormalIndices.data(), sg.mNormalIndices.size(),
+	cb->addMesh(initialShape.getName(), sg.mCoords.data(), sg.mCoords.size(), sg.mNormals.data(), sg.mNormals.size(),
+	            sg.mCounts.data(), sg.mCounts.size(), sg.mVertexIndices.data(), sg.mVertexIndices.size(),
+	            sg.mNormalIndices.data(), sg.mNormalIndices.size(),
 
-	            puvs.first.data(), puvs.second.data(), puvCounts.first.data(),
-	            puvCounts.second.data(), puvIndices.first.data(), puvIndices.second.data(),
-	            sg.mUvs.size(),
+	            puvs.first.data(), puvs.second.data(), puvCounts.first.data(), puvCounts.second.data(),
+	            puvIndices.first.data(), puvIndices.second.data(), sg.mUvs.size(),
 
-	            faceRanges.data(), faceRanges.size(),
-	            matAttrMaps.v.empty() ? nullptr : matAttrMaps.v.data(),
+	            faceRanges.data(), faceRanges.size(), matAttrMaps.v.empty() ? nullptr : matAttrMaps.v.data(),
 	            reportAttrMaps.v.empty() ? nullptr : reportAttrMaps.v.data(), shapeIDs.data());
 }
 

@@ -40,8 +40,7 @@ class PrtCallbacks;
 
 class HydraEncoder : public prtx::GeometryEncoder {
 public:
-	HydraEncoder(const std::wstring& id, const prt::AttributeMap* options,
-	             prt::Callbacks* callbacks);
+	HydraEncoder(const std::wstring& id, const prt::AttributeMap* options, prt::Callbacks* callbacks);
 	~HydraEncoder() override = default;
 
 public:
@@ -51,20 +50,18 @@ public:
 
 private:
 	void convertGeometry(const prtx::InitialShape& initialShape,
-	                     const prtx::EncodePreparator::InstanceVector& instances,
-	                     PrtCallbacks* callbacks, prt::Cache* cache);
+	                     const prtx::EncodePreparator::InstanceVector& instances, PrtCallbacks* callbacks,
+	                     prt::Cache* cache);
 };
 
-class HydraEncoderFactory : public prtx::EncoderFactory,
-                            public prtx::Singleton<HydraEncoderFactory> {
+class HydraEncoderFactory : public prtx::EncoderFactory, public prtx::Singleton<HydraEncoderFactory> {
 public:
 	static HydraEncoderFactory* createInstance();
 
 	explicit HydraEncoderFactory(const prt::EncoderInfo* info) : prtx::EncoderFactory(info) {}
 	~HydraEncoderFactory() override = default;
 
-	HydraEncoder* create(const prt::AttributeMap* options,
-	                     prt::Callbacks* callbacks) const override {
+	HydraEncoder* create(const prt::AttributeMap* options, prt::Callbacks* callbacks) const override {
 		return new HydraEncoder(getID(), options, callbacks);
 	}
 };

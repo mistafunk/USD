@@ -45,47 +45,39 @@ struct CGACError {
 };
 using CGACErrors = std::vector<CGACError>;
 
-using GeneratedData =
-        std::map<pxr::SdfPath, std::pair<pxr::HdContainerDataSourceHandle, pxr::TfToken>>;
+using GeneratedData = std::map<pxr::SdfPath, std::pair<pxr::HdContainerDataSourceHandle, pxr::TfToken>>;
 
 class PrtCallbacks : public prt::Callbacks {
 public:
 	PrtCallbacks(pxr::SdfPath primPath, pxr::HdGpGenerativeProcedural::ChildPrimTypeMap& childPrims,
 	             GeneratedData& generatedData, AttributeMapBuilderUPtr& amb)
-	    : mChildPrims(childPrims), mPrimPath(primPath), mGeneratedData(generatedData),
-	      mAttributeMapBuilder(amb) {}
+	    : mChildPrims(childPrims), mPrimPath(primPath), mGeneratedData(generatedData), mAttributeMapBuilder(amb) {}
 
 	// -- prt::Callbacks interface
-	prt::Status generateError(size_t /*isIndex*/, prt::Status /*status*/,
-	                          const wchar_t* message) override;
-	prt::Status assetError(size_t /*isIndex*/, prt::CGAErrorLevel level, const wchar_t* /*key*/,
-	                       const wchar_t* /*uri*/, const wchar_t* message) override;
+	prt::Status generateError(size_t /*isIndex*/, prt::Status /*status*/, const wchar_t* message) override;
+	prt::Status assetError(size_t /*isIndex*/, prt::CGAErrorLevel level, const wchar_t* /*key*/, const wchar_t* /*uri*/,
+	                       const wchar_t* message) override;
 
-	prt::Status cgaError(size_t /*isIndex*/, int32_t /*shapeID*/, prt::CGAErrorLevel /*level*/,
-	                     int32_t /*methodId*/, int32_t /*pc*/, const wchar_t* message) override;
+	prt::Status cgaError(size_t /*isIndex*/, int32_t /*shapeID*/, prt::CGAErrorLevel /*level*/, int32_t /*methodId*/,
+	                     int32_t /*pc*/, const wchar_t* message) override;
 	prt::Status cgaPrint(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* txt) override;
-	prt::Status cgaReportBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
-	                          bool /*value*/) override;
+	prt::Status cgaReportBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/, bool /*value*/) override;
 	prt::Status cgaReportFloat(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
 	                           double /*value*/) override;
 	prt::Status cgaReportString(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
 	                            const wchar_t* /*value*/) override;
 
-	prt::Status attrBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
-	                     bool /*value*/) override;
-	prt::Status attrFloat(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
-	                      double /*value*/) override;
+	prt::Status attrBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/, bool /*value*/) override;
+	prt::Status attrFloat(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/, double /*value*/) override;
 	prt::Status attrString(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
 	                       const wchar_t* /*value*/) override;
 
-	prt::Status attrBoolArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
-	                          const bool* /*values*/, size_t /*size*/, size_t /*nRows*/) override;
+	prt::Status attrBoolArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/, const bool* /*values*/,
+	                          size_t /*size*/, size_t /*nRows*/) override;
 	prt::Status attrFloatArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
-	                           const double* /*values*/, size_t /*size*/,
-	                           size_t /*nRows*/) override;
+	                           const double* /*values*/, size_t /*size*/, size_t /*nRows*/) override;
 	prt::Status attrStringArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
-	                            const wchar_t* const* /*values*/, size_t /*size*/,
-	                            size_t /*nRows*/) override;
+	                            const wchar_t* const* /*values*/, size_t /*size*/, size_t /*nRows*/) override;
 
 	// -- Hydra-specific interface
 

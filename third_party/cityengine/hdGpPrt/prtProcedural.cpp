@@ -80,15 +80,14 @@ public:
 		return result;
 	}
 
-	ChildPrimTypeMap Update(const HdSceneIndexBaseRefPtr& inputScene,
-	                        const ChildPrimTypeMap& previousResult,
+	ChildPrimTypeMap Update(const HdSceneIndexBaseRefPtr& inputScene, const ChildPrimTypeMap& previousResult,
 	                        const DependencyMap& dirtiedDependencies,
 	                        HdSceneIndexObserver::DirtiedPrimEntries* outputDirtiedPrims) override {
 		ChildPrimTypeMap result;
 
 		_Args args = _GetArgs(inputScene);
-		TF_STATUS("PrtProcedural::Update:\n   source mesh: %s\n   rpk: %s",
-		          args.sourceMeshPath.GetText(), args.rpkPath.GetResolvedPath().c_str());
+		TF_STATUS("PrtProcedural::Update:\n   source mesh: %s\n   rpk: %s", args.sourceMeshPath.GetText(),
+		          args.rpkPath.GetResolvedPath().c_str());
 
 		if (args.sourceMeshPath.IsEmpty()) {
 			mGeneratedData.clear();
@@ -110,10 +109,8 @@ public:
 		}
 		TfToken sourcePrimName = args.sourceMeshPath.GetNameToken();
 
-		HdPrimvarsSchema primvarsSchema =
-		        HdPrimvarsSchema::GetFromParent(sourceMeshPrim.dataSource);
-		HdPrimvarSchema pointsPrimvarSchema =
-		        primvarsSchema.GetPrimvar(HdPrimvarsSchemaTokens->points);
+		HdPrimvarsSchema primvarsSchema = HdPrimvarsSchema::GetFromParent(sourceMeshPrim.dataSource);
+		HdPrimvarSchema pointsPrimvarSchema = primvarsSchema.GetPrimvar(HdPrimvarsSchemaTokens->points);
 		HdSampledDataSourceHandle pointsHandle = pointsPrimvarSchema.GetPrimvarValue();
 		if (!pointsHandle)
 			return result;
@@ -140,9 +137,9 @@ public:
 		}
 
 		InitialShapeBuilderUPtr isb(prt::InitialShapeBuilder::create());
-		const prt::Status setGeoStatus = isb->setGeometry(
-		        prtPoints.data(), prtPoints.size(), (const uint32_t*)faceVertexIndices.cdata(),
-		        faceVertexIndices.size(), (const uint32_t*)faceCounts.cdata(), faceCounts.size());
+		const prt::Status setGeoStatus =
+		        isb->setGeometry(prtPoints.data(), prtPoints.size(), (const uint32_t*)faceVertexIndices.cdata(),
+		                         faceVertexIndices.size(), (const uint32_t*)faceCounts.cdata(), faceCounts.size());
 		if (setGeoStatus != prt::STATUS_OK) {
 			LOG_ERR << "InitialShapeBuilder setGeometry failed with status = "
 			        << prt::getStatusDescription(setGeoStatus);
@@ -164,12 +161,10 @@ public:
 			std::string subTmpDir = ArchMakeTmpSubdir(tmpDir, "hdGpPrt");
 			std::wstring unpackTmpDir = prtu::toUTF16FromUTF8(subTmpDir);
 			const std::wstring packageFileUri = prtu::toFileURIFromUtf8String(packagePath);
-			ResolveMapUPtr packageResolveMap(
-			        prt::createResolveMap(packageFileUri.c_str(), unpackTmpDir.c_str()));
+			ResolveMapUPtr packageResolveMap(prt::createResolveMap(packageFileUri.c_str(), unpackTmpDir.c_str()));
 
 			const std::wstring outerUriPath = prtu::toUTF16FromUTF8(packagedPath);
-			resolveMap.reset(
-			        prt::createResolveMap(packageResolveMap->getString(outerUriPath.c_str())));
+			resolveMap.reset(prt::createResolveMap(packageResolveMap->getString(outerUriPath.c_str())));
 		}
 		else {
 			const std::wstring rpkURI = prtu::toFileURIFromUtf8String(resolvedRpkPath);
@@ -206,8 +201,7 @@ public:
 			}
 			else if (value.IsHolding<std::string>()) {
 				LOG_DBG << "    value: " << value.UncheckedGet<std::string>();
-				amb->setString(u16Key.c_str(),
-				               prtu::toUTF16FromUTF8(value.UncheckedGet<std::string>()).c_str());
+				amb->setString(u16Key.c_str(), prtu::toUTF16FromUTF8(value.UncheckedGet<std::string>()).c_str());
 			}
 			else if (value.IsHolding<bool>()) {
 				LOG_DBG << "    value: " << value.UncheckedGet<bool>();
@@ -215,8 +209,8 @@ public:
 			}
 		}
 		AttributeMapUPtr initialShapeAttributes(amb->createAttributeMapAndReset());
-		isb->setAttributes(ruleFileKey.c_str(), startRule.c_str(), 0, L"sourceMesh",
-		                   initialShapeAttributes.get(), resolveMap.get());
+		isb->setAttributes(ruleFileKey.c_str(), startRule.c_str(), 0, L"sourceMesh", initialShapeAttributes.get(),
+		                   resolveMap.get());
 
 		InitialShapeUPtr initialShape(isb->createInitialShapeAndReset());
 
@@ -228,15 +222,13 @@ public:
 		SdfPath prtPrimPath = _GetProceduralPrimPath();
 		SdfPath prtChildPath = prtPrimPath.AppendChild(sourcePrimName);
 
-		std::unique_ptr<PrtCallbacks> outputHandler(
-		        new PrtCallbacks(prtChildPath, result, mGeneratedData, amb));
+		std::unique_ptr<PrtCallbacks> outputHandler(new PrtCallbacks(prtChildPath, result, mGeneratedData, amb));
 		InitialShapeNOPtrVector initialShapes = {initialShape.get()};
-		const prt::Status generateStatus = prt::generate(
-		        initialShapes.data(), initialShapes.size(), nullptr, encIDs.data(), encIDs.size(),
-		        encOpts.data(), outputHandler.get(), mPRTContext.mPRTCache.get(), nullptr);
+		const prt::Status generateStatus =
+		        prt::generate(initialShapes.data(), initialShapes.size(), nullptr, encIDs.data(), encIDs.size(),
+		                      encOpts.data(), outputHandler.get(), mPRTContext.mPRTCache.get(), nullptr);
 		if (generateStatus != prt::STATUS_OK) {
-			LOG_ERR << "PRT generate failed with status = "
-			        << prt::getStatusDescription(generateStatus);
+			LOG_ERR << "PRT generate failed with status = " << prt::getStatusDescription(generateStatus);
 			return result;
 		}
 
@@ -248,8 +240,7 @@ public:
 	}
 
 	// called concurrently from multiple threads
-	HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr& inputScene,
-	                              const SdfPath& childPrimPath) override {
+	HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr& inputScene, const SdfPath& childPrimPath) override {
 		TF_STATUS("GetChildPrim: %s", childPrimPath.GetText());
 		HdSceneIndexPrim result;
 		auto it = mGeneratedData.find(childPrimPath);
@@ -278,8 +269,7 @@ private:
 
 		HdPrimvarsSchema primvars = HdPrimvarsSchema::GetFromParent(myPrim.dataSource);
 
-		if (HdSampledDataSourceHandle sourceMeshDs =
-		            primvars.GetPrimvar(prtTokens->sourceMeshPath).GetPrimvarValue()) {
+		if (HdSampledDataSourceHandle sourceMeshDs = primvars.GetPrimvar(prtTokens->sourceMeshPath).GetPrimvarValue()) {
 			VtValue v = sourceMeshDs->GetValue(0.0f);
 
 			if (v.IsHolding<VtArray<SdfPath>>()) {
@@ -290,8 +280,7 @@ private:
 			}
 		}
 
-		if (HdSampledDataSourceHandle ds =
-		            primvars.GetPrimvar(prtTokens->rpkPath).GetPrimvarValue()) {
+		if (HdSampledDataSourceHandle ds = primvars.GetPrimvar(prtTokens->rpkPath).GetPrimvarValue()) {
 			VtValue v = ds->GetValue(0.0f);
 			if (v.IsHolding<SdfAssetPath>()) {
 				result.rpkPath = v.UncheckedGet<SdfAssetPath>();
@@ -319,8 +308,7 @@ public:
 			prtContext = std::make_unique<PRTContext>();
 			if (prtContext && prtContext->isAlive()) {
 				// shortcut: we avoid creating an extra dll for the encoder
-				prtx::ExtensionManager::instance().addFactory(
-				        HydraEncoderFactory::createInstance());
+				prtx::ExtensionManager::instance().addFactory(HydraEncoderFactory::createInstance());
 				LOG_INF << "Registered Hydra Encoder.";
 			}
 			else
@@ -338,6 +326,5 @@ public:
 };
 
 TF_REGISTRY_FUNCTION(TfType) {
-	HdGpGenerativeProceduralPluginRegistry::Define<PrtProceduralPlugin,
-	                                               HdGpGenerativeProceduralPlugin>();
+	HdGpGenerativeProceduralPluginRegistry::Define<PrtProceduralPlugin, HdGpGenerativeProceduralPlugin>();
 }

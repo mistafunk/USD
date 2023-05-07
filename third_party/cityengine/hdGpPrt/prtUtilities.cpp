@@ -75,8 +75,7 @@ const std::map<std::wstring, std::wstring> cgacToCEVersion = {
         // clang-format on
 };
 
-void replaceCGACVersionBetween(std::wstring& errorString, const std::wstring prefix,
-                               const std::wstring suffix) {
+void replaceCGACVersionBetween(std::wstring& errorString, const std::wstring prefix, const std::wstring suffix) {
 	size_t versionStartPos = errorString.find(prefix);
 	if (versionStartPos != std::wstring::npos)
 		versionStartPos += prefix.length();
@@ -110,8 +109,7 @@ std::filesystem::path getPluginRoot() {
 	char dllPath[_MAX_PATH];
 	HMODULE hModule = 0;
 
-	GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-	                          GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+	GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 	                  (LPCSTR)getPluginRoot, &hModule);
 	const DWORD res = ::GetModuleFileName(hModule, dllPath, _MAX_PATH);
 	if (res == 0) {
@@ -186,15 +184,9 @@ wchar_t toHex(int i) {
 Color parseColor(const wchar_t* colorString) {
 	Color c{0.0, 0.0, 0.0};
 	if (std::wcslen(colorString) >= 7 && colorString[0] == '#') {
-		c[0] = static_cast<float>((prtu::fromHex(colorString[1]) << 4) +
-		                          prtu::fromHex(colorString[2])) /
-		       255.0f;
-		c[1] = static_cast<float>((prtu::fromHex(colorString[3]) << 4) +
-		                          prtu::fromHex(colorString[4])) /
-		       255.0f;
-		c[2] = static_cast<float>((prtu::fromHex(colorString[5]) << 4) +
-		                          prtu::fromHex(colorString[6])) /
-		       255.0f;
+		c[0] = static_cast<float>((prtu::fromHex(colorString[1]) << 4) + prtu::fromHex(colorString[2])) / 255.0f;
+		c[1] = static_cast<float>((prtu::fromHex(colorString[3]) << 4) + prtu::fromHex(colorString[4])) / 255.0f;
+		c[2] = static_cast<float>((prtu::fromHex(colorString[5]) << 4) + prtu::fromHex(colorString[6])) / 255.0f;
 	}
 	return c;
 }
@@ -212,8 +204,7 @@ std::wstring getColorString(const Color& c) {
 }
 
 template <typename CO, typename CI, typename AF>
-std::basic_string<CO> stringConversionWrapper(AF apiFunc,
-                                              const std::basic_string<CI>& inputString) {
+std::basic_string<CO> stringConversionWrapper(AF apiFunc, const std::basic_string<CI>& inputString) {
 	if (inputString.empty())
 		return std::basic_string<CO>();
 
@@ -298,15 +289,14 @@ std::string objectToXML(prt::Object const* obj) {
 	return std::string(buffer.data());
 }
 
-AttributeMapUPtr createValidatedOptions(const wchar_t* encID,
-                                        const prt::AttributeMap* unvalidatedOptions) {
+AttributeMapUPtr createValidatedOptions(const wchar_t* encID, const prt::AttributeMap* unvalidatedOptions) {
 	const EncoderInfoUPtr encInfo(prt::createEncoderInfo(encID));
 	if (!encInfo)
 		return {};
 	const prt::AttributeMap* validatedOptions = nullptr;
 	const prt::AttributeMap* optionStates = nullptr;
-	const prt::Status s = encInfo->createValidatedOptionsAndStates(
-	        unvalidatedOptions, &validatedOptions, &optionStates);
+	const prt::Status s =
+	        encInfo->createValidatedOptionsAndStates(unvalidatedOptions, &validatedOptions, &optionStates);
 	if (optionStates != nullptr)
 		optionStates->destroy(); // we don't need that atm
 	if (s != prt::STATUS_OK)
@@ -323,8 +313,7 @@ void replaceCGACWithCEVersion(std::wstring& errorString) {
 	replaceCGACVersionBetween(errorString, L"(", L")");
 }
 
-std::wstring getDuplicateCountSuffix(const std::wstring& name,
-                                     std::map<std::wstring, int>& duplicateCountMap) {
+std::wstring getDuplicateCountSuffix(const std::wstring& name, std::map<std::wstring, int>& duplicateCountMap) {
 	auto [iterator, isFirstEntry] = duplicateCountMap.try_emplace(name, 0);
 	if (!isFirstEntry)
 		iterator->second++;

@@ -34,8 +34,7 @@ constexpr bool ENABLE_LOG_FILE = false;
 
 } // namespace
 
-PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs)
-    : mPluginRootPath(prtu::getPluginRoot()) {
+PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs) : mPluginRootPath(prtu::getPluginRoot()) {
 	if (DBG)
 		LOG_DBG << "initialized prt logger, plugin root path is " << mPluginRootPath.wstring();
 
@@ -46,8 +45,7 @@ PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs)
 
 	prt::Status status = prt::STATUS_UNSPECIFIED_ERROR;
 	const auto extensionPathPtrs = prtu::toPtrVec(extensionPaths);
-	mPRTHandle.reset(
-	        prt::init(extensionPathPtrs.data(), extensionPathPtrs.size(), PRT_LOG_LEVEL, &status));
+	mPRTHandle.reset(prt::init(extensionPathPtrs.data(), extensionPathPtrs.size(), PRT_LOG_LEVEL, &status));
 
 	if (!mPRTHandle || status != prt::STATUS_OK) {
 		LOG_FTL << "Could not initialize PRT: " << prt::getStatusDescription(status);
@@ -72,13 +70,12 @@ void PRTContext::registerClient() {
 		prt::addLogHandler(mLogHandler.get());
 	}
 
-//	if (ENABLE_LOG_FILE) {
-//		const std::wstring logPath = (mPluginRootPath / L"serlio.log").wstring();
-//		mFileLogHandler = prt::FileLogHandler::create(prt::LogHandler::ALL,
-//		                                              prt::LogHandler::ALL_COUNT, logPath.c_str());
-//		prt::addLogHandler(mFileLogHandler);
-//	}
-
+	//	if (ENABLE_LOG_FILE) {
+	//		const std::wstring logPath = (mPluginRootPath / L"serlio.log").wstring();
+	//		mFileLogHandler = prt::FileLogHandler::create(prt::LogHandler::ALL,
+	//		                                              prt::LogHandler::ALL_COUNT, logPath.c_str());
+	//		prt::addLogHandler(mFileLogHandler);
+	//	}
 }
 
 void PRTContext::unregisterClient() {

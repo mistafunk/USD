@@ -50,12 +50,11 @@ namespace {
 
 constexpr bool DBG = false;
 
-void detectAndAppendCGACErrors(prt::CGAErrorLevel level, const wchar_t* message,
-                               CGACErrors& cgacErrors) {
-	if (message != nullptr && (std::wcsstr(message, L"CGAC version") ||
-	                           std::wcsstr(message, L"Non-recognized builtin method"))) {
-		const bool shouldBeLogged = (std::wcsstr(message, L"newer than current") ||
-		                             (level == prt::CGAErrorLevel::CGAERROR));
+void detectAndAppendCGACErrors(prt::CGAErrorLevel level, const wchar_t* message, CGACErrors& cgacErrors) {
+	if (message != nullptr &&
+	    (std::wcsstr(message, L"CGAC version") || std::wcsstr(message, L"Non-recognized builtin method"))) {
+		const bool shouldBeLogged =
+		        (std::wcsstr(message, L"newer than current") || (level == prt::CGAErrorLevel::CGAERROR));
 
 		std::wstring stringMessage = message;
 		prtu::replaceCGACWithCEVersion(stringMessage);
@@ -64,24 +63,21 @@ void detectAndAppendCGACErrors(prt::CGAErrorLevel level, const wchar_t* message,
 }
 } // namespace
 
-prt::Status PrtCallbacks::generateError(size_t /*isIndex*/, prt::Status /*status*/,
-                                        const wchar_t* message) {
+prt::Status PrtCallbacks::generateError(size_t /*isIndex*/, prt::Status /*status*/, const wchar_t* message) {
 	LOG_ERR << "GENERATE ERROR: " << message;
 	detectAndAppendCGACErrors(prt::CGAErrorLevel::CGAERROR, message, cgacErrors);
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::assetError(size_t /*isIndex*/, prt::CGAErrorLevel level,
-                                     const wchar_t* /*key*/, const wchar_t* /*uri*/,
-                                     const wchar_t* message) {
+prt::Status PrtCallbacks::assetError(size_t /*isIndex*/, prt::CGAErrorLevel level, const wchar_t* /*key*/,
+                                     const wchar_t* /*uri*/, const wchar_t* message) {
 	LOG_ERR << "ASSET ERROR: " << message;
 	detectAndAppendCGACErrors(level, message, cgacErrors);
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::cgaError(size_t /*isIndex*/, int32_t /*shapeID*/,
-                                   prt::CGAErrorLevel /*level*/, int32_t /*methodId*/,
-                                   int32_t /*pc*/, const wchar_t* message) {
+prt::Status PrtCallbacks::cgaError(size_t /*isIndex*/, int32_t /*shapeID*/, prt::CGAErrorLevel /*level*/,
+                                   int32_t /*methodId*/, int32_t /*pc*/, const wchar_t* message) {
 	LOG_ERR << "CGA ERROR: " << message;
 	return prt::STATUS_OK;
 }
@@ -91,29 +87,27 @@ prt::Status PrtCallbacks::cgaPrint(size_t /*isIndex*/, int32_t /*shapeID*/, cons
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::cgaReportBool(size_t /*isIndex*/, int32_t /*shapeID*/,
-                                        const wchar_t* /*key*/, bool /*value*/) {
+prt::Status PrtCallbacks::cgaReportBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
+                                        bool /*value*/) {
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::cgaReportFloat(size_t /*isIndex*/, int32_t /*shapeID*/,
-                                         const wchar_t* /*key*/, double /*value*/) {
+prt::Status PrtCallbacks::cgaReportFloat(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
+                                         double /*value*/) {
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::cgaReportString(size_t /*isIndex*/, int32_t /*shapeID*/,
-                                          const wchar_t* /*key*/, const wchar_t* /*value*/) {
+prt::Status PrtCallbacks::cgaReportString(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* /*key*/,
+                                          const wchar_t* /*value*/) {
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::attrBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key,
-                                   bool value) {
+prt::Status PrtCallbacks::attrBool(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key, bool value) {
 	mAttributeMapBuilder->setBool(key, value);
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::attrFloat(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key,
-                                    double value) {
+prt::Status PrtCallbacks::attrFloat(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key, double value) {
 	mAttributeMapBuilder->setFloat(key, value);
 	return prt::STATUS_OK;
 }
@@ -124,22 +118,20 @@ prt::Status PrtCallbacks::attrString(size_t /*isIndex*/, int32_t /*shapeID*/, co
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::attrBoolArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key,
-                                        const bool* values, size_t size, size_t /*nRows*/) {
+prt::Status PrtCallbacks::attrBoolArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key, const bool* values,
+                                        size_t size, size_t /*nRows*/) {
 	mAttributeMapBuilder->setBoolArray(key, values, size);
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::attrFloatArray(size_t /*isIndex*/, int32_t /*shapeID*/,
-                                         const wchar_t* key, const double* values, size_t size,
-                                         size_t /*nRows*/) {
+prt::Status PrtCallbacks::attrFloatArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key,
+                                         const double* values, size_t size, size_t /*nRows*/) {
 	mAttributeMapBuilder->setFloatArray(key, values, size);
 	return prt::STATUS_OK;
 }
 
-prt::Status PrtCallbacks::attrStringArray(size_t /*isIndex*/, int32_t /*shapeID*/,
-                                          const wchar_t* key, const wchar_t* const* values,
-                                          size_t size, size_t /*nRows*/) {
+prt::Status PrtCallbacks::attrStringArray(size_t /*isIndex*/, int32_t /*shapeID*/, const wchar_t* key,
+                                          const wchar_t* const* values, size_t size, size_t /*nRows*/) {
 	mAttributeMapBuilder->setStringArray(key, values, size);
 	return prt::STATUS_OK;
 }
@@ -154,10 +146,8 @@ using Vec3fArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtArray<
 using IntArrayDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::VtIntArray>;
 using TokenDataSource = pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>;
 
-pxr::HdContainerDataSourceHandle createMeshTopologyDataSource(const uint32_t* faceCounts,
-                                                              size_t faceCountsSize,
-                                                              const uint32_t* vertexIndices,
-                                                              size_t vertexIndicesSize) {
+pxr::HdContainerDataSourceHandle createMeshTopologyDataSource(const uint32_t* faceCounts, size_t faceCountsSize,
+                                                              const uint32_t* vertexIndices, size_t vertexIndicesSize) {
 	pxr::VtIntArray faceVertexCounts(faceCounts, faceCounts + faceCountsSize);
 	pxr::VtIntArray faceVertexIndices(vertexIndices, vertexIndices + vertexIndicesSize);
 
@@ -167,9 +157,8 @@ pxr::HdContainerDataSourceHandle createMeshTopologyDataSource(const uint32_t* fa
 	        .Build();
 }
 
-pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, size_t vtxSize,
-                                                             const double* nrm, size_t nrmSize,
-                                                             const uint32_t* normalIndices,
+pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, size_t vtxSize, const double* nrm,
+                                                             size_t nrmSize, const uint32_t* normalIndices,
                                                              size_t normalIndicesSize) {
 	pxr::VtArray<pxr::GfVec3f> points;
 	points.reserve(vtxSize / 3);
@@ -189,19 +178,17 @@ pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, 
 	        pxr::HdPrimvarsSchemaTokens->points,
 	        pxr::HdPrimvarSchema::Builder()
 	                .SetPrimvarValue(Vec3fArrayDataSource::New(points))
-	                .SetInterpolation(pxr::HdPrimvarSchema::BuildInterpolationDataSource(
-	                        pxr::HdPrimvarSchemaTokens->vertex))
-	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(
-	                        pxr::HdPrimvarSchemaTokens->point))
+	                .SetInterpolation(
+	                        pxr::HdPrimvarSchema::BuildInterpolationDataSource(pxr::HdPrimvarSchemaTokens->vertex))
+	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(pxr::HdPrimvarSchemaTokens->point))
 	                .Build(),
 	        pxr::HdPrimvarsSchemaTokens->normals,
 	        pxr::HdPrimvarSchema::Builder()
 	                .SetPrimvarValue(Vec3fArrayDataSource::New(normals))
 	                .SetIndices(IntArrayDataSource::New(normalIndicesArray))
-	                .SetInterpolation(pxr::HdPrimvarSchema::BuildInterpolationDataSource(
-	                        pxr::HdPrimvarSchemaTokens->vertex))
-	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(
-	                        pxr::HdPrimvarSchemaTokens->normal))
+	                .SetInterpolation(
+	                        pxr::HdPrimvarSchema::BuildInterpolationDataSource(pxr::HdPrimvarSchemaTokens->vertex))
+	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(pxr::HdPrimvarSchemaTokens->normal))
 	                .Build());
 
 	return primvarsDs;
@@ -213,8 +200,7 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 	pxr::SdfPath prtMaterialsPath = primPath.AppendChild(pxr::TfToken(materialName));
 
 	static const pxr::HdTokenDataSourceHandle nodeIdentifierDataSource =
-	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(
-	                pxr::UsdImagingTokens->UsdPreviewSurface);
+	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(pxr::UsdImagingTokens->UsdPreviewSurface);
 
 	// details: pxr/usdImaging/usdImaging/drawModeStandin.cpp
 	std::vector<pxr::TfToken> parameterNames;
@@ -223,13 +209,11 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 	size_t diffuseColorSize = 0;
 	const double* rawDiffuseColor = material->getFloatArray(L"diffuseColor", &diffuseColorSize);
 	assert(diffuseColorSize == 3);
-	pxr::HdVec3fDataSourceHandle diffuseColor =
-	        pxr::HdRetainedTypedSampledDataSource<pxr::GfVec3f>::New(
-	                pxr::GfVec3f(rawDiffuseColor[0], rawDiffuseColor[1], rawDiffuseColor[2]));
+	pxr::HdVec3fDataSourceHandle diffuseColor = pxr::HdRetainedTypedSampledDataSource<pxr::GfVec3f>::New(
+	        pxr::GfVec3f(rawDiffuseColor[0], rawDiffuseColor[1], rawDiffuseColor[2]));
 
 	const double rawOpacity = material->getFloat(L"opacity");
-	const pxr::HdDataSourceBaseHandle opacity =
-	        pxr::HdRetainedTypedSampledDataSource<float>::New(rawOpacity);
+	const pxr::HdDataSourceBaseHandle opacity = pxr::HdRetainedTypedSampledDataSource<float>::New(rawOpacity);
 
 	parameterNames.emplace_back("diffuseColor");
 	parameters.push_back(diffuseColor);
@@ -237,19 +221,17 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 	parameters.push_back(opacity);
 
 	pxr::HdContainerDataSourceHandle materialNodeParameters =
-	        pxr::HdRetainedContainerDataSource::New(parameterNames.size(), parameterNames.data(),
-	                                                parameters.data());
-	pxr::HdContainerDataSourceHandle materialNode =
-	        pxr::HdMaterialNodeSchema::Builder()
-	                .SetNodeIdentifier(nodeIdentifierDataSource)
-	                .SetParameters(materialNodeParameters)
-	                .Build();
+	        pxr::HdRetainedContainerDataSource::New(parameterNames.size(), parameterNames.data(), parameters.data());
+	pxr::HdContainerDataSourceHandle materialNode = pxr::HdMaterialNodeSchema::Builder()
+	                                                        .SetNodeIdentifier(nodeIdentifierDataSource)
+	                                                        .SetParameters(materialNodeParameters)
+	                                                        .Build();
 
 	pxr::TfToken previewSurfaceNodeName = prtMaterialsPath.GetAsToken();
 	pxr::TfTokenVector nodeNames = {previewSurfaceNodeName};
 	std::vector<pxr::HdDataSourceBaseHandle> nodeValues = {materialNode};
-	pxr::HdContainerDataSourceHandle nodesDataSources = pxr::HdRetainedContainerDataSource::New(
-	        nodeNames.size(), nodeNames.data(), nodeValues.data());
+	pxr::HdContainerDataSourceHandle nodesDataSources =
+	        pxr::HdRetainedContainerDataSource::New(nodeNames.size(), nodeNames.data(), nodeValues.data());
 
 	const pxr::HdTokenDataSourceHandle nodePathName =
 	        pxr::HdRetainedTypedSampledDataSource<pxr::TfToken>::New(previewSurfaceNodeName);
@@ -265,26 +247,24 @@ auto createMaterialDataSource(const pxr::SdfPath& primPath, const prt::Attribute
 
 	pxr::TfTokenVector terminalNames = {terminalName};
 	std::vector<pxr::HdDataSourceBaseHandle> terminalValues = {terminalNode};
-	pxr::HdContainerDataSourceHandle terminalDataSources = pxr::HdRetainedContainerDataSource::New(
-	        terminalNames.size(), terminalNames.data(), terminalValues.data());
+	pxr::HdContainerDataSourceHandle terminalDataSources =
+	        pxr::HdRetainedContainerDataSource::New(terminalNames.size(), terminalNames.data(), terminalValues.data());
 
-	pxr::HdContainerDataSourceHandle materialNetworkDataSource =
-	        pxr::HdMaterialNetworkSchema::Builder()
-	                .SetNodes(nodesDataSources)
-	                .SetTerminals(terminalDataSources)
-	                .Build();
+	pxr::HdContainerDataSourceHandle materialNetworkDataSource = pxr::HdMaterialNetworkSchema::Builder()
+	                                                                     .SetNodes(nodesDataSources)
+	                                                                     .SetTerminals(terminalDataSources)
+	                                                                     .Build();
 
 	pxr::TfTokenVector materialTokens = {pxr::HdMaterialSchemaTokens->universalRenderContext};
 	std::vector<pxr::HdDataSourceBaseHandle> materialValues = {materialNetworkDataSource};
 	assert(materialTokens.size() == materialValues.size());
-	pxr::HdContainerDataSourceHandle materialDataSource = pxr::HdMaterialSchema::BuildRetained(
-	        materialTokens.size(), materialTokens.data(), materialValues.data());
+	pxr::HdContainerDataSourceHandle materialDataSource =
+	        pxr::HdMaterialSchema::BuildRetained(materialTokens.size(), materialTokens.data(), materialValues.data());
 
 	return std::make_tuple(prtMaterialsPath, materialDataSource);
 }
 
-pxr::HdOverlayContainerDataSourceHandle createGeomSubsetDataSource(pxr::SdfPath materialId,
-                                                                   uint32_t faceIndexStart,
+pxr::HdOverlayContainerDataSourceHandle createGeomSubsetDataSource(pxr::SdfPath materialId, uint32_t faceIndexStart,
                                                                    size_t faceIndexCount) {
 	pxr::VtIntArray geomSubsetIndices;
 	geomSubsetIndices.resize(faceIndexCount);
@@ -292,71 +272,62 @@ pxr::HdOverlayContainerDataSourceHandle createGeomSubsetDataSource(pxr::SdfPath 
 
 	auto geomSubsetTypeDs = TokenDataSource::New(pxr::HdGeomSubsetSchemaTokens->typeFaceSet);
 	auto geomSubsetIndicesDs = IntArrayDataSource::New(geomSubsetIndices);
-	auto geomSubsetDs =
-	        pxr::HdGeomSubsetSchema::BuildRetained(geomSubsetTypeDs, geomSubsetIndicesDs);
+	auto geomSubsetDs = pxr::HdGeomSubsetSchema::BuildRetained(geomSubsetTypeDs, geomSubsetIndicesDs);
 
 	std::array<pxr::TfToken, 1> purposeTokens = {pxr::HdMaterialBindingSchemaTokens->allPurpose};
 	std::array<pxr::HdDataSourceBaseHandle, 1> materialPaths = {
 	        pxr::HdRetainedTypedSampledDataSource<pxr::SdfPath>::New(materialId)};
 	static_assert(purposeTokens.size() == materialPaths.size());
 	std::array<pxr::HdContainerDataSourceHandle, 2> containers = {
-	        geomSubsetDs,
-	        pxr::HdRetainedContainerDataSource::New(
-	                pxr::HdMaterialBindingSchemaTokens->materialBinding,
-	                pxr::HdMaterialBindingSchema::BuildRetained(
-	                        materialPaths.size(), purposeTokens.data(), materialPaths.data()))};
+	        geomSubsetDs, pxr::HdRetainedContainerDataSource::New(
+	                              pxr::HdMaterialBindingSchemaTokens->materialBinding,
+	                              pxr::HdMaterialBindingSchema::BuildRetained(
+	                                      materialPaths.size(), purposeTokens.data(), materialPaths.data()))};
 
 	return pxr::HdOverlayContainerDataSource::New(containers.size(), containers.data());
 }
 
 } // namespace
 
-void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, const double* nrm,
-                           size_t nrmSize, const uint32_t* faceCounts, size_t faceCountsSize,
-                           const uint32_t* vertexIndices, size_t vertexIndicesSize,
-                           const uint32_t* normalIndices, size_t normalIndicesSize,
-                           double const* const* uvs, size_t const* uvsSizes,
-                           uint32_t const* const* uvCounts, size_t const* uvCountsSizes,
-                           uint32_t const* const* uvIndices, size_t const* uvIndicesSizes,
+void PrtCallbacks::addMesh(const wchar_t*, const double* vtx, size_t vtxSize, const double* nrm, size_t nrmSize,
+                           const uint32_t* faceCounts, size_t faceCountsSize, const uint32_t* vertexIndices,
+                           size_t vertexIndicesSize, const uint32_t* normalIndices, size_t normalIndicesSize,
+                           double const* const* uvs, size_t const* uvsSizes, uint32_t const* const* uvCounts,
+                           size_t const* uvCountsSizes, uint32_t const* const* uvIndices, size_t const* uvIndicesSizes,
                            size_t uvSetsCount, const uint32_t* faceRanges, size_t faceRangesSize,
                            const prt::AttributeMap** materials, const prt::AttributeMap** reports,
                            const int32_t* shapeIDs) {
-	pxr::HdContainerDataSourceHandle meshTopologyDs = createMeshTopologyDataSource(
-	        faceCounts, faceCountsSize, vertexIndices, vertexIndicesSize);
-	pxr::HdContainerDataSourceHandle primvarDs = createMeshPrimvarDataSource(
-	        vtx, vtxSize, nrm, nrmSize, normalIndices, normalIndicesSize);
+	pxr::HdContainerDataSourceHandle meshTopologyDs =
+	        createMeshTopologyDataSource(faceCounts, faceCountsSize, vertexIndices, vertexIndicesSize);
+	pxr::HdContainerDataSourceHandle primvarDs =
+	        createMeshPrimvarDataSource(vtx, vtxSize, nrm, nrmSize, normalIndices, normalIndicesSize);
 
 	std::vector<pxr::TfToken> subsetNames;
 	std::vector<pxr::HdDataSourceBaseHandle> subsets;
 	for (size_t fri = 0; fri < faceRangesSize - 1; fri++) {
 		auto [materialPath, materialDs] = createMaterialDataSource(mPrimPath, materials[fri]);
 
-		auto materialContainerDs = pxr::HdRetainedContainerDataSource::New(
-		        pxr::HdMaterialSchemaTokens->material, materialDs);
+		auto materialContainerDs =
+		        pxr::HdRetainedContainerDataSource::New(pxr::HdMaterialSchemaTokens->material, materialDs);
 		mGeneratedData.emplace(materialPath,
 		                       std::make_pair(materialContainerDs, pxr::HdMaterialSchemaTokens->material));
 		mChildPrims[materialPath] = pxr::HdMaterialSchemaTokens->material;
 
 		const uint32_t faceIndexStart = faceRanges[fri];
 		const size_t faceIndexCount = faceRanges[fri + 1] - faceRanges[fri];
-		auto geomSubsetDs =
-		        createGeomSubsetDataSource(materialPath, faceIndexStart, faceIndexCount);
+		auto geomSubsetDs = createGeomSubsetDataSource(materialPath, faceIndexStart, faceIndexCount);
 
 		subsetNames.push_back(materialPath.GetNameToken());
 		subsets.push_back(geomSubsetDs);
 	}
 
-	auto geomSubsetsDs = pxr::HdRetainedContainerDataSource::New(
-	        subsetNames.size(), subsetNames.data(), subsets.data());
+	auto geomSubsetsDs =
+	        pxr::HdRetainedContainerDataSource::New(subsetNames.size(), subsetNames.data(), subsets.data());
 
-	auto meshDs = pxr::HdMeshSchema::Builder()
-	                      .SetTopology(meshTopologyDs)
-	                      .SetGeomSubsets(geomSubsetsDs)
-	                      .Build();
+	auto meshDs = pxr::HdMeshSchema::Builder().SetTopology(meshTopologyDs).SetGeomSubsets(geomSubsetsDs).Build();
 
 	auto geoDs = pxr::HdRetainedContainerDataSource::New(pxr::HdMeshSchemaTokens->mesh, meshDs,
-	                                                     pxr::HdPrimvarsSchemaTokens->primvars,
-	                                                     primvarDs);
+	                                                     pxr::HdPrimvarsSchemaTokens->primvars, primvarDs);
 
 	pxr::SdfPath prtMeshPath = mPrimPath.AppendChild(pxr::HdPrimTypeTokens->mesh);
 

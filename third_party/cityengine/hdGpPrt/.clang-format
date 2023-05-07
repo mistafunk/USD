@@ -7,7 +7,7 @@ BraceWrapping:
   BeforeCatch: true
   BeforeElse: true
 BreakBeforeBraces: Custom
-ColumnLimit: 100
+ColumnLimit: 120
 ContinuationIndentWidth: 8
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
