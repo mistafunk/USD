@@ -172,7 +172,7 @@ pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, 
 		normals.emplace_back(nrm[i], nrm[i + 1], nrm[i + 2]);
 	}
 
-	pxr::VtIntArray normalIndicesArray(normalIndices, normalIndices + normalIndicesSize);
+//	pxr::VtIntArray normalIndicesArray(normalIndices, normalIndices + normalIndicesSize);
 
 	pxr::HdContainerDataSourceHandle primvarsDs = pxr::HdRetainedContainerDataSource::New(
 	        pxr::HdPrimvarsSchemaTokens->points,
@@ -185,7 +185,7 @@ pxr::HdContainerDataSourceHandle createMeshPrimvarDataSource(const double* vtx, 
 	        pxr::HdPrimvarsSchemaTokens->normals,
 	        pxr::HdPrimvarSchema::Builder()
 	                .SetPrimvarValue(Vec3fArrayDataSource::New(normals))
-	                .SetIndices(IntArrayDataSource::New(normalIndicesArray))
+	                //.SetIndices(IntArrayDataSource::New(normalIndicesArray))
 	                .SetInterpolation(
 	                        pxr::HdPrimvarSchema::BuildInterpolationDataSource(pxr::HdPrimvarSchemaTokens->vertex))
 	                .SetRole(pxr::HdPrimvarSchema::BuildRoleDataSource(pxr::HdPrimvarSchemaTokens->normal))
