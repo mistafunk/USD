@@ -22,7 +22,7 @@
 
 #include "pxr/imaging/hd/geomSubset.h"
 #include "pxr/imaging/hd/material.h"
-#include "pxr/imaging/hd/materialBindingSchema.h"
+#include "pxr/imaging/hd/materialBindingsSchema.h"
 #include "pxr/imaging/hd/materialConnectionSchema.h"
 #include "pxr/imaging/hd/materialNetworkSchema.h"
 #include "pxr/imaging/hd/materialNodeSchema.h"
@@ -274,14 +274,14 @@ pxr::HdOverlayContainerDataSourceHandle createGeomSubsetDataSource(pxr::SdfPath 
 	auto geomSubsetIndicesDs = IntArrayDataSource::New(geomSubsetIndices);
 	auto geomSubsetDs = pxr::HdGeomSubsetSchema::BuildRetained(geomSubsetTypeDs, geomSubsetIndicesDs);
 
-	std::array<pxr::TfToken, 1> purposeTokens = {pxr::HdMaterialBindingSchemaTokens->allPurpose};
+	std::array<pxr::TfToken, 1> purposeTokens = {pxr::HdMaterialBindingsSchemaTokens->allPurpose};
 	std::array<pxr::HdDataSourceBaseHandle, 1> materialPaths = {
 	        pxr::HdRetainedTypedSampledDataSource<pxr::SdfPath>::New(materialId)};
 	static_assert(purposeTokens.size() == materialPaths.size());
 	std::array<pxr::HdContainerDataSourceHandle, 2> containers = {
 	        geomSubsetDs, pxr::HdRetainedContainerDataSource::New(
-	                              pxr::HdMaterialBindingSchemaTokens->materialBinding,
-	                              pxr::HdMaterialBindingSchema::BuildRetained(
+	                              pxr::HdMaterialBindingsSchemaTokens->materialBindings,
+	                              pxr::HdMaterialBindingsSchema::BuildRetained(
 	                                      materialPaths.size(), purposeTokens.data(), materialPaths.data()))};
 
 	return pxr::HdOverlayContainerDataSource::New(containers.size(), containers.data());
