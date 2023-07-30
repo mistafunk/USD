@@ -21,6 +21,8 @@
 
 #include "prt/LogLevel.h"
 
+#include "pxr/base/tf/diagnostic.h"
+
 #include <mutex>
 
 namespace {
@@ -36,7 +38,7 @@ constexpr bool ENABLE_LOG_FILE = false;
 
 PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs) : mPluginRootPath(prtu::getPluginRoot()) {
 	if (DBG)
-		LOG_DBG << "initialized prt logger, plugin root path is " << mPluginRootPath.wstring();
+		LOG_DBG << "Initializing PRT context, plugin root path is " << mPluginRootPath.wstring();
 
 	std::vector<std::wstring> extensionPaths = {(mPluginRootPath / PRT_EXT_SUBDIR).wstring()};
 	extensionPaths.insert(extensionPaths.end(), addExtDirs.begin(), addExtDirs.end());
@@ -55,6 +57,9 @@ PRTContext::PRTContext(const std::vector<std::wstring>& addExtDirs) : mPluginRoo
 		mPRTCache.reset(prt::CacheObject::create(prt::CacheObject::CACHE_TYPE_DEFAULT));
 		// mResolveMapCache = std::make_unique<ResolveMapCache>();
 	}
+
+	using namespace pxr;
+	TF_STATUS("Initialized PRT %s", prt::getVersion()->mVersion);
 }
 
 bool PRTContext::isAlive() const {

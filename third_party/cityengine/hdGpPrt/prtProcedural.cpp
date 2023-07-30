@@ -50,6 +50,8 @@ PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace {
 
+constexpr bool DBG = false;
+
 constexpr const wchar_t* ENC_ID_ATTR_EVAL = L"com.esri.prt.core.AttributeEvalEncoder";
 constexpr const wchar_t* ENC_ID_CGA_ERROR = L"com.esri.prt.core.CGAErrorEncoder";
 constexpr const wchar_t* ENC_ID_CGA_PRINT = L"com.esri.prt.core.CGAPrintEncoder";
@@ -62,13 +64,15 @@ class PrtProcedural : public HdGpGenerativeProcedural {
 public:
 	PrtProcedural(PRTContext& prtContext, const SdfPath& proceduralPrimPath)
 	    : HdGpGenerativeProcedural(proceduralPrimPath), mPRTContext(prtContext) {
-		TF_STATUS("PrtProcedural c'tor");
+		if (DBG)
+			TF_STATUS("PrtProcedural c'tor");
 		mPRTContext.registerClient();
 	}
 
 	virtual ~PrtProcedural() override {
-		TF_STATUS("PrtProcedural d'tor");
 		mPRTContext.unregisterClient();
+		if (DBG)
+			TF_STATUS("PrtProcedural d'tor");
 	}
 
 	DependencyMap UpdateDependencies(const HdSceneIndexBaseRefPtr& inputScene) override {
@@ -86,8 +90,8 @@ public:
 		ChildPrimTypeMap result;
 
 		_Args args = _GetArgs(inputScene);
-		TF_STATUS("PrtProcedural::Update:\n   source mesh: %s\n   rpk: %s", args.sourceMeshPath.GetText(),
-		          args.rpkPath.GetResolvedPath().c_str());
+		LOG_DBG << "source mesh: " << args.sourceMeshPath.GetText() << "\n   rpk: "
+		        << args.rpkPath.GetResolvedPath().c_str();
 
 		if (args.sourceMeshPath.IsEmpty()) {
 			mGeneratedData.clear();
@@ -100,10 +104,10 @@ public:
 			return result;
 		}
 
-		TF_STATUS("source mesh path: %s", args.sourceMeshPath.GetText());
+		LOG_DBG << "source mesh path: " << args.sourceMeshPath.GetText();
 		HdMeshSchema sourceMeshSchema = HdMeshSchema::GetFromParent(sourceMeshPrim.dataSource);
 		if (!sourceMeshSchema) {
-			TF_WARN("cannot get mesh schema from %s", args.sourceMeshPath.GetText());
+			LOG_WRN << "cannot get mesh schema from " << args.sourceMeshPath.GetText();
 			mGeneratedData.clear();
 			return result;
 		}
@@ -174,7 +178,7 @@ public:
 		if (!resolveMap)
 			return result;
 
-		LOG_DBG << prtu::objectToXML(resolveMap.get());
+		if (DBG) LOG_DBG << prtu::objectToXML(resolveMap.get());
 
 		const std::wstring ruleFileKey = prtu::getRuleFileEntry(*resolveMap);
 		const wchar_t* ruleFileUri = resolveMap->getString(ruleFileKey.c_str());
@@ -241,7 +245,7 @@ public:
 
 	// called concurrently from multiple threads
 	HdSceneIndexPrim GetChildPrim(const HdSceneIndexBaseRefPtr& inputScene, const SdfPath& childPrimPath) override {
-		TF_STATUS("GetChildPrim: %s", childPrimPath.GetText());
+		LOG_DBG << "GetChildPrim: " << childPrimPath.GetText();
 		HdSceneIndexPrim result;
 		auto it = mGeneratedData.find(childPrimPath);
 		if (it != mGeneratedData.end()) {
@@ -301,7 +305,8 @@ PRTContextUPtr prtContext;
 class PrtProceduralPlugin : public HdGpGenerativeProceduralPlugin {
 public:
 	PrtProceduralPlugin() {
-		TF_STATUS("PrtProceduralPlugin c'tor");
+		if (DBG)
+			TF_STATUS("PrtProceduralPlugin c'tor");
 		std::call_once(prtContextInitializationFlag, []() {
 			if (prtContext)
 				TF_CODING_ERROR("Unexpected state of PRT context!");
@@ -309,15 +314,17 @@ public:
 			if (prtContext && prtContext->isAlive()) {
 				// shortcut: we avoid creating an extra dll for the encoder
 				prtx::ExtensionManager::instance().addFactory(HydraEncoderFactory::createInstance());
-				LOG_INF << "Registered Hydra Encoder.";
+				if (DBG)
+					TF_STATUS("Registered Hydra Encoder.");
 			}
 			else
-				LOG_ERR << "Unable to load the ArcGIS Procedural Runtime PRT!";
+				TF_FATAL_ERROR("Unable to load the ArcGIS Procedural Runtime PRT!");
 		});
 	}
 
 	virtual ~PrtProceduralPlugin() override {
-		TF_STATUS("PrtProceduralPlugin d'tor"); // this is not called by default
+		if (DBG)
+			TF_STATUS("PrtProceduralPlugin d'tor"); // this is not called by default
 	}
 
 	HdGpGenerativeProcedural* Construct(const SdfPath& proceduralPrimPath) override {
