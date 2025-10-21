@@ -1,0 +1,43 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World" (
+    apiSchemas = ["BindingAPI"]
+    references = [@./crs.usda@</CRS/UTM30N>]
+)
+{
+    uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:translate"]
+    double3 xformOp:translate = (708276.91981815, 5706731.7076084, 50)
+
+    def Xform "NewYork" (
+        apiSchemas = ["BindingAPI"]
+        references = [@./crs.usda@</CRS/UTM17N>]
+    )
+    {
+        uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:translate"]
+        double3 xformOp:translate = (586000, 4515000, 50)
+
+        def Xform "MoMa"
+        {
+            double3 xformOp:translate = (-393.7, -337.3, 0) # Z-up
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+
+            def Mesh "MoMaBuilding"
+            {
+                int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+                int[] faceVertexIndices = [0, 1, 2, 3, 4, 7, 6, 5, 0, 4, 5, 1, 1, 5, 6, 2, 2, 6, 7, 3, 4, 0, 3, 7]
+                point3f[] points = [(-50, 0, -30), (50, 0, -30), (50, 0, 30), (-50, 0, 30), (-50, 100, -30), (50, 100, -30), (50, 100, 30), (-50, 100, 30)]
+                
+                color3f[] primvars:displayColor = [(0.8, 0.8, 0.9)] (
+                    interpolation = "constant"
+                )
+                
+                string purpose = "default"
+            }
+        }
+    }
+}
