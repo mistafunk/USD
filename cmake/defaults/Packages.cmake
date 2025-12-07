@@ -295,6 +295,35 @@ if (PXR_BUILD_DRACO_PLUGIN)
     find_package(Draco REQUIRED)
 endif()
 
+if (PXR_BUILD_GLTF_PLUGIN)
+    # Fetch TinyGLTF (required dependency for glTF plugin)
+    include(FetchContent)
+
+    FetchContent_Declare(
+        tinygltf
+        GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+        GIT_TAG v2.9.7
+    )
+
+    # Configure TinyGLTF options
+    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "")
+    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "")
+    set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "")
+
+    FetchContent_MakeAvailable(tinygltf)
+
+    # Set variables for use in plugin CMakeLists
+    set(TINYGLTF_INCLUDE_DIR "${tinygltf_SOURCE_DIR}")
+
+    # Check if Draco is available (from PXR_BUILD_DRACO_PLUGIN)
+    if(DRACO_FOUND OR DRACO_LIBRARY)
+        set(GLTF_HAS_DRACO TRUE)
+        add_definitions(-DGLTF_ENABLE_DRACO)
+    else()
+        set(GLTF_HAS_DRACO FALSE)
+    endif()
+endif()
+
 if (PXR_ENABLE_MATERIALX_SUPPORT)
     find_package(MaterialX REQUIRED)
     add_definitions(-DPXR_MATERIALX_SUPPORT_ENABLED)

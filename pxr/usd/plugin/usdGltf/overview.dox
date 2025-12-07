@@ -1,0 +1,101 @@
+/*!
+\page usd_gltf_page_front UsdGltf: glTF File Format Plugin
+\if ( PIXAR_MFB_BUILD )
+\mainpage UsdGltf: glTF File Format Plugin
+\endif
+
+\section usd_gltf_overview Overview
+
+UsdGltf provides a file format plugin for reading glTF 2.0 assets
+(both .gltf and .glb formats) as USD stages. This plugin is based
+on Adobe's USD glTF implementation and includes support for the
+Khronos Group® glTF™ specification.
+
+\section usd_gltf_features Features
+
+The plugin supports importing glTF 2.0 files with the following features:
+
+- \b Geometry: Meshes with positions, normals, UVs, vertex colors, and skinning data
+- \b Materials: Support for UsdPreviewSurface and material extensions
+- \b Textures: Image references and embedded textures
+- \b Transforms: Node hierarchies with transformations
+- \b Animation: Skeletal animations and transform animations
+- \b Cameras: Perspective and orthographic cameras
+- \b Lights: Support for KHR_lights_punctual extension
+
+\subsection usd_gltf_extensions glTF Extensions
+
+The plugin supports various glTF extensions including:
+- KHR_materials_specular
+- KHR_materials_anisotropy
+- KHR_materials_clearcoat
+- KHR_draco_mesh_compression (when Draco support is enabled)
+- And others
+
+\section usd_gltf_usage Usage
+
+Once the plugin is built and installed, glTF files can be opened
+directly with USD tools:
+
+\code
+# Open a glTF file
+usdcat model.gltf
+
+# View a glTF file
+usdview model.glb
+
+# Reference a glTF file in a USD stage
+from pxr import Usd
+stage = Usd.Stage.Open("model.gltf")
+\endcode
+
+\subsection usd_gltf_file_format_args File Format Arguments
+
+The plugin supports several file format arguments for customization:
+
+- \c assetsPath - Alternative path to store imported assets
+- \c animationTracks - Enable importing multiple animation tracks (default: false)
+
+Example usage with file format arguments:
+
+\code
+stage = Usd.Stage.Open("model.gltf:SDF_FORMAT_ARGS:animationTracks=true")
+\endcode
+
+\section usd_gltf_package_resolver Package Resolution
+
+The plugin includes a package resolver (GltfResolver) that enables
+glTF files to be treated as packages, allowing referenced assets
+(textures, binary data) to be properly resolved whether they are
+embedded or external.
+
+\section usd_gltf_limitations Limitations
+
+- The plugin provides read-only support (import only)
+- Some advanced glTF features may have limited support
+- Export functionality is not currently implemented
+
+\section usd_gltf_dependencies Dependencies
+
+- \b TinyGLTF - Required for glTF parsing (automatically downloaded)
+- \b Draco - Optional for compressed mesh support (uses existing USD Draco if available)
+
+\section usd_gltf_build Building
+
+The plugin is built as part of USD when the \c PXR_BUILD_GLTF_PLUGIN option is enabled:
+
+\code
+cmake -DPXR_BUILD_GLTF_PLUGIN=ON ...
+\endcode
+
+For Draco compression support, also enable:
+
+\code
+cmake -DPXR_BUILD_GLTF_PLUGIN=ON -DPXR_BUILD_DRACO_PLUGIN=ON ...
+\endcode
+
+\section usd_gltf_credits Credits
+
+This plugin is based on Adobe's USD File Format Plugins project:
+https://github.com/adobe/USD-Fileformat-plugins
+*/
