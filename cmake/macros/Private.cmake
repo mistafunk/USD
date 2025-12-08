@@ -1311,6 +1311,7 @@ function(_pxr_library NAME)
     target_compile_definitions(${NAME}
         PUBLIC
             ${apiPublic}
+            TBB_SUPPRESS_DEPRECATED_MESSAGES=1
         PRIVATE
             MFB_PACKAGE_NAME=${PXR_PACKAGE}
             MFB_ALT_PACKAGE_NAME=${PXR_PACKAGE}
