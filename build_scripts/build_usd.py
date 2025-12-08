@@ -1377,7 +1377,8 @@ def InstallOpenImageIO(context, force, buildArgs):
         buildOIIOTools = 'ON' if (context.buildUsdImaging
                                   and context.buildTests
                                   and not context.targetWasm) else 'OFF'
-        extraArgs = ['-DOIIO_BUILD_TOOLS={}'.format(buildOIIOTools),
+        extraArgs = ['-DCMAKE_CXX_STANDARD=17',
+                     '-DOIIO_BUILD_TOOLS={}'.format(buildOIIOTools),
                      '-DOIIO_BUILD_TESTS=OFF',
                      '-DBUILD_DOCS=OFF',
                      '-DUSE_PYTHON=OFF',
