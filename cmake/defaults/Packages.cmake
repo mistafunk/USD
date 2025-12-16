@@ -218,8 +218,8 @@ if (PXR_BUILD_IMAGING)
     endif()
     # --Opensubdiv
     set(OPENSUBDIV_USE_GPU ${PXR_BUILD_GPU_SUPPORT})
-    find_package(OpenSubdiv 3 CONFIG)
-    if(OpenSubdiv_DIR)
+    find_package(OpenSubdiv 3 CONFIG NO_DEFAULT_PATH)
+    if(OpenSubdiv_FOUND OR OPENSUBDIV_FOUND)
         # Found in CONFIG mode.
         # First check the shared, then the static library, just like find_library() in FindOpenSubdiv.cmake.
         foreach(postfix "" "_static")
@@ -289,6 +289,9 @@ if (PXR_BUILD_ALEMBIC_PLUGIN)
 endif()
 
 if (PXR_BUILD_DRACO_PLUGIN)
+    if (POLICY CMP0144)
+        cmake_policy(SET CMP0144 NEW)
+    endif()
     find_package(Draco REQUIRED)
 endif()
 
