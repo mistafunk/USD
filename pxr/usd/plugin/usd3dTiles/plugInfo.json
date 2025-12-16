@@ -1,0 +1,30 @@
+{
+    "Plugins": [
+        {
+            "Info": {
+                "Types": {
+                    "Usd3dTilesFileFormat": {
+                        "bases": [
+                            "SdfFileFormat"
+                        ],
+                        "displayName": "OGC 3D Tiles",
+                        "extensions": [
+                            "json"
+                        ],
+                        "formatId": "3dtiles",
+                        "primary": false,
+                        "target": "usd",
+                        "supportsReading": true,
+                        "supportsEditing": false,
+                        "supportsWriting": false
+                    }
+                }
+            },
+            "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@",
+            "Name": "usd3dTiles",
+            "ResourcePath": "@PLUG_INFO_RESOURCE_PATH@",
+            "Root": "@PLUG_INFO_ROOT@",
+            "Type": "library"
+        }
+    ]
+}
