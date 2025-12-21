@@ -1789,6 +1789,13 @@ importMeshes(ImportGltfContext& ctx)
                     break;
                 }
                 case TINYGLTF_MODE_POINTS:
+                    // Points don't need indices - each vertex is a point
+                    // But if indices are provided, we could use them to select a subset
+                    mesh.asPoints = true;
+                    // Set default point widths (1.0 for each point)
+                    mesh.pointWidths.resize(mesh.points.size());
+                    std::fill(mesh.pointWidths.begin(), mesh.pointWidths.end(), 0.01f);
+                    break;
                 case TINYGLTF_MODE_LINE:
                 case TINYGLTF_MODE_LINE_LOOP:
                 case TINYGLTF_MODE_LINE_STRIP:
@@ -1800,7 +1807,11 @@ importMeshes(ImportGltfContext& ctx)
 
                     break;
             }
-            mesh.faces = PXR_NS::VtArray<int>(mesh.indices.size() / 3, 3);
+
+            // Only set faces for triangle-based primitives (not points)
+            if (!mesh.asPoints) {
+                mesh.faces = PXR_NS::VtArray<int>(mesh.indices.size() / 3, 3);
+            }
 
             importMeshJointWeights(*ctx.gltf, primitive, mesh);
 
