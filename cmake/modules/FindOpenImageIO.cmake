@@ -27,6 +27,7 @@ if(UNIX)
             "${OIIO_BASE_DIR}"
         PATH_SUFFIXES
             lib/
+            lib64/
         DOC
             "OpenImageIO library path"
     )
