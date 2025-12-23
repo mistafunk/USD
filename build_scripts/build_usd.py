@@ -1394,6 +1394,14 @@ def InstallOpenImageIO(context, force, buildArgs):
         extraArgs.append('-DOPENEXR_ROOT="{instDir}"'
                          .format(instDir=context.instDir))
 
+        extraArgs.append(f'-DTIFF_INCLUDE_DIR={os.path.join(context.instDir, "include")}')
+        extraArgs.append(f'-DTIFF_LIBRARY_RELEASE={os.path.join(context.instDir, "lib64", "libtiff.so")}')
+        extraArgs.append(f'-DTIFF_LIBRARY_DEBUG={os.path.join(context.instDir, "lib64", "libtiff.so")}')
+
+        extraArgs.append('-DDCMTK_FOUND=FALSE')
+        extraArgs.append('-DCMAKE_DISABLE_FIND_PACKAGE_OpenCV=TRUE')
+        extraArgs.append('-DLIBHEIF_INCLUDE_PATH=/usr/include/x86_64-pc-linux-gnu')
+
         # If Ptex support is disabled in USD, disable support in OpenImageIO
         # as well. This ensures OIIO doesn't accidentally pick up a Ptex
         # library outside of our build.
