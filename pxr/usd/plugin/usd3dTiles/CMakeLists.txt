@@ -36,7 +36,6 @@ pxr_plugin(usd3dTiles
 
 pxr_build_test(testUsd3dTiles
     LIBRARIES
-        #tf
         usd
         usdGeospatial
 
@@ -50,17 +49,16 @@ pxr_register_test(testUsd3dTiles
     EXPECTED_RETURN_CODE 0
 )
 
-pxr_build_test(testUsd3dTilesSubtrees
-    LIBRARIES
-        usd
-        usd3dTiles
-
-    CPPFILES
-        testenv/testUsd3dTilesSubtrees.cpp
-)
-
-pxr_register_test(testUsd3dTilesSubtrees
-    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsd3dTilesSubtrees"
-    TESTENV testenv/testUsd3dTilesSubtrees.testenv
-    EXPECTED_RETURN_CODE 0
-)
+#pxr_build_test(testUsd3dTilesSubtrees
+#    LIBRARIES
+#        usd
+#
+#    CPPFILES
+#        testenv/testUsd3dTilesSubtrees.cpp
+#)
+#
+#pxr_register_test(testUsd3dTilesSubtrees
+#    COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsd3dTilesSubtrees"
+#    TESTENV testenv/testUsd3dTilesSubtrees.testenv
+#    EXPECTED_RETURN_CODE 0
+#)

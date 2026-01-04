@@ -217,7 +217,7 @@ PXR_NAMESPACE_OPEN_SCOPE
                                                    TfToken("Tileset"), UsdGeomTokens->Xform);
 
 		// Author CRS prim and binding using usdGeospatial
-		tiles3d::AuthorAndBindTilesetCrs(layer, rootPath, tileset.crs, data);
+		// tiles3d::AuthorAndBindTilesetCrs(layer, rootPath, tileset.crs, data);
 
 		// Track created prims to avoid duplicates
 		std::set<SdfPath> createdPrims;
