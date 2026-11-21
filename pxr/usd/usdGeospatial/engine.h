@@ -44,6 +44,11 @@ struct UsdGeospatialOperationResult
     /// Why the operation failed, if it did.
     std::string error;
 
+    /// More accurate operations that were not used because they need data
+    /// the engine does not have (e.g. grid files), as the engine names them,
+    /// with what is missing. Empty if the best known operation was used.
+    std::vector<std::string> skippedOperations;
+
     explicit operator bool() const { return succeeded; }
 };
 

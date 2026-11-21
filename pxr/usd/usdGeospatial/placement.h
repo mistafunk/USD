@@ -140,6 +140,13 @@ public:
     /// behind the result, as the proposal requires every result to state.
     const std::string& GetEngine() const { return _engine; }
     const std::string& GetOperation() const { return _operation; }
+
+    /// More accurate operations the engine skipped because it lacks data
+    /// they need (e.g. grid files); see
+    /// UsdGeospatialOperationResult::skippedOperations.
+    const std::vector<std::string>& GetSkippedOperations() const {
+        return _skippedOperations;
+    }
     double GetAccuracy() const { return _accuracy; }
 
     /// The anchor (model origin) in the output CRS's semantic tuple.
@@ -183,6 +190,7 @@ private:
     std::string _sourceCrs;
     std::string _engine;
     std::string _operation;
+    std::vector<std::string> _skippedOperations;
     double _accuracy = -1.0;
     GfVec3d _origin;
     bool _localFrame = false;

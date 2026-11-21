@@ -447,6 +447,10 @@ UsdGeospatialPlacementQuery::Resolve(
     }
 
     r._operation = _JoinOperations(toGeographic.operation, toOutput.operation);
+    r._skippedOperations = toGeographic.skippedOperations;
+    r._skippedOperations.insert(r._skippedOperations.end(),
+                                toOutput.skippedOperations.begin(),
+                                toOutput.skippedOperations.end());
     r._accuracy = (toGeographic.accuracy < 0.0 || toOutput.accuracy < 0.0)
         ? -1.0 : toGeographic.accuracy + toOutput.accuracy;
     r._engineImpl = _engine;

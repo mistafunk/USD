@@ -76,6 +76,7 @@ private:
         std::string description;
         double accuracy = -1.0;
         std::string error;
+        std::vector<std::string> skipped;
     };
 
     std::string _LastError() const;
@@ -89,6 +90,9 @@ private:
                             PROJ_GRID_AVAILABILITY_USE gridUse) const;
     UsdGeospatialOperationResult _Result(const _Operation& op) const;
     double _Accuracy(const PJ* op) const;
+    std::vector<std::string> _SkippedForMissingGrids(
+        const PJ* src, const PJ* dst, const UsdGeospatialAreaOfInterest& area,
+        double usedAccuracy) const;
 
     // PROJ contexts are not thread safe; one context, one lock.
     mutable std::mutex _mutex;
@@ -331,14 +335,62 @@ UsdGeospatialProjEngine::_GetOperation(const std::string& source,
         op.description = name ? name : "";
         op.accuracy = _Accuracy(candidate.get());
         op.error.clear();
+        op.skipped = _SkippedForMissingGrids(
+            src.get(), dst.get(), area, op.accuracy);
         return op;
     }
+    op.skipped = _SkippedForMissingGrids(src.get(), dst.get(), area, -1.0);
     op.error = TfStringPrintf(
         "no usable coordinate operation from '%s' to '%s' (approximate "
         "ballpark operations are disabled; operations needing unavailable "
-        "grids are discarded)",
-        proj_get_name(src.get()), proj_get_name(dst.get()));
+        "grids are discarded)%s%s",
+        proj_get_name(src.get()), proj_get_name(dst.get()),
+        op.skipped.empty() ? "" : "; operations needing missing grids: ",
+        TfStringJoin(op.skipped, "; ").c_str());
     return op;
+}
+
+// Operations from src to dst that need grids which are not available and
+// are more accurate than the one used (any known accuracy if none is used,
+// usedAccuracy < 0): "name (accuracy x m; grid a, b)".
+std::vector<std::string>
+UsdGeospatialProjEngine::_SkippedForMissingGrids(
+    const PJ* src, const PJ* dst, const UsdGeospatialAreaOfInterest& area,
+    double usedAccuracy) const
+{
+    _FactoryPtr factory = _NewFactory(area, PROJ_GRID_AVAILABILITY_IGNORED);
+
+    std::vector<std::string> skipped;
+    _ListPtr all(proj_create_operations(_ctx, src, dst, factory.get()));
+    const int count = all ? proj_list_get_count(all.get()) : 0;
+    for (int i = 0; i < count; ++i) {
+        _PjPtr candidate(proj_list_get(_ctx, all.get(), i));
+        if (!candidate) {
+            continue;
+        }
+        std::vector<std::string> missing;
+        const int grids =
+            proj_coordoperation_get_grid_used_count(_ctx, candidate.get());
+        for (int g = 0; g < grids; ++g) {
+            const char* shortName = nullptr;
+            int available = 0;
+            if (proj_coordoperation_get_grid_used(
+                    _ctx, candidate.get(), g, &shortName, nullptr, nullptr,
+                    nullptr, nullptr, nullptr, &available) && !available) {
+                missing.push_back(shortName ? shortName : "?");
+            }
+        }
+        const double accuracy = _Accuracy(candidate.get());
+        if (missing.empty() || accuracy < 0.0 ||
+            (usedAccuracy >= 0.0 && accuracy >= usedAccuracy)) {
+            continue;
+        }
+        const char* name = proj_get_name(candidate.get());
+        skipped.push_back(TfStringPrintf(
+            "%s (accuracy %g m; grid %s)", name ? name : "?", accuracy,
+            TfStringJoin(missing, ", ").c_str()));
+    }
+    return skipped;
 }
 
 // Accuracy in metres, -1 if unknown. PROJ reports -1 for conversions (map
@@ -379,6 +431,7 @@ UsdGeospatialProjEngine::_Result(const _Operation& op) const
     result.operation = op.description;
     result.accuracy = op.accuracy;
     result.error = op.error;
+    result.skippedOperations = op.skipped;
     result.succeeded = bool(op.pj);
     return result;
 }
