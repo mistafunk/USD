@@ -95,8 +95,10 @@ public:
         return depInfo;
     }
 
+    // Not an override of the base class's virtual PathShouldResolve(path);
+    // named differently so that it does not hide it.
     bool 
-    PathShouldResolve(
+    _PathShouldResolve(
         const SdfLayerRefPtr &layer, 
         const std::string& resolvedPath,
         UsdUtils_DependencyType dependencyType)
@@ -130,7 +132,7 @@ public:
             splitIdentifier.first);
 
         if (resolvedPath.empty()) {
-            if (PathShouldResolve(layer, resolvedPath, dependencyType)) {
+            if (_PathShouldResolve(layer, resolvedPath, dependencyType)) {
                 unresolvedPaths.insert(anchoredPath);
             }
         }
