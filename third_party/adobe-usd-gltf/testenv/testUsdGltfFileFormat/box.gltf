@@ -1,0 +1,75 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "testUsdGltfFileFormat makeFixtures.py"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "BoxNode",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "Box",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0
+     },
+     "indices": 1
+    }
+   ]
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 168,
+   "uri": "box.bin"
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 96
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 96,
+   "byteLength": 72
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 8,
+   "type": "VEC3",
+   "min": [
+    -2,
+    0,
+    -0.5
+   ],
+   "max": [
+    2,
+    1,
+    0.5
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  }
+ ]
+}

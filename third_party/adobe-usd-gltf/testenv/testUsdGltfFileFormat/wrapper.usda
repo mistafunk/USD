@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    defaultPrim = "Wrapper"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Wrapper"
+{
+    def Xform "Model" (
+        prepend references = @./box.glb@
+    )
+    {
+        double3 xformOp:translate = (100, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}
