@@ -8,6 +8,8 @@ layout the C3 scene index observer will produce (docs/RECORDED_FORMAT.md).
     reference.py export [stage]      write app/public/recorded/
     reference.py check               score control points offline (exact
                                      point map) and check the export
+    reference.py proj-expected       fixtures and pyproj expectations for
+                                     the C++ PROJ engine tests
 
 Placement (proposal, "Geospatial model attitude and stage axes" and
 "Evaluation"), for a point x in the anchor's model frame, in stage units:
@@ -31,12 +33,18 @@ from pathlib import Path
 import numpy as np
 import pyproj
 from pyproj import CRS, Transformer
+from pyproj.transformer import TransformerGroup
 from pxr import Gf, Sdf, Usd, UsdGeom
 
 HERE = Path(__file__).resolve().parent
 GEO_DIR = HERE.parent
 SCENE_DIR = GEO_DIR / "testdata" / "scene"
 RECORDED_DIR = GEO_DIR / "app" / "public" / "recorded"
+REPO = GEO_DIR.parent.parent
+C0_LIBRARY = (REPO / "pxr" / "usd" / "usdGeospatial" / "testenv" /
+              "testUsdGeospatialSchemas" / "crsLibrary.usda")
+PROJ_TEST_DIR = (REPO / "pxr" / "usd" / "plugin" / "usdGeospatialProj" /
+                 "testenv" / "testUsdGeospatialProjPlacement")
 
 # Property and schema names, pinned to the proposal at 4120379f (D3, D14).
 API_BINDING = "GeospatialCRSBindingAPI"
@@ -152,26 +160,49 @@ SUPPORTED_DIRECTIONS = {
 }
 
 
-def crs_kind(crs):
-    if crs.is_geocentric:
-        return "geocentric"
-    if crs.is_projected:
-        return "projected"
-    if crs.is_geographic:
-        return "geographic"
-    raise Unsupported("unsupported CRS type: " + crs.type_name)
-
-
 def check_source_crs(crs):
-    kind = crs_kind(crs)
+    """Initial component profile: east/north/up axes (projected, geographic
+    or other Cartesian, e.g. a topocentric derived CRS) or geocentric X/Y/Z."""
     dirs = [a.direction for a in crs.axis_info]
     if len(dirs) != 3:
         raise Unsupported(
             "2D CRS: height needs the EGM2008 default vertical reference, "
             "which needs a geoid grid this reference does not ship")
-    if sorted(dirs) != sorted(SUPPORTED_DIRECTIONS[kind]):
+    if sorted(dirs) not in (sorted(SUPPORTED_DIRECTIONS["projected"]),
+                            sorted(SUPPORTED_DIRECTIONS["geocentric"])):
         raise Unsupported("unsupported axis directions {}".format(dirs))
-    return kind
+
+
+def source_geographic_3d(crs):
+    """The datum's geographic 3D CRS. For a derived Cartesian CRS (e.g. a
+    topocentric plane) pyproj's geodetic_crs is the CRS itself, so use its
+    base; for a geocentric CRS build the geographic CRS of its datum."""
+    geo = crs.geodetic_crs
+    if geo is not None and not geo.is_geographic and crs.source_crs is not None:
+        geo = crs.source_crs.geodetic_crs
+    if geo is None:
+        raise Unsupported("the CRS has no geodetic datum")
+    if geo.is_geocentric:
+        from pyproj.crs import GeographicCRS
+        from pyproj.crs.coordinate_system import Ellipsoidal3DCS
+        geo = GeographicCRS(name=geo.name, datum=geo.datum,
+                            ellipsoidal_cs=Ellipsoidal3DCS())
+    return CRS(geo).to_3d()
+
+
+def best_transformer(src, dst):
+    """The first usable operation PROJ lists for src -> dst, with ballpark
+    operations disabled and operations needing missing grids discarded while
+    listing: the same policy as the C++ PROJ engine, so results are
+    comparable. (Transformer.from_crs picks per point; the grid policy
+    changes PROJ's ranking, e.g. NAD83 -> WGS 84 by 1.2 m.)"""
+    from pyproj.enums import GridAvailabilityUse
+    group = TransformerGroup(src, dst, always_xy=True, allow_ballpark=False,
+                             grid_check=GridAvailabilityUse.DISCARD_MISSING)
+    if not group.transformers:
+        raise Unsupported("no coordinate operation from '{}' to '{}'".format(
+            CRS(src).name, CRS(dst).name))
+    return group.transformers[0]
 
 
 class Placement:
@@ -211,10 +242,17 @@ class Placement:
                               "adjustment) is not supported by the reference yet")
 
         # Anchor in the source datum's geographic 3D CRS.
-        self.src_geo = CRS(self.src.geodetic_crs).to_3d()
+        self.src_geo = source_geographic_3d(self.src)
         self.src_ell = Ellipsoid.of(self.src_geo)
-        to_geo = Transformer.from_crs(self.src, self.src_geo, always_xy=True)
+        try:
+            to_geo = best_transformer(self.src, self.src_geo)
+        except (Unsupported, pyproj.exceptions.ProjError) as e:
+            raise Unsupported("position cannot be converted to geographic 3D: "
+                              "{}".format(e))
         lon, lat, h = to_geo.transform(*self.position)
+        if not all(math.isfinite(c) for c in (lon, lat, h)):
+            raise Unsupported("position cannot be converted to geographic 3D")
+        self.to_geo_operation = to_geo.description
         if kind_is_geocentric_pole(self.src, self.position):
             raise Unsupported("model attitude undefined at geocentric X = Y = 0")
         self.anchor_geo = (lon, lat, h)
@@ -230,9 +268,7 @@ class Placement:
             self.out_crs = self.out_crs.to_3d()
         self.frame = frame
         try:
-            self.to_out = Transformer.from_crs(
-                self.src_geo, self.out_crs, always_xy=True,
-                allow_ballpark=False)
+            self.to_out = best_transformer(self.src_geo, self.out_crs)
         except pyproj.exceptions.ProjError as e:
             raise Unsupported("no coordinate operation: {}".format(e))
         self.operation = self.to_out.description
@@ -663,6 +699,113 @@ def fixtures():
     print("wrote fixtures to {}".format(SCENE_DIR))
 
 
+
+# ---------------------------------------------------------------------------
+# proj-expected: fixtures and expected values for the C++ PROJ engine tests
+
+# Model points per anchor (stage units): box corners and a few interior
+# points, enough to see attitude, axes and units.
+def _box_points(sx, sy, sz):
+    x, y = sx / 2, sy / 2
+    return [(0, 0, 0), (x, y, 0), (-x, y, 0), (-x, -y, 0), (x, -y, 0),
+            (x, y, sz), (0, 0, sz)]
+
+
+def proj_expected():
+    """Writes testUsdGeospatialProjPlacement: a CRS library (the proposal's
+    examples verbatim, plus 3D variants), stages with anchors in those CRSs
+    and expected.json with pyproj results: per anchor its status, and for
+    placeable anchors the origin (EPSG:4979) and model points (EPSG:4978)."""
+    PROJ_TEST_DIR.mkdir(parents=True, exist_ok=True)
+    proposal = Usd.Stage.Open(str(C0_LIBRARY))
+    utm3d = CRS("EPSG:32611").to_3d()
+    ca5_3d = CRS("EPSG:2229").to_3d()
+
+    lib = new_stage(PROJ_TEST_DIR / "crsLibrary.usda")
+    lib.SetDefaultPrim(lib.DefinePrim("/CRS"))
+    def crs_prim(name, wkt):
+        prim = lib.DefinePrim("/CRS/" + name, TYPE_CRS)
+        prim.CreateAttribute(ATTR_WKT, Sdf.ValueTypeNames.Token, custom=False,
+                             variability=Sdf.VariabilityUniform).Set(wkt)
+    for prim in proposal.GetPrimAtPath("/CRS").GetChildren():
+        crs_prim(prim.GetName(), prim.GetAttribute(ATTR_WKT).Get())
+    crs_prim("WGS84_UTM11N_3D", utm3d.to_wkt("WKT2_2019"))
+    crs_prim("NAD83_CA5_ftUS_3D", ca5_3d.to_wkt("WKT2_2019"))
+    lib.GetRootLayer().Save()
+
+    lon0, lat0 = SITE_A_LONLAT
+    e, n, _ = Transformer.from_crs("EPSG:4979", utm3d, always_xy=True).transform(
+        lon0, lat0, 0.0)
+    ca5_pos = Transformer.from_crs(CRS("EPSG:4269").to_3d(), ca5_3d,
+                                   always_xy=True).transform(lon0 - 0.001, lat0, 0.0)
+
+    # Z-up anchors.
+    zup = new_stage(PROJ_TEST_DIR / "placement.usda")
+    world = UsdGeom.Xform.Define(zup, "/World").GetPrim()
+    zup.SetDefaultPrim(world)
+    anchors = [
+        ("Utm3d", "WGS84_UTM11N_3D", (round(e, 3), round(n, 3), 12.5),
+         (30.0, 0.0, 0.0), _box_points(40, 20, 12)),
+        ("Ca5ftUS3d", "NAD83_CA5_ftUS_3D", tuple(round(c, 3) for c in ca5_pos),
+         (-45.0, 2.0, 1.0), _box_points(30, 30, 10)),
+        ("Utm2d", "WGS84_UTM11N", (round(e, 3), round(n, 3), 0.0), None, None),
+        ("Ca5Navd88", "CA5_NAVD88_ftUS",
+         (round(ca5_pos[0], 3), round(ca5_pos[1], 3), 1200.0), None, None),
+    ]
+    for name, crs_name, pos, ori, _ in anchors:
+        prim = UsdGeom.Xform.Define(zup, "/World/" + name).GetPrim()
+        prim.AddAppliedSchema(API_BINDING)
+        prim.GetReferences().AddReference("./crsLibrary.usda", "/CRS/" + crs_name)
+        prim.CreateAttribute(ATTR_POSITION, Sdf.ValueTypeNames.Double3,
+                             custom=False).Set(Gf.Vec3d(*pos))
+        if ori:
+            prim.CreateAttribute(ATTR_ORIENTATION, Sdf.ValueTypeNames.Double3,
+                                 custom=False).Set(Gf.Vec3d(*ori))
+    zup.GetRootLayer().Save()
+
+    # The proposal's Eiffel Tower: Y-up, metres, local tangent plane CRS.
+    yup = Usd.Stage.CreateNew(str(PROJ_TEST_DIR / "eiffelTower.usda"))
+    UsdGeom.SetStageUpAxis(yup, UsdGeom.Tokens.y)
+    UsdGeom.SetStageMetersPerUnit(yup, 1.0)
+    tower = UsdGeom.Xform.Define(yup, "/EiffelTower").GetPrim()
+    yup.SetDefaultPrim(tower)
+    tower.AddAppliedSchema(API_BINDING)
+    tower.GetReferences().AddReference("./crsLibrary.usda", "/CRS/EiffelTower_LTP")
+    tower.CreateAttribute(ATTR_POSITION, Sdf.ValueTypeNames.Double3,
+                          custom=False).Set(Gf.Vec3d(0, 0, 0))
+    tower.CreateAttribute(ATTR_ORIENTATION, Sdf.ValueTypeNames.Double3,
+                          custom=False).Set(Gf.Vec3d(30, 0, 0))
+    yup.GetRootLayer().Save()
+    tower_points = [(0, 0, 0), (62.5, 0, 62.5), (-62.5, 0, -62.5), (0, 300, 0)]
+
+    cases = [("placement.usda", "/World/" + a[0], a[4]) for a in anchors]
+    cases.append(("eiffelTower.usda", "/EiffelTower", tower_points))
+    expected = {"engine": {"name": "pyproj", "version": pyproj.__version__,
+                           "proj": pyproj.proj_version_str},
+                "tolerance": 0.001, "anchors": []}
+    for stage_name, path, points in cases:
+        stage = Usd.Stage.Open(str(PROJ_TEST_DIR / stage_name))
+        mpu = UsdGeom.GetStageMetersPerUnit(stage)
+        up = UsdGeom.GetStageUpAxis(stage)
+        anchor = stage.GetPrimAtPath(path)
+        geo = resolve_anchor(anchor, mpu, up, "EPSG:4979", "enu")
+        rec = {"stage": stage_name, "path": path, "status": geo["status"]}
+        if geo["status"] != "ok":
+            rec["reason"] = geo["reason"]
+        else:
+            ecef = Placement(anchor, mpu, up, "EPSG:4978", "crs")
+            rec["origin4979"] = geo["origin"]
+            rec["operation"] = geo["operation"]
+            rec["points"] = [list(p) for p in points]
+            rec["points4978"] = [list(map(float, ecef.origin_out + ecef.exact(p)))
+                                 for p in points]
+        expected["anchors"].append(rec)
+        print("  {:<22} {:<11} {}".format(path, rec["status"],
+                                          rec.get("operation", rec.get("reason"))))
+    (PROJ_TEST_DIR / "expected.json").write_text(
+        json.dumps(expected, indent=1) + "\n", encoding="utf-8")
+    print("wrote {}".format(PROJ_TEST_DIR))
+
 # ---------------------------------------------------------------------------
 # check
 
@@ -745,6 +888,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("fixtures")
+    sub.add_parser("proj-expected")
     s = sub.add_parser("export")
     s.add_argument("stage", nargs="?", default=str(SCENE_DIR / "scene.usda"))
     s.add_argument("--out", default=str(RECORDED_DIR))
@@ -755,6 +899,8 @@ def main():
     args = p.parse_args()
     if args.cmd == "fixtures":
         fixtures()
+    elif args.cmd == "proj-expected":
+        proj_expected()
     elif args.cmd == "export":
         export(Path(args.stage).resolve(), Path(args.out))
     else:

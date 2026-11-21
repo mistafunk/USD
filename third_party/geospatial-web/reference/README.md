@@ -7,6 +7,7 @@ the C++ library. Ground truth for the tests, and the source of the app's recorde
 python ../tools/geo.py reference -- fixtures   # writes ../testdata/scene/*.usda
 python ../tools/geo.py reference -- export     # writes ../app/public/recorded/ (format: ../docs/RECORDED_FORMAT.md)
 python ../tools/geo.py reference -- check      # scores control points with the exact point map; export checks
+python ../tools/geo.py reference -- proj-expected  # C++ PROJ engine test fixtures + pyproj expectations
 ```
 
 `geo.py` creates `<workspace>/venv-reference` with Python >= 3.12 and the pins in `requirements.txt`
@@ -29,3 +30,8 @@ Test scene (`testdata/scene`), one test case per 3DOL, expected outcome in `geot
 | E | direct binding to a missing CRS prim | unsupported (reported error, T7) |
 
 Control point reference coordinates come from PROJ's topocentric conversion, not from this script's ENU code.
+
+`proj-expected` writes `pxr/usd/plugin/usdGeospatialProj/testenv/testUsdGeospatialProjPlacement/` (stages and
+`expected.json`), which `testUsdGeospatialProjPlacement` compares against within 1 mm. Operations are chosen as the C++
+engine chooses them (`best_transformer`: first listed operation, no ballpark, operations needing missing grids
+discarded), otherwise PROJ may rank a different operation first.

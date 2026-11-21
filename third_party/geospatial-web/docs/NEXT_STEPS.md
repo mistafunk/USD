@@ -50,6 +50,19 @@ proposal's CRS examples verbatim, the Eiffel Tower example and a UTM 11N site wi
 `geo.py test native-debug -- -R UsdGeospatial` pass. **C0 exit met.** Next: C1 (binding resolution, engine interface and
 registry, usdGeospatialProj) and C2 (WASM port).
 
+**Update 2026-11-21, C1 (Claude Code):** in `pxr/usd/usdGeospatial`: binding resolution and placement validation
+(`binding.h`), the engine interface (`engine.h`: `DescribeCrs`, `CanTransform`, `Transform` in semantic tuple order;
+results name engine, operation, accuracy), the registry (`engineRegistry.h`: PlugRegistry discovery, `engineName` and
+`priority` in plugInfo, selection by API > `USDGEOSPATIAL_ENGINE` > priority) and the placement query (`placement.h`:
+the proposal's point map per anchor, origin and drawing matrix in the output CRS, exact per-point map, slerped
+time-sampled orientation). The PROJ engine is `pxr/usd/plugin/usdGeospatialProj` (priority 100). Tests: resolution,
+registry (test-only stub engine selected with `USDGEOSPATIAL_ENGINE=stub`), and PROJ placement against pyproj
+(`reference.py proj-expected`): UTM 11N 3D, NAD83 California zone 5 ftUS 3D and the proposal's Eiffel Tower match
+within 1 mm (0 mm measured); the proposal's 2D UTM 11N and California zone 5 + NAVD88 are reported unsupported.
+All 5 `UsdGeospatial` ctests pass. **C1 met, with the grid question open** (see findings). Not done yet: Python
+wrappers for the new classes, UsdValidator registration of the validation checks, the anchor's own transform `A`,
+2D CRSs with the EGM2008 default height.
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -115,3 +128,17 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
 - (C0) The presets put the venv on PATH (bin and Scripts), so CLion and plain `cmake --preset` find `pyside6-uic`.
 - (C0) Hand-written files under `pxr/` use upstream's header ("Copyright 2026 Pixar"), assumed for upstreamable code;
   change if Esri needs its own line.
+- (C1, open, Simon: "decide later") **Grids natively.** Native PROJ has no libtiff, so it reads no geoid or datum
+  grids: the proposal's 2D UTM 11N (EGM2008 default height) and California zone 5 + NAVD88 examples are reported
+  unsupported natively too, and T3/T4 cannot pass natively. Enabling them means libtiff in native PROJ plus pinned grid
+  downloads (EGM2008, NAVD88 geoid) shared with pyproj. Decide before I1.
+- (C1) **Operation choice depends on the grid policy.** With operations needing missing grids discarded while listing
+  (our engine), PROJ ranks the ESRI chain via `WGS_1984_(ITRF00)_To_NAD_1983` (0.1 m) first for NAD83 -> WGS 84; with
+  pyproj's default it ranks the EPSG null transform "NAD83 to WGS 84 (1)" (4 m) first, 1.2 m apart. The reference now
+  uses the engine's policy (`best_transformer`), and the engine also discards superseded operations like pyproj.
+- (C1) PROJ reports accuracy -1 for conversions (projections, axis changes); the engine reports 0 when every step of
+  an operation is a conversion.
+- (C1) pyproj's `geodetic_crs` of a derived Cartesian CRS (the Eiffel Tower tangent plane) is the CRS itself; the
+  reference now uses its base CRS (`source_geographic_3d`), as the C++ engine does.
+- (C1, C4) The engine registry relies on PlugRegistry types and loading plugins; for the static WASM build the PROJ
+  engine must be registered at static-init time (PLAN, WASM section). Not tested yet.
