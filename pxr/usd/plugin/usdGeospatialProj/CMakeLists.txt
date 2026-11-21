@@ -15,12 +15,20 @@ pxr_plugin(usdGeospatialProj
         plugInfo.json
 )
 
+# Plugins are loaded at runtime in shared builds; a static build (WASM) must
+# link the plugin, which also embeds its plugInfo.json.
+set(testPluginLibraries "")
+if (NOT BUILD_SHARED_LIBS)
+    set(testPluginLibraries usdGeospatialProj)
+endif()
+
 pxr_build_test(testUsdGeospatialProjPlacement
     LIBRARIES
         tf
         js
         usd
         usdGeospatial
+        ${testPluginLibraries}
     CPPFILES
         testenv/testUsdGeospatialProjPlacement.cpp
 )
