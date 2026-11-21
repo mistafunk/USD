@@ -23,6 +23,7 @@ Usage:
     python third_party/geospatial-web/tools/geo.py test web [--ui | --headed] [-- <playwright args>]
     python third_party/geospatial-web/tools/geo.py reference [-- <args>]
     python third_party/geospatial-web/tools/geo.py record [native-debug|native-release] [-- <args>]
+    python third_party/geospatial-web/tools/geo.py usdview [native-debug|native-release] [--stage FILE] [--crs CRS] [--origin "x, y, z"] [-- <usdview args>]
     python third_party/geospatial-web/tools/geo.py serve dev|docker
 """
 
@@ -32,6 +33,7 @@ import hashlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys
@@ -651,6 +653,48 @@ def cmd_record(args):
            lambda log: run([tool] + extra, log, cwd=REPO, env=env))
 
 
+def cmd_usdview(args):
+    """usdview from a native install with the project venv, showing the
+    stage placed in an output CRS by the geospatial scene index plugin."""
+    install = WS / "install" / args.preset
+    usdview = install / "bin" / "usdview"
+    if not usdview.exists():
+        fail("{} not built; run: geo.py build {}".format(usdview, args.preset))
+    # The pxr package's directory differs per platform (lib/python3.12/
+    # site-packages, lib/python); find it.
+    packages = sorted(install.glob("lib/**/pxr/__init__.py"))
+    if not packages:
+        fail("no pxr Python package in {}".format(install / "lib"))
+    env = native_env()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(packages[0].parent.parent)] +
+        ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+    if is_windows():
+        # USD's DLLs.
+        env["PATH"] = os.pathsep.join(
+            [str(install / "bin"), str(install / "lib"), env["PATH"]])
+    for name in ("USDGEOSPATIALIMAGING_OUTPUT_CRS",
+                 "USDGEOSPATIALIMAGING_DISPLAY_ORIGIN"):
+        env.pop(name, None)
+    if args.crs.lower() != "none":
+        env["USDGEOSPATIALIMAGING_OUTPUT_CRS"] = args.crs
+        if args.origin:
+            env["USDGEOSPATIALIMAGING_DISPLAY_ORIGIN"] = args.origin
+    stage = Path(args.stage) if args.stage else (
+        GEO_DIR / "testdata" / "scene" / "scene.usda")
+    cmd = [venv_python(VENV), usdview, stage.resolve()] + args.usdview_args
+
+    def body(log):
+        settings = " ".join("{}={}".format(k, shlex.quote(env[k])) for k in
+                            ("USDGEOSPATIALIMAGING_OUTPUT_CRS",
+                             "USDGEOSPATIALIMAGING_DISPLAY_ORIGIN",
+                             "PYTHONPATH") if k in env)
+        log.write("[geo] environment: {}\n".format(settings))
+        run(cmd, log, cwd=REPO, env=env)
+
+    logged("usdview-" + args.preset, body)
+
+
 def container_tool():
     for tool in ("podman", "docker"):
         if shutil.which(tool):
@@ -810,12 +854,35 @@ def main():
                    help="after --: <stage> <outDir> [name=CRS ...]")
     s.set_defaults(fn=cmd_record)
 
+    s = sub.add_parser("usdview", help="usdview of a native install, with the "
+                                       "stage placed in an output CRS")
+    s.add_argument("preset", nargs="?", default="native-debug",
+                   choices=[p for p, t in PRESETS.items() if t == "native"])
+    s.add_argument("--stage", default="",
+                   help="default: testdata/scene/scene.usda")
+    s.add_argument("--crs", default="EPSG:4979",
+                   help="output CRS for USDGEOSPATIALIMAGING_OUTPUT_CRS; "
+                        "'none' shows the unplaced stage")
+    s.add_argument("--origin", default="",
+                   help='display origin "x, y, z" in the output CRS '
+                        "(default: the first anchor placed)")
+    s.set_defaults(fn=cmd_usdview, usdview_args=[])
+
     s = sub.add_parser("serve", help="serve the web app with COOP/COEP")
     s.add_argument("mode", choices=("dev", "docker"))
     s.add_argument("--port", default="8080")
     s.set_defaults(fn=cmd_serve)
 
-    args = p.parse_args()
+    # usdview: everything after "--" goes to usdview as is (argparse would
+    # take it for the optional preset positional).
+    argv = sys.argv[1:]
+    passthrough = []
+    if argv[:1] == ["usdview"] and "--" in argv:
+        cut = argv.index("--")
+        argv, passthrough = argv[:cut], argv[cut + 1:]
+    args = p.parse_args(argv)
+    if passthrough:
+        args.usdview_args = passthrough
     args.fn(args)
 
 

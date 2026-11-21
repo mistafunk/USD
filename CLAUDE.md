@@ -48,7 +48,7 @@ Root from `USD_GEO_WS` (default: two levels above this clone, else `~/usd-geo`);
 `install/<preset>`, `install/upstream-<target>` (unmodified build_usd.py reference), `cache/` (downloads, ccache,
 emscripten cache, `logs/`). See `third_party/geospatial-web/tools/README.md`.
 Presets: `native-debug`, `native-release`, `wasm32`. Driver: `python third_party/geospatial-web/tools/geo.py
-check|bootstrap|build|test|reference|serve`; `test web [--ui]` runs the app's Playwright specs. Pins (emsdk, PROJ, SQLite) are at the top of `geo.py`.
+check|bootstrap|build|test|reference|record|usdview|serve`; `test web [--ui]` runs the app's Playwright specs. Pins (emsdk, PROJ, SQLite) are at the top of `geo.py`.
 The project venv (`<ws>/venv`) uses Python 3.12 (`VENV_PYTHON` in `geo.py`); the presets put it on PATH, so emcc
 (needs Python >= 3.10) also works when CLion configures. AlmaLinux's system Python is 3.9.
 

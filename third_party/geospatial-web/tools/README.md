@@ -4,7 +4,7 @@ Local tooling for the geospatial web prototype. No GitHub workflows: everything 
 
 | File | Purpose |
 |---|---|
-| `geo.py` | Driver: `check`, `bootstrap`, `build`, `test`, `reference`, `record`, `serve` |
+| `geo.py` | Driver: `check`, `bootstrap`, `build`, `test`, `reference`, `record`, `usdview`, `serve` |
 | `CMakePresets.json` | Presets `native-debug`, `native-release`, `wasm32` |
 | `cmake/sqlite3/` | CMake build of the SQLite amalgamation (PROJ dependency) |
 | `requirements.txt` | Pinned Python packages for the native build's venv |
@@ -65,6 +65,14 @@ python third_party/geospatial-web/tools/geo.py test web              # Playwrigh
 - ccache is optional but worth it: `dnf install ccache` (EPEL). The presets put its cache in `cache/ccache`.
 - PROJ for WASM is built static with `-pthread -fexceptions`, the same thread and exception model as USD's WASM
   build, with `proj.db` embedded in `libproj.a` (about 9 MB until C4 trims it).
+
+## usdview
+
+`geo.py usdview [native-debug|native-release] [--stage FILE] [--crs CRS] [--origin "x, y, z"] [-- <usdview args>]` runs
+usdview from a native install with the project venv's Python and the install's `pxr` package, showing `--stage`
+(default `testdata/scene/scene.usda`) placed in `--crs` (default `EPSG:4979`) by the geospatial scene index plugin
+(`USDGEOSPATIALIMAGING_OUTPUT_CRS`; `--origin` sets `USDGEOSPATIALIMAGING_DISPLAY_ORIGIN`). `--crs none` shows the
+unplaced stage. The log prints the environment and command, for an IDE run configuration.
 
 ## Recorded data from C++
 

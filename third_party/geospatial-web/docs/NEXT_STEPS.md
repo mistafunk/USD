@@ -99,7 +99,7 @@ building corner (UTM 11N) in the display frame (2.6e-8 m global), that a heading
 (slerp) re-place the scene like the stage query; `testUsdGeospatialImagingPlugin` checks what usdview sees (native
 only). All 7 `UsdGeospatial` ctests pass natively. `geo.py record` + `reference -- compare`: 0.000 mm against pyproj;
 Playwright W1/W2 on the C++ dump (`GEO_RECORDED_SRC=recorded-cpp`) pass with the same scores as the reference.
-**C3 exit met natively:** Simon confirmed the placed scene in usdview (`USDGEOSPATIALIMAGING_OUTPUT_CRS=EPSG:4979`). WASM build of the new library not run yet.
+**C3 exit met natively:** Simon confirmed the placed scene in usdview (`USDGEOSPATIALIMAGING_OUTPUT_CRS=EPSG:4979`; now `geo.py usdview`). WASM build of the new library not run yet.
 
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
