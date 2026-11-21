@@ -314,6 +314,12 @@ if (PXR_BUILD_DRACO_PLUGIN)
     find_package(Draco REQUIRED)
 endif()
 
+if (PXR_BUILD_GEOSPATIAL_PROJ)
+    # PROJ installs a CMake package config (proj-config.cmake).
+    find_package(PROJ 9 CONFIG REQUIRED)
+    message(STATUS "Found PROJ ${PROJ_VERSION}: ${PROJ_DIR}")
+endif()
+
 if (PXR_ENABLE_MATERIALX_SUPPORT)
     find_package(MaterialX REQUIRED)
     add_definitions(-DPXR_MATERIALX_SUPPORT_ENABLED)
