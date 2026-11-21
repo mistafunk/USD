@@ -190,6 +190,7 @@ private:
 
     // Evaluation state.
     UsdGeospatialCoordinateOperationEngineSharedPtr _engineImpl;
+    UsdGeospatialAreaOfInterest _area;
     std::string _sourceGeographic;
     std::string _output;
     double _srcA = 0.0, _srcE2 = 0.0;

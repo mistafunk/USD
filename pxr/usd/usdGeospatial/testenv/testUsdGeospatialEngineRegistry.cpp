@@ -52,7 +52,8 @@ main()
     TF_AXIOM(!stubQuery.IsValid());
     TF_AXIOM(TfStringContains(stubQuery.GetError(), "stub"));
     const UsdGeospatialOperationResult op =
-        engine->CanTransform("EPSG:4326", "EPSG:4979");
+        engine->CanTransform("EPSG:4326", "EPSG:4979",
+                             UsdGeospatialAreaOfInterest());
     TF_AXIOM(!op && op.engine == "stub" && !op.error.empty());
 
     // An explicit selection wins over the environment; empty restores it.

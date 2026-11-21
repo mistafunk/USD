@@ -267,7 +267,7 @@ UsdGeospatialPlacement::_ToOutput(const std::vector<GfVec3d>& ecef,
         output->push_back(_FromEcef(_srcA, _srcE2, p));
     }
     const UsdGeospatialOperationResult result =
-        _engineImpl->Transform(_sourceGeographic, _output, output);
+        _engineImpl->Transform(_sourceGeographic, _output, _area, output);
     if (!result && error) {
         *error = result.error;
     }
@@ -426,14 +426,19 @@ UsdGeospatialPlacementQuery::Resolve(
 
     std::vector<GfVec3d> geo{position};
     const UsdGeospatialOperationResult toGeographic =
-        _engine->Transform(wkt, source.geographic3D, &geo);
+        _engine->Transform(wkt, source.geographic3D,
+                           UsdGeospatialAreaOfInterest(), &geo);
     if (!toGeographic) {
         return fail(Status::Unsupported, TfStringPrintf(
             "<%s> position cannot be converted to geographic 3D: %s",
             path, toGeographic.error.c_str()));
     }
+    // Operations into the output CRS are chosen for the anchor's location:
+    // many datum transformations are regional.
+    const UsdGeospatialAreaOfInterest area =
+        UsdGeospatialAreaOfInterest::AtPoint(geo[0][0], geo[0][1]);
     const UsdGeospatialOperationResult toOutput =
-        _engine->CanTransform(source.geographic3D, _output);
+        _engine->CanTransform(source.geographic3D, _output, area);
     if (!toOutput) {
         return fail(Status::Unsupported, TfStringPrintf(
             "<%s> no coordinate operation from '%s' to the output CRS '%s': "
@@ -445,6 +450,7 @@ UsdGeospatialPlacementQuery::Resolve(
     r._accuracy = (toGeographic.accuracy < 0.0 || toOutput.accuracy < 0.0)
         ? -1.0 : toGeographic.accuracy + toOutput.accuracy;
     r._engineImpl = _engine;
+    r._area = area;
     r._sourceGeographic = source.geographic3D;
     r._output = _output;
     r._srcA = source.semiMajorAxis;

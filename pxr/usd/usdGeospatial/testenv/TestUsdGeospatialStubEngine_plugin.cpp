@@ -25,7 +25,8 @@ public:
     }
 
     UsdGeospatialOperationResult CanTransform(
-        const std::string&, const std::string&) override
+        const std::string&, const std::string&,
+        const UsdGeospatialAreaOfInterest&) override
     {
         UsdGeospatialOperationResult result;
         result.engine = GetName();
@@ -35,9 +36,10 @@ public:
 
     UsdGeospatialOperationResult Transform(
         const std::string& source, const std::string& target,
+        const UsdGeospatialAreaOfInterest& area,
         std::vector<GfVec3d>*) override
     {
-        return CanTransform(source, target);
+        return CanTransform(source, target, area);
     }
 };
 

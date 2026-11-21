@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <tuple>
 #include <utility>
 
 PXR_NAMESPACE_OPEN_SCOPE
@@ -45,9 +46,10 @@ using _FactoryPtr =
 /// \class UsdGeospatialProjEngine
 ///
 /// Coordinate operation engine backed by PROJ. Operations are chosen by
-/// proj_create_operations with ballpark operations disabled and operations
-/// that need missing grids discarded, so a CRS pair without a real
-/// operation is reported as unsupported rather than approximated.
+/// proj_create_operations for the area of interest, with ballpark
+/// operations disabled and operations that need missing grids discarded, so
+/// a CRS pair without a real operation is reported as unsupported rather
+/// than approximated.
 ///
 class UsdGeospatialProjEngine : public UsdGeospatialCoordinateOperationEngine
 {
@@ -60,10 +62,12 @@ public:
     UsdGeospatialCrsInfo DescribeCrs(const std::string& definition) override;
 
     UsdGeospatialOperationResult CanTransform(
-        const std::string& source, const std::string& target) override;
+        const std::string& source, const std::string& target,
+        const UsdGeospatialAreaOfInterest& area) override;
 
     UsdGeospatialOperationResult Transform(
         const std::string& source, const std::string& target,
+        const UsdGeospatialAreaOfInterest& area,
         std::vector<GfVec3d>* points) override;
 
 private:
@@ -79,14 +83,19 @@ private:
     void _AppendAxes(const PJ* crs, std::vector<TfToken>* axes) const;
     _PjPtr _Geographic3D(const PJ* crs, std::string* error) const;
     const _Operation& _GetOperation(const std::string& source,
-                                    const std::string& target);
+                                    const std::string& target,
+                                    const UsdGeospatialAreaOfInterest& area);
+    _FactoryPtr _NewFactory(const UsdGeospatialAreaOfInterest& area,
+                            PROJ_GRID_AVAILABILITY_USE gridUse) const;
     UsdGeospatialOperationResult _Result(const _Operation& op) const;
     double _Accuracy(const PJ* op) const;
 
     // PROJ contexts are not thread safe; one context, one lock.
     mutable std::mutex _mutex;
     PJ_CONTEXT* _ctx;
-    std::map<std::pair<std::string, std::string>, _Operation> _operations;
+    // Source, target and area of interest (rounded) to the operation.
+    std::map<std::tuple<std::string, std::string, std::string>, _Operation>
+        _operations;
 };
 
 USDGEOSPATIAL_DEFINE_ENGINE(UsdGeospatialProjEngine);
@@ -256,11 +265,35 @@ UsdGeospatialProjEngine::DescribeCrs(const std::string& definition)
     return info;
 }
 
+_FactoryPtr
+UsdGeospatialProjEngine::_NewFactory(const UsdGeospatialAreaOfInterest& area,
+                                     PROJ_GRID_AVAILABILITY_USE gridUse) const
+{
+    _FactoryPtr factory(proj_create_operation_factory_context(_ctx, nullptr));
+    proj_operation_factory_context_set_allow_ballpark_transformations(
+        _ctx, factory.get(), 0);
+    proj_operation_factory_context_set_grid_availability_use(
+        _ctx, factory.get(), gridUse);
+    proj_operation_factory_context_set_spatial_criterion(
+        _ctx, factory.get(), PROJ_SPATIAL_CRITERION_PARTIAL_INTERSECTION);
+    proj_operation_factory_context_set_discard_superseded(
+        _ctx, factory.get(), 1);
+    if (!area.IsEmpty()) {
+        proj_operation_factory_context_set_area_of_interest(
+            _ctx, factory.get(), area.west, area.south, area.east, area.north);
+    }
+    return factory;
+}
+
 const UsdGeospatialProjEngine::_Operation&
 UsdGeospatialProjEngine::_GetOperation(const std::string& source,
-                                       const std::string& target)
+                                       const std::string& target,
+                                       const UsdGeospatialAreaOfInterest& area)
 {
-    const auto key = std::make_pair(source, target);
+    const auto key = std::make_tuple(
+        source, target, area.IsEmpty() ? std::string() : TfStringPrintf(
+            "%.6f %.6f %.6f %.6f", area.west, area.south, area.east,
+            area.north));
     auto it = _operations.find(key);
     if (it != _operations.end()) {
         return it->second;
@@ -278,17 +311,8 @@ UsdGeospatialProjEngine::_GetOperation(const std::string& source,
         return op;
     }
 
-    _FactoryPtr factory(proj_create_operation_factory_context(_ctx, nullptr));
-    proj_operation_factory_context_set_allow_ballpark_transformations(
-        _ctx, factory.get(), 0);
-    proj_operation_factory_context_set_grid_availability_use(
-        _ctx, factory.get(),
-        PROJ_GRID_AVAILABILITY_DISCARD_OPERATION_IF_MISSING_GRID);
-    proj_operation_factory_context_set_spatial_criterion(
-        _ctx, factory.get(), PROJ_SPATIAL_CRITERION_PARTIAL_INTERSECTION);
-    proj_operation_factory_context_set_discard_superseded(
-        _ctx, factory.get(), 1);
-
+    _FactoryPtr factory = _NewFactory(
+        area, PROJ_GRID_AVAILABILITY_DISCARD_OPERATION_IF_MISSING_GRID);
     _ListPtr candidates(proj_create_operations(
         _ctx, src.get(), dst.get(), factory.get()));
     const int count = candidates ? proj_list_get_count(candidates.get()) : 0;
@@ -361,19 +385,21 @@ UsdGeospatialProjEngine::_Result(const _Operation& op) const
 
 UsdGeospatialOperationResult
 UsdGeospatialProjEngine::CanTransform(const std::string& source,
-                                      const std::string& target)
+                                      const std::string& target,
+                                      const UsdGeospatialAreaOfInterest& area)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    return _Result(_GetOperation(source, target));
+    return _Result(_GetOperation(source, target, area));
 }
 
 UsdGeospatialOperationResult
 UsdGeospatialProjEngine::Transform(const std::string& source,
                                    const std::string& target,
+                                   const UsdGeospatialAreaOfInterest& area,
                                    std::vector<GfVec3d>* points)
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    const _Operation& op = _GetOperation(source, target);
+    const _Operation& op = _GetOperation(source, target, area);
     UsdGeospatialOperationResult result = _Result(op);
     if (!result || points->empty()) {
         return result;

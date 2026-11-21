@@ -47,6 +47,32 @@ struct UsdGeospatialOperationResult
     explicit operator bool() const { return succeeded; }
 };
 
+/// \struct UsdGeospatialAreaOfInterest
+///
+/// Where an operation will be used, as geographic bounds in degrees, so an
+/// engine can choose among regional operations: many datum transformations
+/// are only valid, or only best, in part of their datum's extent. An empty
+/// area means anywhere.
+///
+struct UsdGeospatialAreaOfInterest
+{
+    double west = 0.0;
+    double south = 0.0;
+    double east = 0.0;
+    double north = 0.0;
+
+    bool IsEmpty() const { return !(west <= east && south <= north) ||
+                                  (west == 0.0 && east == 0.0 &&
+                                   south == 0.0 && north == 0.0); }
+
+    /// A small area around one point (longitude, latitude in degrees).
+    static UsdGeospatialAreaOfInterest AtPoint(double lon, double lat)
+    {
+        const double d = 1e-6;
+        return {lon - d, lat - d, lon + d, lat + d};
+    }
+};
+
 /// \struct UsdGeospatialCrsInfo
 ///
 /// What an engine reports about a CRS definition: enough for placement to
@@ -143,15 +169,19 @@ public:
     virtual UsdGeospatialCrsInfo DescribeCrs(
         const std::string& definition) = 0;
 
-    /// Checks that an operation from \p source to \p target exists, without
-    /// transforming anything, and reports the operation it would use.
+    /// Checks that an operation from \p source to \p target exists for
+    /// \p area, without transforming anything, and reports the operation it
+    /// would use.
     virtual UsdGeospatialOperationResult CanTransform(
-        const std::string& source, const std::string& target) = 0;
+        const std::string& source, const std::string& target,
+        const UsdGeospatialAreaOfInterest& area) = 0;
 
-    /// Transforms \p points in place from \p source to \p target. On
-    /// failure \p points is unspecified and the result says why.
+    /// Transforms \p points in place from \p source to \p target with the
+    /// operation CanTransform() reports for \p area. On failure \p points
+    /// is unspecified and the result says why.
     virtual UsdGeospatialOperationResult Transform(
         const std::string& source, const std::string& target,
+        const UsdGeospatialAreaOfInterest& area,
         std::vector<GfVec3d>* points) = 0;
 
 protected:
