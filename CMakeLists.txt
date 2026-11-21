@@ -56,6 +56,14 @@ if (PXR_BUILD_PRMAN_PLUGIN)
     endif()
 endif()
 
+if (PXR_BUILD_GEOSPATIAL_WEB)
+    if (NOT (PXR_BUILD_USD_IMAGING AND PXR_BUILD_GEOSPATIAL_PROJ))
+        message(FATAL_ERROR "PXR_BUILD_GEOSPATIAL_WEB requires "
+                "PXR_BUILD_USD_IMAGING and PXR_BUILD_GEOSPATIAL_PROJ")
+    endif()
+    add_subdirectory(third_party/geospatial-web/module)
+endif()
+
 if (PXR_BUILD_TESTS)
     pxr_tests_prologue()
 endif()
