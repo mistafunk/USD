@@ -824,11 +824,22 @@ function(pxr_register_test TEST_NAME)
     # process.
     if (EMSCRIPTEN)
         if (DEFINED ENV{EMSDK_NODE})
-            message(STATUS "Using EMSDK_NODE node for tests: $ENV{EMSDK_NODE}")
-            set(testWrapperCmd ${testWrapperCmd} --test-runner $ENV{EMSDK_NODE})
+            set(testRunner $ENV{EMSDK_NODE})
         else()
-            message(STATUS "EMSDK_NODE not set, falling back to system provided node")
-            set(testWrapperCmd ${testWrapperCmd} --test-runner node)
+            set(testRunner node)
+        endif()
+        set(testWrapperCmd ${testWrapperCmd} --test-runner ${testRunner})
+
+        # Report the choice once per configure, not for every test.
+        get_property(testRunnerReported GLOBAL
+            PROPERTY PXR_EMSCRIPTEN_TEST_RUNNER_REPORTED)
+        if (NOT testRunnerReported)
+            if (DEFINED ENV{EMSDK_NODE})
+                message(STATUS "Using EMSDK_NODE node for tests: ${testRunner}")
+            else()
+                message(STATUS "EMSDK_NODE not set, falling back to system provided node")
+            endif()
+            set_property(GLOBAL PROPERTY PXR_EMSCRIPTEN_TEST_RUNNER_REPORTED TRUE)
         endif()
     endif()
 
