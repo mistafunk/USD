@@ -1,0 +1,11 @@
+@import "@arcgis/core/assets/esri/themes/light/main.css";
+
+html, body, #viewDiv { margin: 0; padding: 0; width: 100%; height: 100%; }
+#panel {
+  position: absolute; top: 12px; right: 12px; max-width: 360px;
+  background: rgba(255, 255, 255, 0.92); padding: 8px 10px; border-radius: 4px;
+  font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+#panel .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+#panel a.active { font-weight: 600; text-decoration: none; color: inherit; }
+#status { margin: 0; font: 12px/1.35 ui-monospace, monospace; white-space: pre-wrap; }

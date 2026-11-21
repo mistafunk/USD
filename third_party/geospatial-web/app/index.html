@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Geospatial Web W0</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="viewDiv"></div>
+    <div id="panel">
+      <div class="row">
+        <a data-view="global" href="?view=global">Global</a>
+        <a data-view="local" href="?view=local">Local</a>
+        <label><input id="naive" type="checkbox" /> naive float32</label>
+      </div>
+      <div class="row">
+        <button data-goto="overview">Overview</button>
+        <button data-goto="street">Street level</button>
+        <button data-goto="close">1 m</button>
+      </div>
+      <pre id="status"></pre>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

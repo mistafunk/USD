@@ -12,6 +12,14 @@ All our non-upstream files now live in `third_party/geospatial-web` (was `script
 `extras/usd/examples/geospatialWeb`). When `module/` arrives, hook it into the root `CMakeLists.txt` next to
 the RenderMan block, behind an option (one-line upstream-file edit, in its own commit).
 
+**Update 2026-11-21, W0 spike (Claude Code):** `third_party/geospatial-web/app` (see its README). A RenderNode draws
+three meshes (10 m box, 1 m box, 5 cm pole) at float32-exact origins in a global and a local (Web Mercator) SceneView.
+Playwright (headless Chromium, software WebGL2) passes for both modes: `crossOriginIsolated` and SharedArrayBuffer true,
+SDK and basemap load under COEP `require-corp` with no failed requests or console errors. Screenshots at overview,
+street level and 1 m show clean geometry with the origin split; the naive float32 variant is visibly bent at street level
+and displaced by more than a metre at 1 m. Still open for the W0 exit: an interactive look on a real GPU while moving the
+camera (`geo.py serve dev`), which headless screenshots cannot show.
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -19,6 +27,18 @@ Findings for later milestones:
 - (C1) Without grids PROJ still offers a "Ballpark" operation (accuracy unknown) for e.g. NAD27 -> WGS84.
   The engine must disable ballpark operations (`proj_operation_factory_context_set_allow_ballpark`) so T3/T4
   report unsupported instead of placing metres off.
+- (W0, affects C3/I1) **Global render space is not EPSG:4978.** The SDK docs: in global mode render coordinates are
+  ECEF on a *sphere* of radius 6378137 m, not the WGS84 ellipsoid. Requesting EPSG:4978 as the output CRS and feeding
+  that to the RenderNode would misplace data (up to ~21 km). Options: output geographic 3D (EPSG:4979) anchors plus
+  ENU-relative matrices, and let the JS side map each anchor with `renderCoordinateTransformAt` in Float64; or have C++
+  reproduce the SDK's sphere mapping (an SDK implementation detail). **Decided: the first option, D13.**
+- (W0) **Local Web Mercator scenes are not metric.** `renderCoordinateTransformAt` in a local 3857 view returns an
+  unscaled ENU frame (1 m = 1 Mercator unit), so metre-sized meshes render at cos(lat) of their size (0.68x in Zurich).
+  Our C++ placement into the view SR (3857) will include the projection scale, which is correct; the W1 reference must
+  do the same, and real local scenes are better in a conformal CRS with scale near 1 (UTM, LV95) with a matching basemap.
+- (W0) The SDK's CDN worker is blocked under COEP `require-corp`; self-host the SDK assets (done in `app/`).
+- (W0) The SDK does not know RenderNode geometry when choosing near/far clip distances; close-range views (T6) need
+  `view.constraints.clipDistance` set explicitly.
 
 Both tracks can start in parallel. Suggested order:
 

@@ -32,7 +32,7 @@ Every piece exists today except the WASM build of Hydra and usdImaging, and noth
 | [Autodesk USD fork](https://github.com/autodesk-forks/USD) | Working emscripten patches for Hydra and usdImaging on `adsk/feature/wasm` (26.05 dev, last synced March 2026); a fresh `adsk/hgiWebGPU` on 26.08 dev | One release behind; we cherry-pick the imaging build fixes only, not its WebGPU backend |
 | [PROJ](https://proj.org/) | First engine plugin, natively and in WASM: WKT2 parsing, operation selection, accuracy, grids (native only for now), ENU (topocentric) conversion | Needs SQLite and `proj.db` (about 9 MB in full) built for WASM; grid files stay native |
 | [Maps SDK `RenderNode`](https://developers.arcgis.com/javascript/latest/references/core/views/3d/webgl/RenderNode/) | Custom WebGL2 pass in SceneView: `consumes`/`produces`, `render()`, `camera.viewMatrix`/`projectionMatrix`, `requestRender()` | Shares the SDK's GL context and FBOs; must restore GL state |
-| [`webgl` utilities](https://developers.arcgis.com/javascript/latest/references/core/views/3d/webgl/) | `toRenderCoordinates`, `renderCoordinateTransformAt`, `fromRenderCoordinates` | Render space is ECEF (global) or the view SR (local); float32 jitter unless we subtract a local origin ([windmills sample](https://developers.arcgis.com/javascript/latest/sample-code/custom-render-node-windmills)) |
+| [`webgl` utilities](https://developers.arcgis.com/javascript/latest/references/core/views/3d/webgl/) | `toRenderCoordinates`, `renderCoordinateTransformAt`, `fromRenderCoordinates` | Render space is ECEF on a 6378137 m sphere (global, not EPSG:4978) or the view SR (local); float32 jitter unless we subtract a local origin ([windmills sample](https://developers.arcgis.com/javascript/latest/sample-code/custom-render-node-windmills)) |
 | [`projectOperator`](https://developers.arcgis.com/javascript/latest/references/core/geometry/operators/projectOperator/) + [`geographicTransformationUtils`](https://developers.arcgis.com/javascript/latest/references/core/geometry/operators/support/geographicTransformationUtils/) | Client-side Esri Projection Engine (WASM): `projectLoad()`, `projectExecuteMany()`, `getTransformations()` | Alternative engine plugin in E1. Equation-based datum transforms only; grid-based and vertical CRS projection unsupported |
 
 ## Architecture options
@@ -49,12 +49,12 @@ Option A needs the most up-front work, mostly porting Hydra and usdImaging to WA
 
 ## Chosen approach
 
-All geospatial work happens in C++ inside the WASM module. OpenUSD composes the stage, and a geospatial scene index resolves each anchor into render space in Float64. JS only uploads float32 buffers and per-3DOL matrices to a RenderNode.
+All geospatial work happens in C++ inside the WASM module. OpenUSD composes the stage, and a geospatial scene index resolves each anchor into the output CRS in Float64. JS maps each anchor into render space in Float64, uploads float32 buffers and draws them in a RenderNode (D13).
 
 ```
 USD layers (3DOLs, each bound to a CRS)
   -> UsdImagingStageSceneIndex (compose)
-  -> geospatial filtering scene index (check support via engine plugin; place F(x) in Float64, per-3DOL render origin)
+  -> geospatial filtering scene index (check support via engine plugin; place F(x) in Float64, per-3DOL anchor + matrix)
        \-> unsupported / broken binding: error data source, reported, not drawn
   -> HdSceneIndexObserver + embind (typed arrays)
   -> Maps SDK RenderNode (WebGL2 mesh pass)
@@ -64,11 +64,11 @@ Only a 3DOL whose source-to-output transform the engine can perform reaches the 
 
 **Data flow**
 
-1. **Load.** A Web Worker loads our WASM build of v26.08 with usdGeospatial. JS preloads the USD files into the in-memory file system and opens the root layer. The app passes render space as the output CRS: geocentric (EPSG:4978) for a global SceneView, or the view's spatial reference for a local one (requirement 16). A session layer is used only to override source bindings in tests.
+1. **Load.** A Web Worker loads our WASM build of v26.08 with usdGeospatial. JS preloads the USD files into the in-memory file system and opens the root layer. The app passes the output CRS (requirement 16): geographic 3D (EPSG:4979) for a global SceneView, whose render space is a sphere the SDK maps to (D13), or the view's spatial reference for a local one. A session layer is used only to override source bindings in tests.
 2. **Compose.** OpenUSD composes sublayers, references and payloads. `UsdImagingStageSceneIndex` turns the stage into Hydra scene index prims.
 3. **Check support.** For each direct CRS binding, the geospatial scene index asks the engine whether it can transform source to output. The engine is whichever engine plugin is active, PROJ to start with, in the browser as well as natively. If no usable transform exists, or the vertical CRSs differ, the prim gets an error data source and is reported as unsupported.
-4. **Place.** The geospatial scene index (an `HdSingleInputFilteringSceneIndex`) evaluates the proposal's placement F(x). It overrides each anchor's xform with a Float64 matrix relative to a float32-exact render origin chosen per 3DOL, and publishes that origin alongside.
-5. **Observe and render.** A C++ `HdSceneIndexObserver` collects mesh points, indices and normals plus the placement matrices. embind exposes them as typed arrays, which the worker transfers to the main thread. The RenderNode draws them with a minimal WebGL2 shader, using modelView = `camera.viewMatrix` x translate(origin) x matrix, computed in Float64 before casting.
+4. **Place.** The geospatial scene index (an `HdSingleInputFilteringSceneIndex`) evaluates the proposal's placement F(x). It publishes, per 3DOL, an anchor in the output CRS and a Float64 matrix from mesh-local units to that anchor's frame: ENU metres for a global view, view-SR units for a local one.
+5. **Observe and render.** A C++ `HdSceneIndexObserver` collects mesh points, indices and normals plus the placement matrices. embind exposes them as typed arrays, which the worker transfers to the main thread. JS turns each anchor into a render frame (global: `renderCoordinateTransformAt`; local: a translation in view-SR units), splits off a float32-exact origin, and the RenderNode draws with modelView = `camera.viewMatrix` x translate(origin) x frame x matrix, computed in Float64 before casting.
 
 **Precision strategy**
 
@@ -92,7 +92,7 @@ We implement the proposal's initial scope as a `usdGeospatial` library on the ge
 | Placement evaluation | F(x): position to geographic 3D, ellipsoid-normal ENU basis, heading/pitch/roll, `metersPerUnit` and `upAxis` mapping, then the anchor's ordinary xformOps; time-sampled position and slerped orientation | Source placement evaluation and transform order |
 | Engine interface | One abstract `CoordinateOperationEngine`: transform points between two WKT CRSs; return the operation used, accuracy (or unknown) and any failure reason | Principle 7; requirements 21 and 28 |
 | Engine backends | usdGeospatialProj plugin first (native and WASM); usdGeospatialEsriPE plugin later as an alternative. See Transformation engine plugins below | Initial scope: the engine chooses operations |
-| Geospatial scene index | `HdSingleInputFilteringSceneIndex` after `UsdImagingStageSceneIndex`: resolves each anchor into the requested output CRS in double precision, emits a render-origin-relative matrix, and attaches error data sources for failures | Queries, scene charts and instances; Tamrat's suggestion |
+| Geospatial scene index | `HdSingleInputFilteringSceneIndex` after `UsdImagingStageSceneIndex`: resolves each anchor into the requested output CRS in double precision, emits an anchor plus an anchor-relative matrix (D13), and attaches error data sources for failures | Queries, scene charts and instances; Tamrat's suggestion |
 | Scene index observer | `HdSceneIndexObserver` that keeps mesh buffers, matrices and status per prim and reports dirty ranges; replaces a render delegate | No render delegate needed |
 | JS API (embind) | Open stage, set output CRS, register engine callbacks, read buffers as typed-array views, read the status report | Not in the proposal; prototype only |
 | Query API | Resolve a prim or point into an output CRS, returning coordinates, operation and accuracy | Runtime coordinate transformation |
@@ -302,9 +302,9 @@ The browser harness runs with Playwright and writes a JSON and HTML report per r
 
 | Question | Proposed answer | How to settle it |
 | --- | --- | --- |
-| What coordinate transform does RenderNode use, and how precise is the render origin? | Render space is ECEF for global scenes and the view SR for local ones. We request that as the output CRS, so the scene index already produces render-space matrices relative to a float32-exact origin per 3DOL. | W0 spike: measure jitter at 1 m camera distance in both view types. |
+| What coordinate transform does RenderNode use, and how precise is the render origin? | **Settled by W0 (D13).** Global render space is ECEF on a 6378137 m sphere, not EPSG:4978, so global views take EPSG:4979 anchors mapped in JS with `renderCoordinateTransformAt`; local views use the view SR. With a float32-exact origin per mesh, geometry is clean at 1 m in headless screenshots; naive float32 ECEF visibly jitters (confirmed on a real GPU). | W0: confirm origin mode is steady while moving the camera on a real GPU. |
 | Who is the transform provider? | An engine plugin behind `UsdGeospatialCoordinateOperationEngine`: usdGeospatialProj everywhere first, usdGeospatialEsriPE as the alternative in E1. | Agree the interface (WKT in, WKT out, points; returns points, operation, accuracy or failure) with Tamrat before C1. |
-| How is the target CRS chosen? | By the consumer, not authored: the app passes render space as the output CRS (requirement 16). Without one, the CRS bound to `defaultPrim` is used, otherwise resolution fails. | Settled by the proposal; session layers only override source bindings in tests. |
+| How is the target CRS chosen? | By the consumer, not authored: the app passes the output CRS (requirement 16), per D13. Without one, the CRS bound to `defaultPrim` is used, otherwise resolution fails. | Settled by the proposal; session layers only override source bindings in tests. |
 | Can the Esri engine plugin call `projectOperator` synchronously from C++ in the worker? (E1) | The scene index needs synchronous answers. Load `projectOperator` inside the worker and call it through `EM_JS`. If the SDK won't load in a worker, pre-resolve all CRS pairs on the main thread before composing and pass the results in. | Spike at the start of E1. No longer on the critical path, since PROJ runs in the browser. |
 | Does the WASM need pthreads and `SharedArrayBuffer`? | Yes: upstream's WASM build uses `-pthread`, so we serve with COOP/COEP from day one. | W0: confirm SDK, basemaps and fonts load under COEP; try `credentialless` if `require-corp` blocks anything. |
 | How much of the Autodesk diff is needed? | Only the build, CMake and `__EMSCRIPTEN__` fixes for the GPU-free Hydra subset. No WebGPU, Hgi or hdSt. | First step of C2: list the diff by directory and size it. |
