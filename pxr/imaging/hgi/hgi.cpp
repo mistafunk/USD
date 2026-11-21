@@ -193,6 +193,9 @@ _MakeNewPlatformDefaultHgi()
             "HgiMetal";
         #elif defined(ARCH_OS_WINDOWS)
             "HgiGL";
+        #elif defined(ARCH_OS_WASM_VM)
+            // No Hgi backend is built for WebAssembly.
+            "";
         #else
             ""; 
             #error Unknown Platform
@@ -206,6 +209,12 @@ _MakeNewPlatformDefaultHgi()
             TF_CODING_ERROR(
                 "Build requires PXR_VULKAN_SUPPORT_ENABLED=true to use Vulkan");
         #endif
+    }
+
+    if (hgiType[0] == '\0') {
+        TF_DEBUG(HGI_DEBUG_INSTANCE_CREATION).Msg(
+            "No platform default Hgi on this platform\n");
+        return nullptr;
     }
 
     TF_DEBUG(HGI_DEBUG_INSTANCE_CREATION).Msg("Platform default Hgi: "
