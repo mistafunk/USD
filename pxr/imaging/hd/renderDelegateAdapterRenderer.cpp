@@ -52,7 +52,7 @@ _ComputeDrivers(const HdRendererCreateArgsSchema &rendererCreateArgs)
 /// Creating a std::vector<HdDriver*> here.
 /// HdRenderDelegateAdapterRenderer::_drivers owns the HdDriver struct's.
 ///
-class HdRenderDelegateAdapterRenderer::_LegacyRenderControl
+class HdRenderDelegateAdapterRenderer::_LegacyRenderControl final
     : public HdLegacyRenderControlInterface
 {
 public:
