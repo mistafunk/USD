@@ -12,6 +12,8 @@
 #include "pxr/base/tf/enum.h"
 #include "pxr/base/tf/registryManager.h"
 
+#include <cinttypes>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 TF_REGISTRY_FUNCTION(TfEnum)
@@ -32,7 +34,7 @@ void
 Vt_ArrayEditOps::_LiteralOutOfBounds(int64_t idx, size_t size)
 {
     TF_DEBUG(VT_ARRAY_EDIT_BOUNDS).Msg(
-        "Index %zd out of bounds for literal value (max = %zu)\n",
+        "Index %" PRId64 " out of bounds for literal value (max = %zu)\n",
         idx, size);
 }
 
@@ -40,7 +42,7 @@ void
 Vt_ArrayEditOps::_ReferenceOutOfBounds(int64_t idx, size_t size)
 {
     TF_DEBUG(VT_ARRAY_EDIT_BOUNDS).Msg(
-        "Array reference index %zd out of bounds (size = %zu)\n",
+        "Array reference index %" PRId64 " out of bounds (size = %zu)\n",
         idx, size);
 }
 
@@ -48,7 +50,7 @@ void
 Vt_ArrayEditOps::_InsertOutOfBounds(int64_t idx, size_t size)
 {
     TF_DEBUG(VT_ARRAY_EDIT_BOUNDS).Msg(
-        "Array insert index %zd out of bounds (size = %zu)\n",
+        "Array insert index %" PRId64 " out of bounds (size = %zu)\n",
         idx, size);
 }
 
@@ -56,7 +58,7 @@ void
 Vt_ArrayEditOps::_NegativeSizeArg(Op op, int64_t size)
 {
     TF_DEBUG(VT_ARRAY_EDIT_BOUNDS).Msg(
-        "Sizing operation '%s' with negative size argument %zd\n",
+        "Sizing operation '%s' with negative size argument %" PRId64 "\n",
         TfEnum::GetName(op).c_str(), size);
 }
 

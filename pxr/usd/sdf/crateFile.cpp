@@ -76,6 +76,7 @@
 
 #include <tbb/concurrent_queue.h>
 
+#include <cinttypes>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -775,7 +776,7 @@ struct _AssetStream {
         if constexpr (SafetyOverSpeed) {
             if (nRead != nBytes) {
                 PXR_TF_THROW(SdfReadOutOfBoundsError, TfStringPrintf(
-                             "Failed reading %zu bytes at offset %zu",
+                             "Failed reading %zu bytes at offset %" PRId64,
                              nBytes, _cur));
             }
         }
@@ -3825,7 +3826,7 @@ CrateFile::_ReadTokens(Reader reader)
     }
     wd.Wait();
     if (i != numTokens) {
-        TF_RUNTIME_ERROR("Crate file claims %zu tokens, found %zu",
+        TF_RUNTIME_ERROR("Crate file claims %" PRIu64 " tokens, found %zu",
                          numTokens, i);
     }
 

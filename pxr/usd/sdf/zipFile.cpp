@@ -17,6 +17,7 @@
 #include "pxr/base/tf/pathUtils.h"
 #include "pxr/base/tf/safeOutputFile.h"
 
+#include <cinttypes>
 #include <cstdint>
 #include <ctime>
 #include <mutex>
@@ -977,7 +978,7 @@ Sdf_CheckZipFileWriteOperation(const TfErrorMark& mark) {
     if (!mark.IsClean()) {
         mark.Clear();
         TF_RUNTIME_ERROR(
-            "Zipfile is larger than maximum size allowed by Zip32 (%ld)", 
+            "Zipfile is larger than maximum size allowed by Zip32 (%" PRId64 ")",
                 Sdf_GetMaxZipFileSize()
         );
 

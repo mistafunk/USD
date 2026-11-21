@@ -10,6 +10,8 @@
 #include "pxr/base/tf/diagnostic.h"
 #include "pxr/base/tf/enum.h"
 
+#include <cinttypes>
+
 PXR_NAMESPACE_OPEN_SCOPE
 
 inline bool
@@ -75,7 +77,7 @@ Vt_ArrayEditOpsBuilder::_IssueArityError(Ops::Op op, int count)
 void
 Vt_ArrayEditOpsBuilder::_IssueNegativeSizeError(Ops::Op op, int64_t size)
 {
-    TF_CODING_ERROR("Op '%s' invalid negative size argument: %zd",
+    TF_CODING_ERROR("Op '%s' invalid negative size argument: %" PRId64,
                     TfEnum::GetName(op).c_str(), size);
 }
 

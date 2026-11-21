@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cinttypes>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -1502,9 +1503,9 @@ void ArchFileAdvise(
     int rval = posix_fadvise(fileno(file), offset, static_cast<off_t>(count),
                              adviceMap[adv]);
     if (rval != 0) {
-        fprintf(stderr, "failed call to posix_fadvise(%d, %zd, %zd)"
-                "ret=%d, errno=%d '%s'\n",
-                fileno(file), offset, static_cast<off_t>(count),
+        fprintf(stderr, "failed call to posix_fadvise(%d, %" PRId64 ", %"
+                PRId64 ")ret=%d, errno=%d '%s'\n",
+                fileno(file), offset, static_cast<int64_t>(count),
                 rval, errno, ArchStrerror().c_str());
     }
 #endif
