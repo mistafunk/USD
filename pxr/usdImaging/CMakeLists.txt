@@ -5,6 +5,7 @@ set(DIRS
     usdProcImaging
     usdSkelImaging
     usdVolImaging
+    usdGeospatialImaging
     usdIrImaging
     usdAppUtils
     usdviewq

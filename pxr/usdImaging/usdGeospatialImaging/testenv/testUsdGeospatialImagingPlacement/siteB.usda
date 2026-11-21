@@ -1,0 +1,62 @@
+#usda 1.0
+(
+    defaultPrim = "SiteB"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SiteB" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crs_library.usda@</CRS/WGS84_Geographic3D>
+)
+{
+    double3 crs:position = (-117.19525820912393, 34.05648790373001, 0.00003915652632713318)
+    custom string geotest:description = "T1: geographic 3D mast standing on Site A's NE corner"
+    custom token geotest:expect = "pass"
+
+    def Mesh "Mast"
+    {
+        float3[] extent = [(-0.5, -0.5, 0), (0.5, 0.5, 25)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+        point3f[] points = [(-0.5, -0.5, 0), (0.5, -0.5, 0), (0.5, 0.5, 0), (-0.5, 0.5, 0), (-0.5, -0.5, 25), (0.5, -0.5, 25), (0.5, 0.5, 25), (-0.5, 0.5, 25)]
+        color3f[] primvars:displayColor = [(0.2, 0.5, 0.9)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Xform "ControlPoints"
+    {
+        def Xform "Base"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19525820912393, 34.05648790373001, 0.00003915652632713318)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "Top"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19525820912393, 34.056487903730016, 25.000039154663682)
+            double3 xformOp:translate = (0, 0, 25)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "TopNE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19525279341083, 34.056492411327056, 25.00003919377923)
+            double3 xformOp:translate = (0.5, 0.5, 25)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "TopSW"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19526362483647, 34.05648339613273, 25.000039194710553)
+            double3 xformOp:translate = (-0.5, -0.5, 25)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+}
+

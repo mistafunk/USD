@@ -1,0 +1,645 @@
+{
+ "format": "geospatial-web-recorded",
+ "version": 1,
+ "stage": "scene.usda",
+ "output": {
+  "name": "global",
+  "crs": "EPSG:4979",
+  "wkt": "GEOGCRS[\"WGS 84\",ENSEMBLE[\"World Geodetic System 1984 ensemble\",MEMBER[\"World Geodetic System 1984 (Transit)\"],MEMBER[\"World Geodetic System 1984 (G730)\"],MEMBER[\"World Geodetic System 1984 (G873)\"],MEMBER[\"World Geodetic System 1984 (G1150)\"],MEMBER[\"World Geodetic System 1984 (G1674)\"],MEMBER[\"World Geodetic System 1984 (G1762)\"],MEMBER[\"World Geodetic System 1984 (G2139)\"],MEMBER[\"World Geodetic System 1984 (G2296)\"],ELLIPSOID[\"WGS 84\",6378137,298.257223563,LENGTHUNIT[\"metre\",1]],ENSEMBLEACCURACY[2.0]],PRIMEM[\"Greenwich\",0,ANGLEUNIT[\"degree\",0.0174532925199433]],CS[ellipsoidal,3],AXIS[\"geodetic latitude (Lat)\",north,ORDER[1],ANGLEUNIT[\"degree\",0.0174532925199433]],AXIS[\"geodetic longitude (Lon)\",east,ORDER[2],ANGLEUNIT[\"degree\",0.0174532925199433]],AXIS[\"ellipsoidal height (h)\",up,ORDER[3],LENGTHUNIT[\"metre\",1]],USAGE[SCOPE[\"Geodesy. Navigation and positioning using GPS satellite system.\"],AREA[\"World.\"],BBOX[-90,-180,90,180]],ID[\"EPSG\",4979]]",
+  "frame": "enu"
+ },
+ "engine": {
+  "name": "pyproj",
+  "version": "3.8.0",
+  "proj": "9.8.1"
+ },
+ "stageMetersPerUnit": 1.0,
+ "stageUpAxis": "Z",
+ "buffers": "buffers.bin",
+ "anchors": [
+  {
+   "path": "/World/SiteA",
+   "status": "ok",
+   "sourceCrs": "WGS 84 / UTM zone 11N",
+   "position": [
+    481957.95,
+    3768437.85,
+    0.0
+   ],
+   "orientation": [
+    30.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -117.19549997299366,
+    34.05649998208545,
+    -9.313225746154785e-10
+   ],
+   "matrix": [
+    0.8660254027215425,
+    -0.5000000002166795,
+    -6.552446779606313e-10,
+    0.0,
+    0.5000000001565781,
+    0.8660254040213691,
+    -2.9072846907673977e-10,
+    0.0,
+    8.342374013814435e-11,
+    -4.5444031870900403e-10,
+    1.0000000002173355,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  },
+  {
+   "path": "/World/SiteB",
+   "status": "ok",
+   "sourceCrs": "WGS 84",
+   "position": [
+    -117.19525820912393,
+    34.05648790373001,
+    3.915652632713318e-05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -117.19525820912393,
+    34.056487903730016,
+    3.915652632713318e-05
+   ],
+   "matrix": [
+    0.9999999991195552,
+    4.0980856557328287e-10,
+    -1.905143766283016e-10,
+    0.0,
+    1.559982698573492e-11,
+    1.0000000000560296,
+    -2.2606588823137486e-10,
+    0.0,
+    -2.521619579809453e-10,
+    1.1213546757815607e-10,
+    0.9999999998443296,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  },
+  {
+   "path": "/World/SiteC",
+   "status": "ok",
+   "sourceCrs": "WGS 84 / UTM zone 11N",
+   "position": [
+    481957.95,
+    3768497.85,
+    0.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -117.19550121532465,
+    34.05704110913963,
+    1.862645149230957e-09
+   ],
+   "matrix": [
+    0.9999999999630576,
+    2.1606645639327127e-10,
+    -3.1964475510903867e-10,
+    0.0,
+    1.8226407882959705e-10,
+    1.000000000410853,
+    5.895052501703191e-10,
+    0.0,
+    3.7376601813576826e-11,
+    -2.567613344162112e-10,
+    0.999999999818511,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  },
+  {
+   "path": "/World/SiteD",
+   "status": "unsupported",
+   "reason": "2D CRS: height needs the EGM2008 default vertical reference, which needs a geoid grid this reference does not ship"
+  },
+  {
+   "path": "/World/SiteE",
+   "status": "error",
+   "reason": "direct binding without a crs:wkt definition (no fallback to an ancestor CRS)"
+  }
+ ],
+ "meshes": [
+  {
+   "path": "/World/SiteA/Building",
+   "anchor": "/World/SiteA",
+   "status": "ok",
+   "color": [
+    0.8500000238418579,
+    0.44999998807907104,
+    0.15000000596046448
+   ],
+   "points": {
+    "byteOffset": 0,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 432,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 864,
+    "count": 36
+   },
+   "matrix": [
+    0.8660254027215425,
+    -0.5000000002166795,
+    -6.552446779606313e-10,
+    0.0,
+    0.5000000001565781,
+    0.8660254040213691,
+    -2.9072846907673977e-10,
+    0.0,
+    8.342374013814435e-11,
+    -4.5444031870900403e-10,
+    1.0000000002173355,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 2.7016382975191134e-08
+  },
+  {
+   "path": "/World/SiteA/Wing/Box",
+   "anchor": "/World/SiteA",
+   "status": "ok",
+   "color": [
+    0.8999999761581421,
+    0.699999988079071,
+    0.30000001192092896
+   ],
+   "points": {
+    "byteOffset": 1008,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 1440,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 1872,
+    "count": 36
+   },
+   "matrix": [
+    0.8660254027215425,
+    -0.5000000002166795,
+    -6.552446779606313e-10,
+    0.0,
+    0.5000000001565781,
+    0.8660254040213691,
+    -2.9072846907673977e-10,
+    0.0,
+    8.342374013814435e-11,
+    -4.5444031870900403e-10,
+    1.0000000002173355,
+    0.0,
+    28.480762082429166,
+    -10.669872986393539,
+    -2.111098268420264e-08,
+    1.0
+   ],
+   "linearizationError": 4.556466622346781e-08
+  },
+  {
+   "path": "/World/SiteB/Mast",
+   "anchor": "/World/SiteB",
+   "status": "ok",
+   "color": [
+    0.20000000298023224,
+    0.5,
+    0.8999999761581421
+   ],
+   "points": {
+    "byteOffset": 2016,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 2448,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 2880,
+    "count": 36
+   },
+   "matrix": [
+    0.9999999991195552,
+    4.0980856557328287e-10,
+    -1.905143766283016e-10,
+    0.0,
+    1.559982698573492e-11,
+    1.0000000000560296,
+    -2.2606588823137486e-10,
+    0.0,
+    -2.521619579809453e-10,
+    1.1213546757815607e-10,
+    0.9999999998443296,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 8.991151802628517e-09
+  },
+  {
+   "path": "/World/SiteC/Box",
+   "anchor": "/World/SiteC",
+   "status": "ok",
+   "color": [
+    0.6000000238418579,
+    0.6000000238418579,
+    0.6000000238418579
+   ],
+   "points": {
+    "byteOffset": 3024,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 3456,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 3888,
+    "count": 36
+   },
+   "matrix": [
+    0.9999999999630576,
+    2.1606645639327127e-10,
+    -3.1964475510903867e-10,
+    0.0,
+    1.8226407882959705e-10,
+    1.000000000410853,
+    5.895052501703191e-10,
+    0.0,
+    3.7376601813576826e-11,
+    -2.567613344162112e-10,
+    0.999999999818511,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 4.679837144534823e-09
+  },
+  {
+   "path": "/World/SiteD/Box",
+   "anchor": "/World/SiteD",
+   "status": "unsupported",
+   "color": [
+    0.5,
+    0.800000011920929,
+    0.4000000059604645
+   ],
+   "points": {
+    "byteOffset": 4032,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 4464,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 4896,
+    "count": 36
+   }
+  },
+  {
+   "path": "/World/SiteE/Box",
+   "anchor": "/World/SiteE",
+   "status": "error",
+   "color": [
+    0.800000011920929,
+    0.30000001192092896,
+    0.30000001192092896
+   ],
+   "points": {
+    "byteOffset": 5040,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 5472,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 5904,
+    "count": 36
+   }
+  }
+ ],
+ "controlPoints": [
+  {
+   "path": "/World/SiteA/ControlPoints/SW",
+   "anchor": "/World/SiteA",
+   "local": [
+    -20.0,
+    -10.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19574173693196,
+     34.056512059965364,
+     3.915652632713318e-05
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteA/ControlPoints/SE",
+   "anchor": "/World/SiteA",
+   "local": [
+    20.0,
+    -10.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19536652404896,
+     34.056331755533044,
+     3.928225487470627e-05
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteA/ControlPoints/NE",
+   "anchor": "/World/SiteA",
+   "local": [
+    20.0,
+    10.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19525820912393,
+     34.05648790373001,
+     3.915652632713318e-05
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteA/ControlPoints/NW",
+   "anchor": "/World/SiteA",
+   "local": [
+    -20.0,
+    10.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19563342246562,
+     34.05666820848838,
+     3.928132355213165e-05
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteA/ControlPoints/RoofNE",
+   "anchor": "/World/SiteA",
+   "local": [
+    20.0,
+    10.0,
+    12.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19525820957831,
+     34.056487903752824,
+     12.00003915745765
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteA/ControlPoints/WingFar",
+   "anchor": "/World/SiteA",
+   "local": [
+    35.0,
+    10.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19511750453044,
+     34.05642028914899,
+     0.00010378938168287277
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteB/ControlPoints/Base",
+   "anchor": "/World/SiteB",
+   "local": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19525820912393,
+     34.05648790373001,
+     3.915652632713318e-05
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteB/ControlPoints/Top",
+   "anchor": "/World/SiteB",
+   "local": [
+    0.0,
+    0.0,
+    25.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19525820912393,
+     34.056487903730016,
+     25.000039154663682
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteB/ControlPoints/TopNE",
+   "anchor": "/World/SiteB",
+   "local": [
+    0.5,
+    0.5,
+    25.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19525279341083,
+     34.056492411327056,
+     25.00003919377923
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteB/ControlPoints/TopSW",
+   "anchor": "/World/SiteB",
+   "local": [
+    -0.5,
+    -0.5,
+    25.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19526362483647,
+     34.05648339613273,
+     25.000039194710553
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteC/ControlPoints/SW",
+   "anchor": "/World/SiteC",
+   "local": [
+    -4.0,
+    -4.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19554454145992,
+     34.057005048216006,
+     2.512708306312561e-06
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteC/ControlPoints/SE",
+   "anchor": "/World/SiteC",
+   "local": [
+    4.0,
+    -4.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19545788918938,
+     34.057005048216006,
+     2.512708306312561e-06
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteC/ControlPoints/NE",
+   "anchor": "/World/SiteC",
+   "local": [
+    4.0,
+    4.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19545734757556,
+     34.057077170047585,
+     2.543441951274872e-06
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteC/ControlPoints/NW",
+   "anchor": "/World/SiteC",
+   "local": [
+    -4.0,
+    4.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19554454149662,
+     34.05707717004778,
+     2.51084566116333e-06
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteD/ControlPoints/Origin",
+   "anchor": "/World/SiteD",
+   "local": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19669999999999,
+     34.05649999999999,
+     9.313225746154785e-10
+    ]
+   }
+  }
+ ],
+ "testCases": [
+  {
+   "anchor": "/World/SiteA",
+   "expect": "pass",
+   "description": "T1: UTM 11N (3D) building with a child transform, heading 30"
+  },
+  {
+   "anchor": "/World/SiteB",
+   "expect": "pass",
+   "description": "T1: geographic 3D mast standing on Site A's NE corner"
+  },
+  {
+   "anchor": "/World/SiteC",
+   "expect": "fail",
+   "description": "Harness self-test: control point NE has a 5 cm reference error"
+  },
+  {
+   "anchor": "/World/SiteD",
+   "expect": "unsupported",
+   "description": "T4-like: 2D CRS (California zone 5, ftUS) needs EGM2008 height"
+  },
+  {
+   "anchor": "/World/SiteE",
+   "expect": "unsupported",
+   "description": "T7: direct binding to a missing CRS prim"
+  }
+ ]
+}
