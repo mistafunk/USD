@@ -18,42 +18,46 @@ pxr_plugin(${PXR_PACKAGE}
     DISABLE_PRECOMPILED_HEADERS
 )
 
-pxr_build_test(testHdTiny
-    LIBRARIES
-        hdx
-    
-    CPPFILES
-        testenv/testHdTiny.cpp
-)
+# The test drives the plugin through HdxRenderTask, and hdx is only built
+# with GPU support.
+if (TARGET hdx)
+    pxr_build_test(testHdTiny
+        LIBRARIES
+            hdx
 
-# This test only runs on MacOS and Linux for now.
-if (APPLE)
-    pxr_register_test(testHdTiny
-        ENV
-            ${PXR_PLUGINPATH_NAME}=${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny/resources
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdTiny" 
-        TESTENV testenv/testHdTiny
-        STDOUT_REDIRECT output.txt
-        DIFF_COMPARE output.txt
+        CPPFILES
+            testenv/testHdTiny.cpp
     )
-elseif (UNIX)
-    pxr_register_test(testHdTiny
-        ENV
-            ${PXR_PLUGINPATH_NAME}=${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny/resources
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdTiny" 
-        TESTENV testenv/testHdTiny
-        STDOUT_REDIRECT output.txt
-        DIFF_COMPARE output.txt
-    )
-elseif (WIN32)
-    pxr_register_test(testHdTiny
-        ENV
-            ${PXR_PLUGINPATH_NAME}=${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny/resources
-        PRE_PATH
-            ${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny
-        COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdTiny" 
-        TESTENV testenv/testHdTiny
-        STDOUT_REDIRECT output.txt
-        DIFF_COMPARE output.txt
-    )
+
+    # This test only runs on MacOS and Linux for now.
+    if (APPLE)
+        pxr_register_test(testHdTiny
+            ENV
+                ${PXR_PLUGINPATH_NAME}=${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny/resources
+            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdTiny" 
+            TESTENV testenv/testHdTiny
+            STDOUT_REDIRECT output.txt
+            DIFF_COMPARE output.txt
+        )
+    elseif (UNIX)
+        pxr_register_test(testHdTiny
+            ENV
+                ${PXR_PLUGINPATH_NAME}=${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny/resources
+            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdTiny" 
+            TESTENV testenv/testHdTiny
+            STDOUT_REDIRECT output.txt
+            DIFF_COMPARE output.txt
+        )
+    elseif (WIN32)
+        pxr_register_test(testHdTiny
+            ENV
+                ${PXR_PLUGINPATH_NAME}=${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny/resources
+            PRE_PATH
+                ${CMAKE_INSTALL_PREFIX}/share/usd/examples/plugin/hdTiny
+            COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testHdTiny" 
+            TESTENV testenv/testHdTiny
+            STDOUT_REDIRECT output.txt
+            DIFF_COMPARE output.txt
+        )
+    endif()
 endif()
