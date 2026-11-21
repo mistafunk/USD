@@ -460,6 +460,15 @@ macro(pxr_plugin NAME)
         # Dynamic linking is not supported yet in the usd build toolchain
         message(STATUS "Building ${NAME} plugin as static library for emscripten support")
         pxr_library(${NAME} TYPE "STATIC" ${ARGN})
+
+        # Unlike an explicitly static library, a plugin depends on dynamic
+        # initialization (e.g. TF_REGISTRY_FUNCTION), so it must be linked
+        # with whole-archive like other libraries. Take it off the list of
+        # explicitly static libraries, which are linked without it.
+        get_property(help CACHE PXR_STATIC_LIBS PROPERTY HELPSTRING)
+        set(staticLibs ${PXR_STATIC_LIBS})
+        list(REMOVE_ITEM staticLibs ${NAME})
+        set(PXR_STATIC_LIBS "${staticLibs}" CACHE INTERNAL "${help}")
     else()
         pxr_library(${NAME} TYPE "PLUGIN" ${ARGN})
     endif()
