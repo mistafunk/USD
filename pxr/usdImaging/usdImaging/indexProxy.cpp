@@ -12,6 +12,18 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+// Type name of an adapter for debug output. Binding the adapter to a
+// reference first keeps typeid's operand free of side effects.
+static std::string
+_GetAdapterTypeName(const UsdImagingPrimAdapterSharedPtr &adapter)
+{
+    if (!adapter) {
+        return "none";
+    }
+    const UsdImagingPrimAdapter &a = *adapter;
+    return TfType::GetCanonicalTypeName(typeid(a));
+}
+
 TF_DEFINE_ENV_SETTING(USDIMAGING_LEGACY_UPDATE_FOR_TIME, 0,
         "Run UpdateForTime every time any prim is marked dirty (legacy behavior)");
 static bool _LegacyUpdateForTime() {
@@ -43,7 +55,7 @@ UsdImagingIndexProxy::_AddHdPrimInfo(SdfPath const &cachePath,
     TF_DEBUG(USDIMAGING_CHANGES).Msg(
         "[Add HdPrim Info] <%s> adapter=%s\n",
         cachePath.GetText(),
-        TfType::GetCanonicalTypeName(typeid(*(adapterToInsert.get()))).c_str());
+        _GetAdapterTypeName(adapterToInsert).c_str());
 
     // Currently, we don't support more than one adapter dependency per usd
     // prim, but we could relax this restriction if it's useful.
@@ -275,8 +287,7 @@ UsdImagingIndexProxy::InsertInstancer(
         TF_DEBUG(USDIMAGING_INSTANCER).Msg(
             "[Instancer Inserted] %s, adapter = %s\n",
             cachePath.GetText(),
-            adapter ? TfType::GetCanonicalTypeName(typeid(*adapter)).c_str()
-                    : "none");
+            _GetAdapterTypeName(adapter).c_str());
 
         _AddTask(cachePath);
     }

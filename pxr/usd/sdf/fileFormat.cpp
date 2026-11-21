@@ -561,11 +561,13 @@ SdfFileFormat::_SetLayerData(
         // to have the qualities the file format dictates, even if the
         // underlying data object type is the same.
         const SdfAbstractDataConstPtr oldData = _GetLayerData(*layer);
+        // Bound to references so that typeid's operands have no side effects.
+        const SdfAbstractData &newImpl = *get_pointer(data);
+        const SdfAbstractData &oldImpl = *get_pointer(oldData);
         const bool differentDataImpl = 
             data->StreamsData() != oldData->StreamsData() ||
             data->IsDetached() != oldData->IsDetached() ||
-            !TfSafeTypeCompare(
-                typeid(*get_pointer(data)), typeid(*get_pointer(oldData)));
+            !TfSafeTypeCompare(typeid(newImpl), typeid(oldImpl));
 
         if (differentDataImpl) {
             layer->_AdoptData(data);

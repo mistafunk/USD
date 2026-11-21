@@ -59,6 +59,18 @@ TF_REGISTRY_FUNCTION(TfType)
 
 // ------------------------------------------------------------
 
+// Type name of an adapter for debug output. Binding the adapter to a
+// reference first keeps typeid's operand free of side effects.
+static std::string
+_GetAdapterTypeName(const UsdImagingPrimAdapterSharedPtr &adapter)
+{
+    if (!adapter) {
+        return "none";
+    }
+    const UsdImagingPrimAdapter &a = *adapter;
+    return TfType::GetCanonicalTypeName(typeid(a));
+}
+
 bool
 UsdImagingInstanceAdapter::ShouldCullChildren() const
 {
@@ -348,9 +360,7 @@ UsdImagingInstanceAdapter::_Populate(UsdPrim const& prim,
                 "[Add Instance NI] <%s>  %s (%s), adapter = %s\n",
                 instancerPath.GetText(), protoPath.GetText(),
                 iter->GetName().GetText(),
-                primAdapter ?
-                    TfType::GetCanonicalTypeName(typeid(*primAdapter)).c_str() :
-                    "none");
+                _GetAdapterTypeName(primAdapter).c_str());
         }
     }
 
