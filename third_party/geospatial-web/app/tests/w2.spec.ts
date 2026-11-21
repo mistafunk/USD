@@ -1,7 +1,7 @@
 // W2: the harness scores the recorded data (testdata/scene) in the global and
-// local views. Every case must produce its expected outcome: pass (A, B),
-// fail (C, a planted 5 cm reference error), unsupported (D 2D CRS, E broken
-// binding). Writes reports/w2-<timestamp>.{json,html} and reports/latest.*.
+// local views. Every case must produce its expected outcome: pass (A, B and
+// the I1 sites F, G, I, J, K), fail (C, a planted 5 cm reference error; I in
+// the local view, T5), unsupported (D 2D CRS, E broken binding, H NAVD88). Writes reports/w2-<timestamp>.{json,html} and reports/latest.*.
 import { expect, test, type Page } from "@playwright/test";
 import type { HarnessReport } from "../src/harness";
 import { writeReport } from "./report";
@@ -40,9 +40,14 @@ for (const mode of ["global", "local"]) {
     for (const c of report!.cases) {
       console.log(`${mode}: ${c.anchor} expected ${c.expect}, got ${c.result} (${c.detail})`);
     }
+    // Matrix placement: the 1 km runway (Site I, T5) is off by about 2.5 cm
+    // at its ends in Web Mercator.
     expect(report!.cases.map((c) => [c.anchor, c.result])).toEqual([
       ["/World/SiteA", "pass"], ["/World/SiteB", "pass"], ["/World/SiteC", "fail"],
-      ["/World/SiteD", "unsupported"], ["/World/SiteE", "unsupported"]]);
+      ["/World/SiteD", "unsupported"], ["/World/SiteE", "unsupported"],
+      ["/World/SiteF", "pass"], ["/World/SiteG", "pass"], ["/World/SiteH", "unsupported"],
+      ["/World/SiteI", mode === "local" ? "fail" : "pass"], ["/World/SiteJ", "pass"],
+      ["/World/SiteK", "pass"]]);
     expect(report!.summary.unexpected).toBe(0);
     await page.screenshot({ path: `test-results/w2-${mode}.png` });
   });

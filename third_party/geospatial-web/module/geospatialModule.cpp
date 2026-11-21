@@ -7,13 +7,15 @@
 //     m.FS.writeFile("/data/scene.usda", bytes);   // and its dependencies
 //     const scene = new m.GeospatialScene();
 //     scene.open("/data/scene.usda");              // "" or an error
-//     scene.setOutput("EPSG:4979", false);         // "" or an error
+//     scene.setOutput("EPSG:4979", false, false);  // "" or an error
 //     scene.sync();                                // changed prim paths
 //     scene.anchors(); scene.meshes();             // see below
 //
 // meshes() returns typed arrays that view the module's memory; copy them
 // (slice()) before the next call into the module.
 //
+
+#include "testData.h"
 
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdGeospatialImaging/meshObserver.h"
@@ -110,6 +112,7 @@ public:
 
     void Close()
     {
+        _time = UsdTimeCode::Default();
         _observer.reset();
         _placement.Reset();
         _sceneIndices = UsdImagingSceneIndices();
@@ -117,10 +120,12 @@ public:
     }
 
     /// Places the stage in \p outputCrs (e.g. "EPSG:4979" for a global
-    /// view, the view's spatial reference for a local one). Returns an empty
-    /// string, or why the output CRS cannot be used.
+    /// view, the view's spatial reference for a local one), optionally
+    /// measuring the matrix shortcut and publishing exact per-vertex frame
+    /// points (measurement mode). Returns an empty string, or why the output
+    /// CRS cannot be used.
     std::string SetOutput(const std::string& outputCrs,
-                          bool measureLinearization)
+                          bool measureLinearization, bool exactPoints)
     {
         if (!_stage) {
             return "no stage";
@@ -131,6 +136,7 @@ public:
         UsdImagingCreateSceneIndicesInfo info;
         info.stage = _stage;
         _sceneIndices = UsdImagingCreateSceneIndices(info);
+        _sceneIndices.stageSceneIndex->SetTime(_time);
         _placement = UsdGeospatialImagingPlacementSceneIndex::New(
             _sceneIndices.finalSceneIndex,
             HdRetainedContainerDataSource::New(
@@ -138,7 +144,9 @@ public:
                 HdRetainedTypedSampledDataSource<std::string>::New(outputCrs),
                 tokens->measureLinearization,
                 HdRetainedTypedSampledDataSource<bool>::New(
-                    measureLinearization)));
+                    measureLinearization),
+                tokens->exactPoints,
+                HdRetainedTypedSampledDataSource<bool>::New(exactPoints)));
         const UsdGeospatialPlacementQuery& query = _placement->GetQuery();
         if (!query.IsValid()) {
             const std::string error = query.GetError();
@@ -165,10 +173,13 @@ public:
             ? "enu" : "crs";
     }
 
+    /// The time the stage is evaluated at, by the scene chain and
+    /// resolve(); applies to chains set up later too.
     void SetTime(double time)
     {
+        _time = UsdTimeCode(time);
         if (_sceneIndices.stageSceneIndex) {
-            _sceneIndices.stageSceneIndex->SetTime(UsdTimeCode(time));
+            _sceneIndices.stageSceneIndex->SetTime(_time);
         }
     }
 
@@ -213,6 +224,11 @@ public:
             o.set("engine", a.engine);
             o.set("operation", a.operation);
             o.set("accuracy", a.accuracy ? val(*a.accuracy) : val::null());
+            val skipped = val::array();
+            for (const std::string& s : a.skippedOperations) {
+                skipped.call<void>("push", s);
+            }
+            o.set("skippedOperations", skipped);
             o.set("sourceCrs", a.sourceCrs);
             o.set("position", _Vec3(a.position));
             o.set("orientation", _Vec3(a.orientation));
@@ -250,9 +266,55 @@ public:
                 m.normals.size(), m.normals.data())));
             o.set("indices", val(emscripten::typed_memory_view(
                 m.indices.size(), m.indices.data())));
+            o.set("framePoints", m.framePoints.empty() ? val::null()
+                : val(emscripten::typed_memory_view(
+                    m.framePoints.size(), m.framePoints.data())));
             result.call<void>("push", o);
         }
         return result;
+    }
+
+    /// Test data on the stage (testData.h): controlPoints, testCases and
+    /// time (null if the stage does not set one), in the recorded format.
+    val TestData() const
+    {
+        val o = val::object();
+        val points = val::array();
+        val cases = val::array();
+        o.set("time", val::null());
+        if (!_stage) {
+            o.set("controlPoints", points);
+            o.set("testCases", cases);
+            return o;
+        }
+        const GeospatialWebTestData data = GeospatialWebReadTestData(_stage);
+        for (const GeospatialWebControlPoint& p : data.controlPoints) {
+            val cp = val::object();
+            cp.set("path", p.path);
+            cp.set("anchor", p.anchor.empty() ? val::null() : val(p.anchor));
+            cp.set("local", p.local ? _Vec3(*p.local) : val::null());
+            val reference = val::object();
+            reference.set("crs", p.referenceCrs);
+            reference.set("position", _Vec3(p.referencePosition));
+            cp.set("reference", reference);
+            points.call<void>("push", cp);
+        }
+        for (const GeospatialWebTestCase& c : data.testCases) {
+            val tc = val::object();
+            tc.set("anchor", c.anchor);
+            tc.set("expect", c.expect);
+            tc.set("description", c.description);
+            if (!c.expectLocal.empty()) {
+                tc.set("expectLocal", c.expectLocal);
+            }
+            cases.call<void>("push", tc);
+        }
+        o.set("controlPoints", points);
+        o.set("testCases", cases);
+        if (data.time) {
+            o.set("time", *data.time);
+        }
+        return o;
     }
 
     /// The C1 query on the stage, independent of Hydra: places the anchor at
@@ -270,7 +332,7 @@ public:
         }
         const UsdGeospatialPlacementQuery query(outputCrs);
         const UsdGeospatialPlacement placement = query.Resolve(
-            _stage->GetPrimAtPath(SdfPath(anchorPath)));
+            _stage->GetPrimAtPath(SdfPath(anchorPath)), _time);
         o.set("status", std::string(
             placement.IsOk() ? "ok"
             : placement.GetStatus() ==
@@ -302,6 +364,7 @@ public:
 
 private:
     UsdStageRefPtr _stage;
+    UsdTimeCode _time = UsdTimeCode::Default();
     UsdImagingSceneIndices _sceneIndices;
     UsdGeospatialImagingPlacementSceneIndexRefPtr _placement;
     std::unique_ptr<UsdGeospatialImagingMeshObserver> _observer;
@@ -347,7 +410,8 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
         .function("upAxis", &GeospatialScene::GetUpAxis)
         .function("anchors", &GeospatialScene::Anchors)
         .function("meshes", &GeospatialScene::Meshes)
-        .function("resolve", &GeospatialScene::Resolve);
+        .function("resolve", &GeospatialScene::Resolve)
+        .function("testData", &GeospatialScene::TestData);
     emscripten::function("info", &GetInfo);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

@@ -287,7 +287,7 @@ The prototype passes when two 3DOLs in different spatial references land on thei
 | --- | --- | --- | --- |
 | T1 Same datum | 3DOL A in a UTM zone (WGS84), 3DOL B in WGS84 geographic 3D | Pass | Pass |
 | T2 Equation-based datum shift | 3DOL A in a national CRS with a Helmert transform to WGS84, 3DOL B in WGS84 | Pass; operation logged | Pass; operation logged |
-| T3 Grid-based datum shift | A CRS pair whose only usable transform is grid-based (for example NADCON or NTv2) | Unsupported, reported | Pass with grids installed; unsupported without |
+| T3 Grid-based datum shift | A CRS whose best transform is grid-based (NAD27 at Redlands: NADCON5) | Placed with the best equation-based operation, its accuracy reported, the skipped grid operations named (D22) | Same without grids (D18) |
 | T4 Vertical CRS mismatch | The proposal's California zone 5 + NAVD88 compound example vs ellipsoidal heights | Unsupported, reported (no geoid grid) | Pass with geoid grid; unsupported without |
 | T5 Matrix vs full point map | T1 and T2 data, placement matrix vs F(x) per vertex | Under 1 cm difference for 3DOLs up to 1 km | Same |
 | T6 Precision | Global and local SceneView, camera 1 m from a control point | Under 1 px screen error | Not applicable |

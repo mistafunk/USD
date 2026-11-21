@@ -42,8 +42,8 @@ function mkdirs(m: Module, dir: string) {
   }
 }
 
-function setOutput(crs: string, measure: boolean) {
-  const error = need(scene).setOutput(crs, measure);
+function setOutput(crs: string, measure: boolean, exact: boolean) {
+  const error = need(scene).setOutput(crs, measure, exact);
   if (error) throw new Error(error);
 }
 
@@ -58,8 +58,10 @@ function state(): { value: SceneState; transfer: Transferable[] } {
       points: mesh.points.slice(),
       normals: mesh.normals.slice(),
       indices: mesh.indices.slice(),
+      framePoints: mesh.framePoints ? mesh.framePoints.slice() : null,
     };
     transfer.push(copy.points.buffer, copy.normals.buffer, copy.indices.buffer);
+    if (copy.framePoints) transfer.push(copy.framePoints.buffer);
     return copy;
   });
   return {
@@ -89,7 +91,8 @@ self.onmessage = async (event: MessageEvent) => {
     switch (op) {
       case "init": result = await init(args.moduleUrl); break;
       case "load": result = await load(args.files, args.stage); break;
-      case "setOutput": result = setOutput(args.crs, args.measure); break;
+      case "setOutput": result = setOutput(args.crs, args.measure, args.exact); break;
+      case "testData": result = need(scene).testData(); break;
       case "setTime": result = need(scene).setTime(args.time); break;
       case "state": ({ value: result, transfer } = state()); break;
       case "resolve":

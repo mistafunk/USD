@@ -67,7 +67,8 @@ for (const mode of ["global", "local"]) {
     expect(status["/World/SiteA"]).toBe("ok");
     expect(status["/World/SiteB"]).toBe("ok");
     // Sites C-E belong to the W2 cases; D and E are not drawn.
-    expect(a.stats.meshes).toBe(4);
+    // Drawn: A (building, wing), B, C, F, G, I, J, K; D, E, H are not placeable.
+    expect(a.stats.meshes).toBe(9);
 
     // Render space: global is the SDK's 6378137 m sphere (east-west about
     // 0.1 % shorter than the ellipsoid at 34 deg N); local is the view SR

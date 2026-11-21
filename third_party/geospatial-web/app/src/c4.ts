@@ -145,13 +145,16 @@ async function scene(usd: UsdClient, name: string) {
 
 async function scenes() {
   const fixtures = `${USD_BASE}/fixtures/scene`;
-  const files = ["scene.usda", "crs_library.usda", "siteA.usda", "siteB.usda", "siteC.usda",
-                 "siteD.usda", "siteE.usda"];
+  const index = await fetchJson<{ stage: string; files: string[] }>(`${fixtures}/index.json`);
   const usd = new UsdClient();
   try {
     state.info = await timed("init", () => usd.init());
     await timed("load scene", () => usd.load(
-      files.map((f) => ({ url: `${fixtures}/${f}`, path: `/scene/${f}` })), "/scene/scene.usda"));
+      index.files.map((f) => ({ url: `${fixtures}/${f}`, path: `/scene/${f}` })),
+      `/scene/${index.stage}`));
+    // The reference evaluates the scene at its geotest:time.
+    const test = await usd.testData();
+    if (test.time !== null) await usd.setTime(test.time);
     await scene(usd, "global");
     await scene(usd, "local-3857");
   } finally {

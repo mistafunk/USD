@@ -31,8 +31,23 @@ Test scene (`testdata/scene`), one test case per 3DOL, expected outcome in `geot
 | C | box in UTM 11N, control point NE has a planted 5 cm reference error | fail (harness self-test) |
 | D | box bound to a 2D CRS (NAD83 / California zone 5, ftUS) | unsupported (EGM2008 height) |
 | E | direct binding to a missing CRS prim | unsupported (reported error, T7) |
+| F | box in WGS 72 (geographic 3D): Helmert shift to WGS 84 | pass; operation logged (T2) |
+| G | box in NAD27 (geographic 3D): NADCON grids missing | pass with the 7 m equation-based operation; skipped grid operations reported (T3, D22) |
+| H | box in California zone 5 + NAVD88 (compound) | unsupported (geoid grid, T4) |
+| I | 1 km runway in UTM 11N | pass; in a local Web Mercator view with matrix placement fail (`geotest:expectLocal`, T5) |
+| J | box in geographic 3D, heading 90 | pass (T8) |
+| K | box with orientation (0, 0, 0) at 0 and (90, 30, 0) at 10 | pass at the scene time 5, slerped (T8) |
 
-Control point reference coordinates come from PROJ's topocentric conversion, not from this script's ENU code.
+The scene is evaluated at `geotest:time` (root layer `customLayerData`, 5): the reference, `geospatialRecord`, the C++
+imaging test and the browser all set that time. Orientation samples are slerped, by this script's own quaternions.
+
+Control point reference coordinates come from PROJ's topocentric conversion on the source datum's ellipsoid, not from
+this script's ENU code; for other datums (F, G) they are then transformed to EPSG:4979 with the engine's policy.
+
+Operations are chosen for the anchor's location (`area_at`, an area of interest around the anchor, as the C++ engine
+does). Into a projected output the reference goes through the output's geographic 3D CRS (`output_transformer`):
+PROJ's direct operation into a projected CRS with an ellipsoidal height axis keeps the source height through the
+datum shift. pyproj is built against the workspace's PROJ (D19; `geo.py reference` does it once).
 
 `proj-expected` writes `pxr/usd/plugin/usdGeospatialProj/testenv/testUsdGeospatialProjPlacement/` (stages and
 `expected.json`), which `testUsdGeospatialProjPlacement` compares against within 1 mm. Operations are chosen as the C++

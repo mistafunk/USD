@@ -2,8 +2,11 @@
 // SceneView on a cross-origin isolated page.
 //
 //   ?view=global|local   viewing mode (default global)
-//   &data=recorded|w0    recorded reference export (W1, default) or the W0
-//                        hard-coded meshes
+//   &data=live|recorded|w0  the live OpenUSD module (I1, default), recorded
+//                        data (W1; &src=recorded-cpp for the C++ dump) or
+//                        the W0 hard-coded meshes
+//   &exact=1             live only: exact per-vertex placement (measurement
+//                        mode, T5) instead of matrices
 //   &naive=1             W0 only: bake absolute render coordinates into
 //                        float32 vertices (shows the jitter we avoid)
 
@@ -18,7 +21,8 @@ import SceneView from "@arcgis/core/views/SceneView.js";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
 import type { HarnessReport } from "./harness";
 import { transformPoint } from "./mat4";
-import { MeshPass, type PassStats } from "./meshPass";
+import { MeshPass, type PassStats, type ScreenError } from "./meshPass";
+import { loadLiveScene, type LiveData } from "./live";
 import { loadRecordedScene } from "./recorded";
 import type { CameraPreset, Scene } from "./scene";
 import { w0Scene } from "./w0Scene";
@@ -28,7 +32,11 @@ esriConfig.assetsPath = __ARCGIS_ASSETS__;
 
 const params = new URLSearchParams(location.search);
 const viewingMode = params.get("view") === "local" ? "local" : "global";
-const data = params.get("data") === "w0" ? "w0" : "recorded";
+// Content: the live OpenUSD module (default, D21), recorded data, or W0's
+// hard-coded meshes.
+const data = (["recorded", "w0"] as const).find((d) => d === params.get("data")) ?? "live";
+// Measurement mode (T5): exact per-vertex placement instead of matrices.
+const exact = params.get("exact") === "1";
 // Directory of recorded data under public/: the offline reference's export
 // (recorded) or the C++ observer's (recorded-cpp, geo.py record).
 const recordedDir = /^[a-z0-9-]+$/.test(params.get("src") ?? "")
@@ -54,9 +62,13 @@ interface AppState {
   goto?: (preset: string) => Promise<unknown>;
   /** Render-space position (Float64) of a mesh-local point. */
   renderPoint?: (mesh: string, p: number[]) => number[] | null;
+  /** T6: screen error of a mesh point, float32 pipeline vs Float64. */
+  screenError?: (mesh: string, p: number[]) => ScreenError | null;
   /** W2 harness: control point scoring for the current view. */
   score?: () => HarnessReport | null;
   report: HarnessReport | null;
+  /** Live data: what the module returned (T9 checks). */
+  live: LiveData | null;
 }
 
 const state: AppState = {
@@ -72,6 +84,7 @@ const state: AppState = {
   anchors: [],
   errors: [],
   report: null,
+  live: null,
 };
 (globalThis as unknown as { __app: AppState }).__app = state;
 addEventListener("error", (e) => state.errors.push(String(e.message)));
@@ -145,7 +158,13 @@ const pass = new MeshPass(view);
 state.stats = pass.stats;
 
 view.when(async () => {
-  scene = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, recordedDir);
+  if (data === "live") {
+    const loaded = await loadLiveScene(view, { exact });
+    scene = loaded.scene;
+    state.live = loaded.live;
+  } else {
+    scene = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, recordedDir);
+  }
   state.scene = scene.name;
   state.anchors = scene.anchors;
   pass.setMeshes(scene.meshes);
@@ -156,6 +175,7 @@ view.when(async () => {
     const m = scene?.renderMatrices.get(mesh);
     return m ? transformPoint(m, p) : null;
   };
+  state.screenError = (mesh, p) => pass.screenError(mesh, p);
   state.score = () => {
     const r = scene?.score?.() ?? null;
     if (r) r.renderer = state.renderer;
@@ -176,6 +196,15 @@ function setLinks() {
   });
 }
 setLinks();
+
+const exactBox = document.getElementById("exact") as HTMLInputElement;
+exactBox.checked = exact;
+exactBox.disabled = data !== "live";
+exactBox.addEventListener("change", () => {
+  const p = new URLSearchParams(location.search);
+  if (exactBox.checked) p.set("exact", "1"); else p.delete("exact");
+  location.search = p.toString();
+});
 
 const naiveBox = document.getElementById("naive") as HTMLInputElement;
 naiveBox.checked = naive;

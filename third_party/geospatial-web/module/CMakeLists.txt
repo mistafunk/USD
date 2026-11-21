@@ -91,3 +91,18 @@ install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../testdata/scene/
     DESTINATION ${webDir}/fixtures/scene
 )
+
+# The scene's files, so the app's worker knows what to fetch.
+set(sceneDir ${CMAKE_CURRENT_SOURCE_DIR}/../testdata/scene)
+file(GLOB sceneFiles CONFIGURE_DEPENDS RELATIVE ${sceneDir} ${sceneDir}/*.usda)
+list(SORT sceneFiles)
+list(TRANSFORM sceneFiles PREPEND "\"")
+list(TRANSFORM sceneFiles APPEND "\"")
+list(JOIN sceneFiles ", " sceneFileList)
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/scene-index.json
+    "{ \"stage\": \"scene.usda\", \"files\": [${sceneFileList}] }\n")
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/scene-index.json
+    DESTINATION ${webDir}/fixtures/scene
+    RENAME index.json
+)

@@ -63,8 +63,19 @@ interface GpuMesh {
   count: number;
 }
 
+/** T6: where a mesh point lands on screen, as drawn and exactly. */
+export interface ScreenError {
+  /** Pixels between the float32 pipeline and an all-Float64 projection. */
+  pixels: number;
+  /** Camera distance to the point, metres of render space. */
+  distance: number;
+}
+
 export class MeshPass {
   readonly stats: PassStats = { frames: 0, near: 0, meshes: 0, triangles: 0 };
+  /** The last frame's camera, for screenError(). */
+  private camera: { view: Float64Array; projection: Float64Array;
+                    viewport: number[] } | null = null;
   private node: RenderNode;
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -88,6 +99,35 @@ export class MeshPass {
     });
   }
 
+  /**
+   * T6: projects the mesh point `p` (mesh-local) to the screen twice with the
+   * last frame's camera: as the GPU does (float32 vertex, float32 modelView
+   * and projection, float32 arithmetic) and in Float64 throughout. Null
+   * before the first frame or for an unknown mesh.
+   */
+  screenError(meshName: string, p: number[]): ScreenError | null {
+    const mesh = (this.gpu.map((g) => g.mesh).concat(this.pending))
+      .find((m) => m.name === meshName);
+    if (!this.camera || !mesh) return null;
+    const { view, projection, viewport } = this.camera;
+    const modelView = multiply(multiply(view, translation(mesh.origin)), mesh.matrix);
+
+    // Float64: the point in render space, then view and projection.
+    const exact = project(projection, transform(modelView, p));
+    // float32, as in the vertex shader.
+    const f = Math.fround;
+    const mv32 = Array.from(modelView, f), p32 = p.map(f), proj32 = Array.from(projection, f);
+    const eye32 = transform32(mv32, p32);
+    const drawn = project32(proj32, eye32);
+
+    const toPixels = (ndc: number[]) =>
+      [(ndc[0] + 1) / 2 * viewport[2], (ndc[1] + 1) / 2 * viewport[3]];
+    const [a, b] = [toPixels(exact), toPixels(drawn)];
+    const eye = transform(modelView, p);
+    return { pixels: Math.hypot(a[0] - b[0], a[1] - b[1]),
+             distance: Math.hypot(eye[0], eye[1], eye[2]) };
+  }
+
   setMeshes(meshes: PlacedMesh[]): void {
     this.pending = meshes;
     this.node.requestRender();
@@ -107,6 +147,11 @@ export class MeshPass {
     const output = node.bindRenderTarget();
     const camera = node.camera;
     const view = camera.viewMatrix as Mat4;
+    this.camera = {
+      view: Float64Array.from(view as ArrayLike<number>),
+      projection: Float64Array.from(camera.projectionMatrix as ArrayLike<number>),
+      viewport: Array.from(camera.viewport),
+    };
 
     gl.useProgram(this.program);
     gl.enable(gl.DEPTH_TEST);
@@ -222,4 +267,27 @@ export class MeshPass {
     }
     this.gpu = [];
   }
+}
+
+function transform(m: ArrayLike<number>, p: number[]): number[] {
+  return [0, 1, 2].map((r) => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
+}
+
+function project(m: ArrayLike<number>, e: number[]): number[] {
+  const c = [0, 1, 3].map((r) => m[r] * e[0] + m[4 + r] * e[1] + m[8 + r] * e[2] + m[12 + r]);
+  return [c[0] / c[2], c[1] / c[2]];
+}
+
+/** transform() with every product and sum rounded to float32. */
+function transform32(m: number[], p: number[]): number[] {
+  const f = Math.fround;
+  return [0, 1, 2].map((r) =>
+    f(f(f(f(m[r] * p[0]) + f(m[4 + r] * p[1])) + f(m[8 + r] * p[2])) + m[12 + r]));
+}
+
+function project32(m: number[], e: number[]): number[] {
+  const f = Math.fround;
+  const c = [0, 1, 3].map((r) =>
+    f(f(f(f(m[r] * e[0]) + f(m[4 + r] * e[1])) + f(m[8 + r] * e[2])) + m[12 + r]));
+  return [f(c[0] / c[2]), f(c[1] / c[2])];
 }

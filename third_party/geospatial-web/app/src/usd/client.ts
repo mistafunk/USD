@@ -1,5 +1,5 @@
 // Main-thread side of the OpenUSD worker: promise-based calls.
-import type { FileSpec, ModuleInfo, Resolved, SceneState, Vec3 } from "./types";
+import type { FileSpec, ModuleInfo, Resolved, SceneState, StageTestData, Vec3 } from "./types";
 
 /** Where the dev server (vite.config.ts) and nginx serve the install. */
 export const USD_BASE = "/usd";
@@ -42,9 +42,18 @@ export class UsdClient {
     return this.call("load", { files, stage });
   }
 
-  /** EPSG:4979 for a global view, the view's spatial reference for a local one. */
-  setOutput(crs: string, measure = false): Promise<void> {
-    return this.call("setOutput", { crs, measure });
+  /**
+   * EPSG:4979 for a global view, the view's spatial reference for a local one.
+   * `measure` adds each mesh's linearization error, `exact` its exact frame
+   * points (measurement mode).
+   */
+  setOutput(crs: string, measure = false, exact = false): Promise<void> {
+    return this.call("setOutput", { crs, measure, exact });
+  }
+
+  /** Control points, test cases and evaluation time on the stage. */
+  testData(): Promise<StageTestData> {
+    return this.call("testData");
   }
 
   setTime(time: number): Promise<void> {

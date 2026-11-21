@@ -1,4 +1,5 @@
 # Offline reference (plan option D). Python 3.12 (geo.py VENV_PYTHON); geo.py creates <workspace>/venv-reference.
 usd-core==26.8
+# Built from source against the workspace's PROJ (geo.py reference, D19).
 pyproj==3.8.0
 numpy==2.5.5

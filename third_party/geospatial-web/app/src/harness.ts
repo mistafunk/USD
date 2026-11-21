@@ -11,7 +11,7 @@
 
 import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
-import { fromRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
+import { fromRenderCoordinates, toRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
 import { multiply, transformPoint } from "./mat4";
 
 export type Outcome = "pass" | "fail" | "unsupported";
@@ -27,6 +27,8 @@ export interface TestCase {
   anchor: string;
   expect: Outcome;
   description: string;
+  /** Outcome in a local view with matrix placement, where it differs (T5). */
+  expectLocal?: Outcome;
 }
 
 export interface HarnessAnchor {
@@ -34,6 +36,10 @@ export interface HarnessAnchor {
   status: string;
   reason?: string;
   matrix?: number[];
+  engine?: string;
+  operation?: string;
+  accuracy?: number | null;
+  skippedOperations?: string[];
 }
 
 export interface PointResult {
@@ -52,12 +58,21 @@ export interface CaseResult {
   ok: boolean;
   detail: string;
   points: PointResult[];
+  /** What placed it (T2, T3, T11): engine, operation, accuracy (m, null if
+   *  unknown) and more accurate operations skipped for missing grids. */
+  engine?: string;
+  operation?: string;
+  accuracy?: number | null;
+  skippedOperations?: string[];
 }
 
 export interface HarnessReport {
   view: string;
   output: string;
   engine: string;
+  /** "matrix": control points placed with the anchor matrix, as drawn by
+   *  default; "exact": with the exact point map (measurement mode, T5). */
+  mode: "matrix" | "exact";
   /** WebGL renderer the scores were taken with (set by the app). */
   renderer?: string;
   tolerance: number;
@@ -75,6 +90,10 @@ export interface HarnessInput {
   testCases: TestCase[];
   /** Render frame of an anchor, as used for drawing. */
   anchorFrame(path: string): Float64Array | null;
+  /** Exact mode: a control point's exact position in the output CRS, and
+   *  that CRS's spatial reference in the view. */
+  exactPoint?: (controlPoint: string) => number[] | null;
+  outputSpatialReference?: SpatialReference;
   tolerance: number;
 }
 
@@ -103,12 +122,21 @@ function errors(got: number[], ref: number[]): [number, number, number] {
 
 export function score(input: HarnessInput): HarnessReport {
   const anchors = new Map(input.anchors.map((a) => [a.path, a]));
+  const exact = !!input.exactPoint;
+  const local = input.view.viewingMode === "local";
   const cases: CaseResult[] = input.testCases.map((tc) => {
     const a = anchors.get(tc.anchor);
-    const base = { anchor: tc.anchor, description: tc.description, expect: tc.expect };
+    const expect = local && !exact && tc.expectLocal ? tc.expectLocal : tc.expect;
+    const base = {
+      anchor: tc.anchor, description: tc.description, expect,
+      ...(a?.status === "ok" ? {
+        engine: a.engine, operation: a.operation, accuracy: a.accuracy ?? null,
+        skippedOperations: a.skippedOperations ?? [],
+      } : {}),
+    };
     if (!a || a.status !== "ok" || !a.matrix) {
       const detail = a ? `${a.status}: ${a.reason ?? ""}` : "anchor missing from the data";
-      return { ...base, result: "unsupported", ok: tc.expect === "unsupported", detail,
+      return { ...base, result: "unsupported", ok: expect === "unsupported", detail,
                points: [] };
     }
     const frame = input.anchorFrame(tc.anchor);
@@ -122,7 +150,18 @@ export function score(input: HarnessInput): HarnessReport {
         return { name, error: null, horizontal: null, vertical: null,
                  note: `reference CRS ${cp.reference.crs} not supported by the harness` };
       }
-      const render = transformPoint(toRender, cp.local);
+      let render = transformPoint(toRender, cp.local);
+      if (exact) {
+        // The exact output position, placed by the SDK like any geometry in
+        // the output CRS.
+        const p = input.exactPoint!(cp.path);
+        const out = p && toRenderCoordinates(input.view, p, 0, input.outputSpatialReference!,
+                                             new Float64Array(3), 0, 1);
+        if (!out) {
+          return { name, error: null, horizontal: null, vertical: null, note: "no exact point" };
+        }
+        render = Array.from(out);
+      }
       const geo = fromRenderCoordinates(input.view, render, 0, new Float64Array(3), 0,
                                         SpatialReference.WGS84, 1);
       if (!geo) {
@@ -139,7 +178,7 @@ export function score(input: HarnessInput): HarnessReport {
     const detail = allMeasured
       ? `max ${worst.toFixed(4)} m over ${points.length} control points`
       : `${points.length - measured.length} of ${points.length} control points not measurable`;
-    return { ...base, result, ok: result === tc.expect, detail, points };
+    return { ...base, result, ok: result === expect, detail, points };
   });
 
   const summary = { pass: 0, fail: 0, unsupported: 0, unexpected: 0 };
@@ -151,6 +190,7 @@ export function score(input: HarnessInput): HarnessReport {
     view: input.view.viewingMode,
     output: input.output,
     engine: input.engine,
+    mode: exact ? "exact" : "matrix",
     tolerance: input.tolerance,
     time: new Date().toISOString(),
     cases,

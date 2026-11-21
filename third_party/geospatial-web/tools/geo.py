@@ -607,6 +607,29 @@ def cmd_test_web(args):
 # --------------------------------------------------------------------------
 # reference / serve
 
+def reference_env():
+    """pyproj built against and running on the workspace's native PROJ, so
+    the reference uses the same PROJ as our builds (D19)."""
+    deps = WS / "deps" / "native"
+    env = base_env()
+    env["PROJ_DIR"] = str(deps)
+    env["PROJ_DATA"] = str(deps / "share" / "proj")
+    if is_windows():
+        var, lib = "PATH", deps / "bin"
+    elif platform.system() == "Darwin":
+        var, lib = "DYLD_LIBRARY_PATH", deps / "lib"
+    else:
+        var, lib = "LD_LIBRARY_PATH", deps / "lib"
+    env[var] = os.pathsep.join([str(lib)] + ([env[var]] if env.get(var) else []))
+    return env
+
+
+def pyproj_proj_version(py, env):
+    r = subprocess.run([str(py), "-c", "import pyproj; print(pyproj.proj_version_str)"],
+                       env=env, capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
 def cmd_reference(args):
     ref = GEO_DIR / "reference"
     reqs = ref / "requirements.txt"
@@ -632,8 +655,27 @@ def cmd_reference(args):
                 fail("Python {}.{} not found (AlmaLinux: dnf install "
                      "python{}.{})".format(*VENV_PYTHON, *VENV_PYTHON))
             run([base, "-m", "venv", VENV_REFERENCE], log)
-        run([py, "-m", "pip", "install", "-q", "-r", reqs], log)
-        run([py, script] + extra, log, cwd=ref)
+        env = reference_env()
+        if not (WS / "deps" / "native" / "share" / "proj" / "proj.db").exists():
+            fail("native PROJ not built; run: geo.py bootstrap native "
+                 "--steps sqlite,proj")
+        run([py, "-m", "pip", "install", "-q", "-r", reqs], log, env=env)
+        # requirements.txt pins pyproj; replace its wheel (bundled PROJ) by a
+        # build against ours once.
+        want = PROJ["name"].split("-")[1]
+        have_proj = pyproj_proj_version(py, env)
+        if have_proj != want:
+            log.write("[geo] pyproj uses PROJ {}; building it against PROJ {}\n"
+                      .format(have_proj, want))
+            pin = next(line.strip() for line in reqs.read_text().splitlines()
+                       if line.startswith("pyproj=="))
+            run([py, "-m", "pip", "install", "-q", "--no-binary", "pyproj",
+                 "--force-reinstall", "--no-deps", "--no-cache-dir", pin],
+                log, env=env)
+            have_proj = pyproj_proj_version(py, env)
+            if have_proj != want:
+                fail("pyproj still uses PROJ {} (wanted {})".format(have_proj, want))
+        run([py, script] + extra, log, cwd=ref, env=env)
 
     logged("reference", body)
 

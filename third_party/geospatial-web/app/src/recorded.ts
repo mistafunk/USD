@@ -15,7 +15,7 @@ import { xyToLngLat } from "@arcgis/core/geometry/support/webMercatorUtils.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { toRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
 import { score, type ControlPoint, type TestCase } from "./harness";
-import { multiply, splitOrigin, translation } from "./mat4";
+import { identity, multiply, normalMatrix3, splitOrigin, translation } from "./mat4";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorStatus, CameraPreset, Scene } from "./scene";
 
@@ -24,7 +24,7 @@ interface BufferView {
   count: number;
 }
 
-interface RecordedAnchor {
+export interface RecordedAnchor {
   path: string;
   status: "ok" | "unsupported" | "error";
   reason?: string;
@@ -32,8 +32,10 @@ interface RecordedAnchor {
   origin?: number[];
   /** Anchor model frame (stage units) to the anchor's frame; Float64. */
   matrix?: number[];
+  engine?: string;
   operation?: string;
   accuracy?: number | null;
+  skippedOperations?: string[];
 }
 
 interface RecordedMesh {
@@ -71,6 +73,8 @@ const PRESETS: Record<string, CameraPreset> = {
   // About 8 m north of the corner, outside the building (model (-2, +8) from
   // the corner, heading 30), looking back at it.
   corner: { label: "Corner", east: 2.27, north: 7.93, up: 3, heading: 196, tilt: 82, near: true },
+  // T6: 1 m from the corner (0.6 m north-east, 0.8 m up), looking down at it.
+  close: { label: "1 m", east: 0.42, north: 0.42, up: 0.8, heading: 225, tilt: 37, near: true },
 };
 
 export async function loadRecordedScene(view: SceneView, base: string): Promise<Scene> {
@@ -86,13 +90,60 @@ export async function loadRecordedScene(view: SceneView, base: string): Promise<
 
 export function placeRecorded(view: SceneView, manifest: RecordedManifest,
                               buffers: ArrayBuffer): Scene {
-  const anchors = new Map(manifest.anchors.map((a) => [a.path, a]));
-  if (manifest.output.frame === "crs") {
-    const wkid = Number(manifest.output.crs.replace(/^EPSG:/, ""));
+  return placeScene(view, {
+    name: `recorded ${manifest.output.name} (${engineLabel(manifest)})`,
+    output: manifest.output,
+    engine: engineLabel(manifest),
+    anchors: manifest.anchors,
+    meshes: manifest.meshes.map((m) => ({
+      ...m,
+      positions: new Float32Array(buffers, m.points.byteOffset, m.points.count * 3),
+      normals: new Float32Array(buffers, m.normals.byteOffset, m.normals.count * 3),
+      indices: new Uint32Array(buffers, m.indices.byteOffset, m.indices.count),
+    })),
+    controlPoints: manifest.controlPoints ?? [],
+    testCases: manifest.testCases ?? [],
+  });
+}
+
+/** A mesh to place: buffers in mesh-local units, or exact frame points. */
+export interface InputMesh {
+  path: string;
+  anchor: string | null;
+  status: string;
+  reason?: string;
+  color?: number[];
+  matrix?: number[];
+  positions: Float32Array;
+  normals: Float32Array;
+  indices: Uint32Array;
+  /** Exact mode: the corners mapped exactly into the anchor's frame. */
+  framePoints?: Float32Array | null;
+}
+
+/** What placeScene draws and scores, from recorded or live data. */
+export interface PlaceInput {
+  name: string;
+  output: { name: string; crs: string; frame: "enu" | "crs" };
+  engine: string;
+  anchors: RecordedAnchor[];
+  meshes: InputMesh[];
+  controlPoints: ControlPoint[];
+  testCases: TestCase[];
+  /** Exact mode (measurement mode, T5): meshes drawn from framePoints and
+   *  control points scored at these exact output positions. */
+  exactPoints?: Map<string, number[]>;
+}
+
+export function placeScene(view: SceneView, input: PlaceInput): Scene {
+  const exact = !!input.exactPoints;
+  const anchors = new Map(input.anchors.map((a) => [a.path, a]));
+  if (input.output.frame === "crs") {
+    const wkid = Number(input.output.crs.replace(/^EPSG:/, ""));
     const sr = view.spatialReference;
     // The SDK reports Web Mercator as wkid 102100 (latestWkid 3857).
     if (sr.wkid !== wkid && sr.latestWkid !== wkid) {
-      throw new Error(`recorded output ${manifest.output.crs} is not the view's ` +
+      throw new Error(`output ${input.output.crs} is not the view's ` +
                       `spatial reference (wkid ${view.spatialReference.wkid})`);
     }
   }
@@ -107,7 +158,7 @@ export function placeRecorded(view: SceneView, manifest: RecordedManifest,
   };
   const computeFrame = (a: RecordedAnchor): Float64Array => {
     const origin = a.origin!;
-    if (manifest.output.frame === "crs") return translation(origin);
+    if (input.output.frame === "crs") return translation(origin);
     const frame = geographicFrame(view, origin);
     if (!frame) throw new Error(`no render frame at ${a.path}`);
     return frame;
@@ -115,59 +166,79 @@ export function placeRecorded(view: SceneView, manifest: RecordedManifest,
 
   const meshes: PlacedMesh[] = [];
   const renderMatrices = new Map<string, Float64Array>();
-  for (const m of manifest.meshes) {
+  for (const m of input.meshes) {
     const a = m.anchor ? anchors.get(m.anchor) : undefined;
     if (m.status !== "ok" || !a || a.status !== "ok" || !m.matrix) continue;
-    const full = multiply(frameOf(a), m.matrix);
+    // Exact mode draws the exact frame points: the matrix is the identity.
+    const useExact = exact && !!m.framePoints;
+    const full = multiply(frameOf(a), useExact ? identity() : m.matrix);
     renderMatrices.set(m.path, full);
     meshes.push({
       name: m.path,
       ...splitOrigin(full),
-      positions: new Float32Array(buffers, m.points.byteOffset, m.points.count * 3),
-      normals: new Float32Array(buffers, m.normals.byteOffset, m.normals.count * 3),
-      indices: new Uint32Array(buffers, m.indices.byteOffset, m.indices.count),
-      color: m.color ?? [0.8, 0.8, 0.8],
+      positions: useExact ? m.framePoints! : m.positions,
+      normals: useExact ? transformNormals(m.matrix, m.normals) : m.normals,
+      indices: m.indices,
+      color: (m.color ?? [0.8, 0.8, 0.8]) as [number, number, number],
     });
   }
 
-  const status: AnchorStatus[] = manifest.anchors.map((a) => ({
+  const status: AnchorStatus[] = input.anchors.map((a) => ({
     path: a.path,
     status: a.status,
     detail: a.status === "ok"
       ? `${a.sourceCrs}; ${a.operation}; accuracy ${a.accuracy ?? "unknown"}`
       : a.reason ?? "",
   }));
-  for (const m of manifest.meshes) {
+  for (const m of input.meshes) {
     if (m.status === "unplaced") {
       status.push({ path: m.path, status: "unplaced", detail: m.reason ?? "" });
     }
   }
 
   // Camera presets are relative to Site B's anchor (the building corner).
-  const ok = manifest.anchors.filter((a) => a.status === "ok");
+  const ok = input.anchors.filter((a) => a.status === "ok");
   const ref = ok.find((a) => a.path.endsWith("/SiteB")) ?? ok[0];
-  if (!ref) throw new Error("no placeable anchor in the recorded data");
+  if (!ref) throw new Error("no placeable anchor in the data");
   return {
-    name: `recorded ${manifest.output.name} (${engineLabel(manifest)})`,
-    target: toLonLatH(manifest, ref.origin!),
+    name: input.name,
+    target: toLonLatH(input.output.frame, ref.origin!),
     presets: PRESETS,
     meshes,
     anchors: status,
     renderMatrices,
     score: () => score({
       view,
-      output: manifest.output.name,
-      engine: engineLabel(manifest),
-      anchors: manifest.anchors,
-      controlPoints: manifest.controlPoints ?? [],
-      testCases: manifest.testCases ?? [],
+      output: input.output.name,
+      engine: input.engine,
+      anchors: input.anchors,
+      controlPoints: input.controlPoints,
+      testCases: input.testCases,
       anchorFrame: (path) => {
         const a = anchors.get(path);
         return a && a.status === "ok" ? frameOf(a) : null;
       },
+      ...(exact ? {
+        exactPoint: (cp: string) => input.exactPoints!.get(cp) ?? null,
+        outputSpatialReference: input.output.frame === "enu"
+          ? SpatialReference.WGS84 : view.spatialReference,
+      } : {}),
       tolerance: 0.01,
     }),
   };
+}
+
+/** Normals into the anchor's frame (exact mode draws frame coordinates). */
+function transformNormals(matrix: number[], normals: Float32Array): Float32Array {
+  const n3 = normalMatrix3(matrix);
+  const out = new Float32Array(normals.length);
+  for (let i = 0; i < normals.length; i += 3) {
+    const [x, y, z] = [normals[i], normals[i + 1], normals[i + 2]];
+    const v = [0, 1, 2].map((r) => n3[r] * x + n3[3 + r] * y + n3[6 + r] * z);
+    const len = Math.hypot(v[0], v[1], v[2]) || 1;
+    out.set(v.map((c) => c / len), i);
+  }
+  return out;
 }
 
 const WGS84_A = 6378137;
@@ -208,8 +279,8 @@ export function geographicFrame(view: SceneView, [lon, lat, h]: number[]): Float
   return f;
 }
 
-function toLonLatH(manifest: RecordedManifest, origin: number[]): [number, number, number] {
-  if (manifest.output.frame === "enu") return [origin[0], origin[1], origin[2]];
+function toLonLatH(frame: "enu" | "crs", origin: number[]): [number, number, number] {
+  if (frame === "enu") return [origin[0], origin[1], origin[2]];
   const [lon, lat] = xyToLngLat(origin[0], origin[1]);
   return [lon, lat, origin[2]];
 }

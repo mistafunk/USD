@@ -82,6 +82,12 @@ usdImaging, the placement scene index and the PROJ engine) and the test fixtures
 (workspace from `USD_GEO_WS`, else five levels above `app/`), as nginx serves it in the container.
 `geo.py test web -- c4` runs the C4 browser check (`app/c4.html`).
 
+## Reference
+
+`geo.py reference -- <command>` runs `reference/reference.py` in `venv-reference`. The first run replaces pyproj's
+wheel by a build against the workspace's PROJ (`deps/native`, D19), so reference, native and browser share one PROJ;
+`geo.py bootstrap native --steps sqlite,proj` must have run.
+
 ## Recorded data from C++
 
 `geo.py record [native-debug]` runs `install/<preset>/bin/geospatialRecord` (from `module/`, option

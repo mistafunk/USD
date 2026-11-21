@@ -114,6 +114,19 @@ outputs (matrices within 4e-8). Under Node the same module gives the same C1 res
 of the test scene 54 ms. **C4 exit met.** Size: `geospatialModule.wasm` 30.7 MB (Release), of which the embedded
 `proj.db` is 10.7 MB; served precompressed, 7.2 MB with gzip (4.6 MB with brotli); proj.db trimmed at I2 (D17).
 
+**Update 2026-11-21, I1 (Claude Code):** the app draws the live module by default (D21): `src/live.ts` loads the
+test scene through the worker, evaluates it at `geotest:time`, places it in EPSG:4979 (global) or the view's spatial
+reference (local, promoted to 3D) and scores it with the harness; `&exact=1` draws exact per-vertex points
+(measurement mode: placement scene index `exactPoints`, `framePoints`). New test sites (reference `fixtures`): F (T2,
+WGS 72 Helmert), G (T3, NAD27 without grids, D22), H (T4, NAVD88), I (T5, 1 km runway), J and K (T8, heading 90 and a
+slerped time-sampled orientation). pyproj is built on our PROJ 9.9.0 (D19). Engine: `skippedOperations` (D22) and an
+area of interest. Playwright `i1` (global and local, matrix and exact; report `app/reports/i1-*`): all 11 cases as
+expected in every run; T9 browser vs native (`geo.py record`) 0.000 mm on every placed anchor, matrices within 4e-8,
+same against the reference; T5 under 0.15 mm except the runway in Web Mercator (25 mm, matrix shortcut; exact mode
+passes); T6 0.001 px at 1 m in both views; T11 every result names `proj`. Native: 7 `UsdGeospatial` ctests pass,
+`reference -- compare` 62 checks ok. **I1 exit met** (browser vs native within 1 cm on every case both can do;
+measured 0 mm). WASM ctest run of the changed C++ pending (Simon).
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -234,3 +247,19 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
   `test.pre.js` does for tests.
 - (C4) WASM matrices differ from native by up to 4e-8 (native vs pyproj: 0 to 1e-9), most likely the C library's
   trigonometry; well within tolerance.
+- (I1) **Operations must be chosen for the anchor's location.** Without an area of interest PROJ ranks operations for
+  the whole datum: NAD27 at Redlands got "NAD27 to WGS 84 (3)" (Canada, 20 m) instead of "(6)" (CONUS west, 7 m),
+  12 m apart. The engine interface now takes a `UsdGeospatialAreaOfInterest`; placement passes the anchor. The C1
+  California case changed operation too ("NAD83 to WGS 84 (1)" instead of the ITRF00 chain). The reference had the
+  same blind spot, so tests agreed; it now uses the same area.
+- (I1) **Projected outputs go through their geographic 3D CRS.** PROJ's direct operation into a projected CRS with an
+  ellipsoidal height axis (e.g. promoted Web Mercator) wraps the datum shift in `push/pop v_3`, keeping the source
+  height: 2 m off for WGS 72, 21 m for NAD27 at Redlands. Placement now shifts datum into the output's geographic 3D
+  CRS, then projects (a conversion). Found by the local W2 run; native and reference had agreed on the wrong result.
+- (I1, T5) **The matrix shortcut is not enough at 1 km in Web Mercator:** 25 mm at the runway ends (Mercator's scale
+  changes across the model); under 1 um in the global view's ENU frame. Exact mode (`&exact=1`) places per vertex.
+  Options for real data: exact mode for large models, or one matrix per tile.
+- (I1, T6) The float32 pipeline puts a point 1 m from the camera within 0.001 px of a Float64 projection (CPU
+  emulation of the shader's float32 arithmetic), in both views.
+- (I1, D22) Skipped grid operations are now specific to the site: NAD27 at Redlands skips "NAD27 to NAD83 (1) + NAD83
+  to WGS 84 (54)" (NADCON5 CONUS, 2.15 m).

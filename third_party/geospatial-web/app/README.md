@@ -16,6 +16,8 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | File | Purpose |
 |---|---|
 | `src/meshPass.ts` | WebGL2 pass in a `RenderNode`. Per mesh: float32-exact render origin + Float64 matrix; modelView = `viewMatrix` x translate(origin) x matrix in Float64, cast to float32 once |
+| `src/live.ts` | Live data: loads the test scene through the worker, places it in the view's output CRS, scores it |
+| `tests/i1.spec.ts` | I1: the whole browser test plan on live data (harness, T2, T3, T5, T6, T9, T11); report `reports/i1-*` |
 | `src/usd/` | OpenUSD in a Web Worker: `worker.ts` owns the module and stage, `client.ts` is the promise API, `types.ts` the data |
 | `c4.html`, `src/c4.ts` | C4 check page: C1 cases and the live scene chain in the browser vs pyproj (`tests/c4.spec.ts`) |
 | `src/main.ts` | SceneView (`?view=global` or `local`), content (`?data=recorded` or `w0`), camera presets, status panel, `window.__app` test hooks |
@@ -29,7 +31,8 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | `tests/w1.spec.ts` | W1 checks: anchors ok, mast on the building corner in render space; screenshots `w1-<view>-<preset>.png` |
 | `tests/w2.spec.ts`, `tests/report.ts` | W2: runs the harness in both views, expects every case's outcome; writes `reports/w2-<time>.{json,html}` and `reports/latest.*` (git-ignored) |
 
-URL options: `?view=global|local`, `&data=recorded|w0`, `&src=recorded|recorded-cpp` (recorded data from the reference
+URL options: `?view=global|local`, `&data=live|recorded|w0` (default live: the OpenUSD module in a worker, I1),
+`&exact=1` (live: exact per-vertex placement, the measurement mode of T5), `&src=recorded|recorded-cpp` (recorded data from the reference
 export or from the C++ observer, `geo.py record`), and for W0 `&naive=1`, which bakes absolute render coordinates into float32 vertices (what a
 float32-only pipeline does) to show the jitter the origin split avoids.
 

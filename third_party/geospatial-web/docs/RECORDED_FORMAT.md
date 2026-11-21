@@ -48,7 +48,8 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
     "path": "/World/SiteA/ControlPoints/NE", "anchor": "/World/SiteA", "local": [20, 10, 0],
     "reference": { "crs": "EPSG:4979", "position": [lon, lat, h] }
   } ],
-  "testCases": [ { "anchor": "/World/SiteA", "expect": "pass | fail | unsupported", "description": "..." } ]
+  "testCases": [ { "anchor": "/World/SiteA", "expect": "pass | fail | unsupported", "description": "...",
+                   "expectLocal": "(optional: outcome in a local view with matrix placement)" } ]
 }
 ```
 
@@ -65,6 +66,10 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
   metres, `null` when unknown.
 - **`anchors[].matrix`** is the same linearization for the anchor itself (`D` = identity); the W2 harness places
   control points with it.
+- **`time`** (optional, top level): the time the scene was evaluated at (`geotest:time` in the root layer's
+  `customLayerData`).
+- **`anchors[].skippedOperations`** (optional): more accurate operations the engine skipped because their grids are
+  missing (T3, D22).
 - **`controlPoints`, `testCases`** are test data, read from the stage's `geotest:` attributes
   (`geotest:referencePosition`, `geotest:referenceCrs` on control point prims under an anchor; `geotest:expect`,
   `geotest:description` on the anchor). `local` is the control point in its anchor's model frame (stage units).

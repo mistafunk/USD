@@ -16,6 +16,8 @@ export interface LiveAnchor {
   operation: string;
   /** Metres; null if unknown. */
   accuracy: number | null;
+  /** More accurate operations skipped for missing grids (T3). */
+  skippedOperations: string[];
   sourceCrs: string;
   position: Vec3;
   orientation: Vec3;
@@ -38,6 +40,8 @@ export interface LiveMesh {
   points: Float32Array;
   normals: Float32Array;
   indices: Uint32Array;
+  /** Exact mode: the corners mapped exactly into the anchor's frame. */
+  framePoints: Float32Array | null;
 }
 
 export interface SceneState {
@@ -62,6 +66,18 @@ export interface Resolved {
   matrix?: number[];
   outputPoints?: Vec3[];
   pointsError?: string;
+}
+
+/** Test data on the stage (geotest: attributes), as in the recorded format. */
+export interface StageTestData {
+  controlPoints: {
+    path: string; anchor: string | null; local: number[] | null;
+    reference: { crs: string; position: number[] };
+  }[];
+  testCases: { anchor: string; expect: "pass" | "fail" | "unsupported";
+               description: string; expectLocal?: "pass" | "fail" | "unsupported" }[];
+  /** The scene's evaluation time (geotest:time), or null. */
+  time: number | null;
 }
 
 /** A file to fetch into the module's file system. */

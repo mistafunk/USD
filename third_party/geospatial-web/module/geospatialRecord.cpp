@@ -9,11 +9,14 @@
 // Outputs default to global=EPSG:4979 and local-3857=EPSG:3857.
 //
 
+#include "testData.h"
+
 #include "pxr/pxr.h"
 #include "pxr/usdImaging/usdGeospatialImaging/meshObserver.h"
 #include "pxr/usdImaging/usdGeospatialImaging/placementSceneIndex.h"
 #include "pxr/usdImaging/usdGeospatialImaging/tokens.h"
 #include "pxr/usdImaging/usdImaging/sceneIndices.h"
+#include "pxr/usdImaging/usdImaging/stageSceneIndex.h"
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usd/primRange.h"
 #include "pxr/usd/usd/stage.h"
@@ -95,59 +98,33 @@ _WriteView(JsWriter& w, const char* name, const _View& view)
     w.EndObject();
 }
 
-// A string or token attribute's value; empty if it has none.
-std::string
-_GetString(const UsdPrim& prim, const char* name)
-{
-    VtValue value;
-    prim.GetAttribute(TfToken(name)).Get(&value);
-    if (value.IsHolding<TfToken>()) {
-        return value.UncheckedGet<TfToken>().GetString();
-    }
-    return value.IsHolding<std::string>()
-        ? value.UncheckedGet<std::string>() : std::string();
-}
-
 // Control points and test cases are test data on the stage (geotest:
 // attributes, reference/README.md); the harness reads them from here.
 void
-_WriteTestData(JsWriter& w, const UsdStageRefPtr& stage)
+_WriteTestData(JsWriter& w, const GeospatialWebTestData& data)
 {
-    UsdGeomXformCache cache;
     w.WriteKey("controlPoints");
     w.BeginArray();
-    for (const UsdPrim& prim : stage->Traverse()) {
-        const UsdAttribute position =
-            prim.GetAttribute(TfToken("geotest:referencePosition"));
-        GfVec3d reference;
-        if (!position || !position.Get(&reference)) {
-            continue;
-        }
-        const UsdPrim anchor = UsdGeospatialResolveBinding(prim).anchor;
-        std::string crs = _GetString(prim, "geotest:referenceCrs");
-        if (crs.empty()) {
-            crs = "EPSG:4979";
-        }
+    for (const GeospatialWebControlPoint& p : data.controlPoints) {
         w.BeginObject();
-        w.WriteKeyValue("path", prim.GetPath().GetString());
-        if (anchor) {
-            bool resets = false;
-            const GfMatrix4d local =
-                cache.ComputeRelativeTransform(prim, anchor, &resets);
-            w.WriteKeyValue("anchor", anchor.GetPath().GetString());
-            w.WriteKey("local");
-            _WriteVec3(w, local.ExtractTranslation());
-        } else {
-            w.WriteKey("anchor");
+        w.WriteKeyValue("path", p.path);
+        w.WriteKey("anchor");
+        if (p.anchor.empty()) {
             w.WriteValue(nullptr);
-            w.WriteKey("local");
+        } else {
+            w.WriteValue(p.anchor);
+        }
+        w.WriteKey("local");
+        if (p.local) {
+            _WriteVec3(w, *p.local);
+        } else {
             w.WriteValue(nullptr);
         }
         w.WriteKey("reference");
         w.BeginObject();
-        w.WriteKeyValue("crs", crs);
+        w.WriteKeyValue("crs", p.referenceCrs);
         w.WriteKey("position");
-        _WriteVec3(w, reference);
+        _WriteVec3(w, p.referencePosition);
         w.EndObject();
         w.EndObject();
     }
@@ -155,17 +132,14 @@ _WriteTestData(JsWriter& w, const UsdStageRefPtr& stage)
 
     w.WriteKey("testCases");
     w.BeginArray();
-    for (const UsdPrim& prim : stage->Traverse()) {
-        const std::string expect = _GetString(prim, "geotest:expect");
-        if (!prim.HasAPI<UsdGeospatialCRSBindingAPI>() || expect.empty()) {
-            continue;
-        }
-        const std::string description =
-            _GetString(prim, "geotest:description");
+    for (const GeospatialWebTestCase& c : data.testCases) {
         w.BeginObject();
-        w.WriteKeyValue("anchor", prim.GetPath().GetString());
-        w.WriteKeyValue("expect", expect);
-        w.WriteKeyValue("description", description);
+        w.WriteKeyValue("anchor", c.anchor);
+        w.WriteKeyValue("expect", c.expect);
+        w.WriteKeyValue("description", c.description);
+        if (!c.expectLocal.empty()) {
+            w.WriteKeyValue("expectLocal", c.expectLocal);
+        }
         w.EndObject();
     }
     w.EndArray();
@@ -196,6 +170,10 @@ _Record(const UsdStageRefPtr& stage, const std::string& stageName,
                 query.GetError().c_str());
         return false;
     }
+    const GeospatialWebTestData testData = GeospatialWebReadTestData(stage);
+    if (testData.time) {
+        sceneIndices.stageSceneIndex->SetTime(UsdTimeCode(*testData.time));
+    }
     UsdGeospatialImagingMeshObserver observer(placement);
     observer.Sync();
 
@@ -217,6 +195,9 @@ _Record(const UsdStageRefPtr& stage, const std::string& stageName,
     w.WriteKeyValue("format", "geospatial-web-recorded");
     w.WriteKeyValue("version", 1);
     w.WriteKeyValue("stage", stageName);
+    if (testData.time) {
+        w.WriteKeyValue("time", *testData.time);
+    }
     w.WriteKey("output");
     w.BeginObject();
     w.WriteKeyValue("name", name);
@@ -260,6 +241,14 @@ _Record(const UsdStageRefPtr& stage, const std::string& stageName,
         w.WriteKey("matrix");
         _WriteMatrix(w, anchor.modelToFrame);
         w.WriteKeyValue("operation", anchor.operation);
+        if (!anchor.skippedOperations.empty()) {
+            w.WriteKey("skippedOperations");
+            w.BeginArray();
+            for (const std::string& op : anchor.skippedOperations) {
+                w.WriteValue(op);
+            }
+            w.EndArray();
+        }
         w.WriteKey("accuracy");
         if (anchor.accuracy) {
             w.WriteValue(*anchor.accuracy);
@@ -301,7 +290,7 @@ _Record(const UsdStageRefPtr& stage, const std::string& stageName,
     }
     w.EndArray();
 
-    _WriteTestData(w, stage);
+    _WriteTestData(w, testData);
     w.EndObject();
     out << "\n";
     printf("wrote %s (%zu anchors, %zu meshes)\n", path.c_str(),

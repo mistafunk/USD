@@ -1,0 +1,63 @@
+#usda 1.0
+(
+    defaultPrim = "SiteI"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SiteI" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crs_library.usda@</CRS/WGS84_UTM11N_3D>
+)
+{
+    double3 crs:position = (481957.95, 3768237.85, 0)
+    custom string geotest:description = "T5: 1 km runway in UTM 11N (matrix vs exact point map)"
+    custom token geotest:expect = "pass"
+    custom token geotest:expectLocal = "fail"
+
+    def Mesh "Runway"
+    {
+        float3[] extent = [(-500, -15, 0), (500, 15, 1)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+        point3f[] points = [(-500, -15, 0), (500, -15, 0), (500, 15, 0), (-500, 15, 0), (-500, -15, 1), (500, -15, 1), (500, 15, 1), (-500, 15, 1)]
+        color3f[] primvars:displayColor = [(0.35, 0.35, 0.4)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Xform "ControlPoints"
+    {
+        def Xform "West"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.20091145218929, 34.05469610559934, 0.01957761775702238)
+            double3 xformOp:translate = (-500, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "Centre"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19549583212978, 34.05469622489322, -9.313225746154785e-10)
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "East"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19008021207027, 34.05469610559934, 0.01957761775702238)
+            double3 xformOp:translate = (500, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "EastNE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.190080204319, 34.054831334062264, 1.019595317542553)
+            double3 xformOp:translate = (500, 15, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+}
+

@@ -38,6 +38,7 @@ from pathlib import Path
 import numpy as np
 import pyproj
 from pyproj import CRS, Transformer
+from pyproj.crs import CompoundCRS
 from pyproj.transformer import TransformerGroup
 from pxr import Gf, Sdf, Usd, UsdGeom
 
@@ -64,7 +65,9 @@ ATTR_ORIENTATION = "crs:orientation"
 ATTR_CP_POSITION = "geotest:referencePosition"   # double3, in ATTR_CP_CRS
 ATTR_CP_CRS = "geotest:referenceCrs"             # token, e.g. "EPSG:4979"
 ATTR_EXPECT = "geotest:expect"                   # token on an anchor
-ATTR_DESCRIPTION = "geotest:description"         # string on an anchor
+ATTR_DESCRIPTION = "geotest:description"
+# Outcome in a local view with the matrix shortcut, where it differs (T5).
+ATTR_EXPECT_LOCAL = "geotest:expectLocal"         # string on an anchor
 CP_TOLERANCE = 0.01  # client vs reference (test plan)
 
 OUTPUTS = {
@@ -150,6 +153,89 @@ def attitude(heading, pitch, roll):
             @ rotation((0, 1, 0), roll))
 
 
+def quat_axis(axis, degrees):
+    half = math.radians(degrees) / 2.0
+    return np.array([math.cos(half), *(np.array(axis, dtype=float) * math.sin(half))])
+
+
+def quat_mul(a, b):
+    w1, x1, y1, z1 = a
+    w2, x2, y2, z2 = b
+    return np.array([w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                     w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                     w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                     w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2])
+
+
+def quat_attitude(heading, pitch, roll):
+    """The attitude() rotation as a unit quaternion (w, x, y, z)."""
+    return quat_mul(quat_mul(quat_axis((0, 0, 1), -heading),
+                             quat_axis((1, 0, 0), pitch)),
+                    quat_axis((0, 1, 0), roll))
+
+
+def quat_matrix(q):
+    """Column-vector rotation matrix of a unit quaternion."""
+    w, x, y, z = q
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+        [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+        [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+    ])
+
+
+def slerp(q0, q1, t):
+    """Spherical interpolation along the shorter arc; None if the samples are
+    180 degrees apart (no unique path)."""
+    dot = float(np.dot(q0, q1))
+    if dot < 0.0:
+        q1, dot = -q1, -dot
+    if dot < 1e-12:
+        return None
+    if dot > 1.0 - 1e-15:
+        return q0
+    theta = math.acos(min(dot, 1.0))
+    return (math.sin((1 - t) * theta) * q0 + math.sin(t * theta) * q1) / math.sin(theta)
+
+
+def orientation_at(attr, time):
+    """crs:orientation at a time as a column-vector rotation on ENU vectors,
+    and the authored (heading, pitch, roll) at that time for reporting.
+    Proposal: samples are slerped along the shorter arc (held interpolation
+    keeps the earlier sample); 180-degree neighbours are an error."""
+    if not attr or not attr.HasAuthoredValue():
+        return np.eye(3), [0.0, 0.0, 0.0]
+    def sample(t):
+        v = attr.Get(t)
+        if v is None or not all(math.isfinite(c) for c in v):
+            raise Invalid("crs:orientation is blocked or not finite")
+        return [float(c) for c in v]
+    samples = attr.GetTimeSamples()
+    if time.IsDefault() or not samples:
+        hpr = sample(time)
+        return quat_matrix(quat_attitude(*hpr)), hpr
+    t = time.GetValue()
+    if t <= samples[0] or t >= samples[-1] or t in samples:
+        hpr = sample(Usd.TimeCode(min(max(t, samples[0]), samples[-1])))
+        return quat_matrix(quat_attitude(*hpr)), hpr
+    upper = next(s for s in samples if s > t)
+    lower = samples[samples.index(upper) - 1]
+    q0, q1 = quat_attitude(*sample(Usd.TimeCode(lower))), quat_attitude(*sample(Usd.TimeCode(upper)))
+    if attr.GetStage().GetInterpolationType() == Usd.InterpolationTypeHeld:
+        return quat_matrix(q0), sample(Usd.TimeCode(lower))
+    q = slerp(q0, q1, (t - lower) / (upper - lower))
+    if q is None:
+        raise Invalid("crs:orientation samples at {} and {} are 180 degrees apart".format(lower, upper))
+    return quat_matrix(q), sample(time)
+
+
+def scene_time(stage):
+    """The evaluation time the scene asks for (root layer customLayerData
+    geotest:time), else the default time."""
+    t = stage.GetRootLayer().customLayerData.get("geotest:time")
+    return Usd.TimeCode(float(t)) if t is not None else Usd.TimeCode.Default()
+
+
 def axis_map(up_axis):
     """Stage (x, y, z) to model (E, N, U)."""
     if up_axis == "Z":
@@ -204,15 +290,53 @@ def output_3d(out_crs):
     return crs if crs.is_geographic else crs.to_3d()
 
 
-def best_transformer(src, dst):
+def area_at(lon, lat):
+    """A small area of interest around a point, as the C++ engine uses for an
+    anchor (UsdGeospatialAreaOfInterest::AtPoint)."""
+    from pyproj.aoi import AreaOfInterest
+    d = 1e-6
+    return AreaOfInterest(lon - d, lat - d, lon + d, lat + d)
+
+
+class _Chain:
+    """Two transformers applied in turn, with the attributes placement uses."""
+
+    def __init__(self, first, second):
+        self.first, self.second = first, second
+        self.description = "{}; then {}".format(first.description, second.description)
+        a, b = first.accuracy, second.accuracy
+        self.accuracy = None if a is None or b is None or a < 0 or b < 0 else a + b
+
+    def transform(self, x, y, z):
+        return self.second.transform(*self.first.transform(x, y, z))
+
+
+def output_transformer(src_geo, out_crs, area):
+    """Source geographic 3D -> output CRS. A projected output goes through its
+    geographic 3D CRS: PROJ's direct operation into a projected CRS with an
+    ellipsoidal height axis keeps the source height through the datum shift
+    (push/pop v_3), losing e.g. 2 m (WGS 72) or 21 m (NAD27) at Redlands. Same
+    as the C++ placement."""
+    out_crs = CRS(out_crs)
+    if out_crs.is_projected:
+        out_geo = CRS(out_crs.geodetic_crs).to_3d()
+        return _Chain(best_transformer(src_geo, out_geo, area),
+                      best_transformer(out_geo, out_crs, area))
+    return best_transformer(src_geo, out_crs, area)
+
+
+def best_transformer(src, dst, area=None):
     """The first usable operation PROJ lists for src -> dst, with ballpark
     operations disabled and operations needing missing grids discarded while
     listing: the same policy as the C++ PROJ engine, so results are
     comparable. (Transformer.from_crs picks per point; the grid policy
-    changes PROJ's ranking, e.g. NAD83 -> WGS 84 by 1.2 m.)"""
+    changes PROJ's ranking, e.g. NAD83 -> WGS 84 by 1.2 m.) With an area of
+    interest PROJ ranks regional operations for it; without one, NAD27 ->
+    WGS 84 at Redlands would get a Canadian operation."""
     from pyproj.enums import GridAvailabilityUse
     group = TransformerGroup(src, dst, always_xy=True, allow_ballpark=False,
-                             grid_check=GridAvailabilityUse.DISCARD_MISSING)
+                             grid_check=GridAvailabilityUse.DISCARD_MISSING,
+                             area_of_interest=area)
     if not group.transformers:
         raise Unsupported("no coordinate operation from '{}' to '{}'".format(
             CRS(src).name, CRS(dst).name))
@@ -222,7 +346,8 @@ def best_transformer(src, dst):
 class Placement:
     """One directly bound anchor, resolved for one output CRS."""
 
-    def __init__(self, anchor, stage_mpu, up_axis, out_crs, frame):
+    def __init__(self, anchor, stage_mpu, up_axis, out_crs, frame,
+                 time=Usd.TimeCode.Default()):
         self.path = str(anchor.GetPath())
         wkt_attr = anchor.GetAttribute(ATTR_WKT)
         wkt = wkt_attr.Get() if wkt_attr else None
@@ -239,18 +364,14 @@ class Placement:
         pos_attr = anchor.GetAttribute(ATTR_POSITION)
         if not pos_attr or not pos_attr.HasAuthoredValue():
             raise Invalid("missing crs:position")
-        pos = pos_attr.Get()
+        pos = pos_attr.Get(time)
         if pos is None or not all(math.isfinite(c) for c in pos):
             raise Invalid("crs:position is blocked or not finite")
         self.position = [float(c) for c in pos]
-        ori_attr = anchor.GetAttribute(ATTR_ORIENTATION)
-        ori = ori_attr.Get() if ori_attr and ori_attr.HasAuthoredValue() \
-            else (0.0, 0.0, 0.0)
-        if ori is None or not all(math.isfinite(c) for c in ori):
-            raise Invalid("crs:orientation is blocked or not finite")
-        self.orientation = [float(c) for c in ori]
+        self.rotation, self.orientation = orientation_at(
+            anchor.GetAttribute(ATTR_ORIENTATION), time)
 
-        own = UsdGeom.Xformable(anchor).GetLocalTransformation()
+        own = UsdGeom.Xformable(anchor).GetLocalTransformation(time)
         if own != Gf.Matrix4d(1.0):
             raise Unsupported("anchor ordinary transform A (post-placement "
                               "adjustment) is not supported by the reference yet")
@@ -272,7 +393,7 @@ class Placement:
         self.anchor_geo = (lon, lat, h)
         self.origin_ecef = self.src_ell.to_ecef(lon, lat, h)
         self.basis = enu_basis(lon, lat)
-        self.model = (stage_mpu * self.basis @ attitude(*self.orientation)
+        self.model = (stage_mpu * self.basis @ self.rotation
                       @ axis_map(up_axis))
 
         # Source geographic 3D -> output CRS (no ballpark operations: a
@@ -280,7 +401,8 @@ class Placement:
         self.out_crs = output_3d(out_crs)
         self.frame = frame
         try:
-            self.to_out = best_transformer(self.src_geo, self.out_crs)
+            self.to_out = output_transformer(self.src_geo, self.out_crs,
+                                             area_at(lon, lat))
         except pyproj.exceptions.ProjError as e:
             raise Unsupported("no coordinate operation: {}".format(e))
         self.operation = self.to_out.description
@@ -427,8 +549,12 @@ def test_cases(stage):
         expect = anchor.GetAttribute(ATTR_EXPECT)
         if expect and expect.HasAuthoredValue():
             desc = anchor.GetAttribute(ATTR_DESCRIPTION)
-            cases.append({"anchor": str(anchor.GetPath()), "expect": str(expect.Get()),
-                          "description": str(desc.Get()) if desc else ""})
+            case = {"anchor": str(anchor.GetPath()), "expect": str(expect.Get()),
+                    "description": str(desc.Get()) if desc else ""}
+            local = anchor.GetAttribute(ATTR_EXPECT_LOCAL)
+            if local and local.HasAuthoredValue():
+                case["expectLocal"] = str(local.Get())
+            cases.append(case)
     return cases
 
 
@@ -436,7 +562,8 @@ def export(stage_path, out_dir):
     stage = Usd.Stage.Open(str(stage_path))
     mpu = UsdGeom.GetStageMetersPerUnit(stage)
     up = UsdGeom.GetStageUpAxis(stage)
-    cache = UsdGeom.XformCache()
+    time = scene_time(stage)
+    cache = UsdGeom.XformCache(time)
 
     meshes = [UsdGeom.Mesh(p) for p in stage.Traverse() if p.IsA(UsdGeom.Mesh)]
     blob = bytearray()
@@ -459,7 +586,7 @@ def export(stage_path, out_dir):
     cases = test_cases(stage)
 
     for out_name, (out_crs, frame) in OUTPUTS.items():
-        anchors = {str(a.GetPath()): resolve_anchor(a, mpu, up, out_crs, frame)
+        anchors = {str(a.GetPath()): resolve_anchor(a, mpu, up, out_crs, frame, time)
                    for a in direct_anchors(stage)}
         records = []
         for mesh in meshes:
@@ -477,7 +604,7 @@ def export(stage_path, out_dir):
                 pl = a["_p"]
                 d = column_major(cache.ComputeRelativeTransform(mesh.GetPrim(), anchor)[0])
                 rec["matrix"] = list((jacobian4(pl) @ d).T.reshape(-1))  # column-major
-                pts = np.array(mesh.GetPointsAttr().Get(), dtype=np.float64)
+                pts = np.array(mesh.GetPointsAttr().Get(time), dtype=np.float64)
                 local = (d[:3, :3] @ pts.T).T + d[:3, 3]
                 rec["linearizationError"] = max(
                     float(np.linalg.norm(pl.exact(q) - pl.jacobian @ q)) for q in local)
@@ -487,6 +614,7 @@ def export(stage_path, out_dir):
             "format": "geospatial-web-recorded",
             "version": 1,
             "stage": stage_path.name,
+            **({} if time.IsDefault() else {"time": time.GetValue()}),
             "output": {"name": out_name, "crs": out_crs,
                        "wkt": output_3d(out_crs).to_wkt("WKT2_2019"),
                        "frame": frame},
@@ -513,10 +641,10 @@ def jacobian4(pl):
     return j
 
 
-def resolve_anchor(anchor, mpu, up, out_crs, frame):
+def resolve_anchor(anchor, mpu, up, out_crs, frame, time=Usd.TimeCode.Default()):
     rec = {"path": str(anchor.GetPath())}
     try:
-        pl = Placement(anchor, mpu, up, out_crs, frame)
+        pl = Placement(anchor, mpu, up, out_crs, frame, time)
     except Invalid as e:
         return {**rec, "status": "error", "reason": str(e)}
     except Unsupported as e:
@@ -541,6 +669,16 @@ SITE_C_NORTH = 60.0                    # metres of UTM northing north of Site A
 SITE_C_BOX = (8.0, 8.0, 4.0)
 SITE_C_BIAS = (0.05, 0.0, 0.0)         # deliberate reference error, ENU metres
 SITE_D_WEST = 0.0012                   # degrees of longitude west of Site A
+# I1 sites, spread east and west of Site A (degrees of longitude) or south.
+SITE_F_EAST = 0.0015                   # T2: WGS 72 (Helmert to WGS 84)
+SITE_G_EAST = 0.0030                   # T3: NAD27 (grids missing)
+SITE_H_EAST = 0.0045                   # T4: California zone 5 + NAVD88
+SITE_I_SOUTH = 200.0                   # T5: 1 km runway, metres south (UTM)
+RUNWAY = (1000.0, 30.0, 1.0)
+SITE_J_WEST = 0.0030                   # T8: heading 90
+SITE_K_WEST = 0.0045                   # T8: time-sampled orientation
+SITE_K_SAMPLES = {0.0: (0.0, 0.0, 0.0), 10.0: (90.0, 30.0, 0.0)}
+SCENE_TIME = 5.0                       # the scene is evaluated here (geotest:time)
 
 
 def box_mesh(stage, path, size, color):
@@ -581,31 +719,57 @@ def expect(prim, outcome, description):
     prim.CreateAttribute(ATTR_DESCRIPTION, Sdf.ValueTypeNames.String).Set(description)
 
 
-def topocentric(lon, lat, h, enu):
-    """ENU metres at (lon, lat, h) on WGS84 -> lon, lat, h, through PROJ's
-    topocentric conversion: independent of this script's ENU basis."""
+def topocentric(lon, lat, h, enu, ellipsoid="+ellps=WGS84"):
+    """ENU metres at (lon, lat, h) on an ellipsoid (default WGS84) -> lon,
+    lat, h on it, through PROJ's topocentric conversion: independent of this
+    script's ENU basis."""
     t = Transformer.from_pipeline(
-        "+proj=pipeline +step +inv +proj=topocentric +ellps=WGS84 "
-        "+lon_0={} +lat_0={} +h_0={} +step +inv +proj=cart +ellps=WGS84"
-        .format(lon, lat, h))
+        "+proj=pipeline +step +inv +proj=topocentric {e} "
+        "+lon_0={} +lat_0={} +h_0={} +step +inv +proj=cart {e}"
+        .format(lon, lat, h, e=ellipsoid))
     return t.transform(*enu)
 
 
-def add_control_points(stage, anchor_path, anchor_geo, heading, points, bias=None):
+def proj_ellipsoid(crs):
+    e = CRS(crs).ellipsoid
+    return "+a={!r} +rf={!r}".format(e.semi_major_metre, e.inverse_flattening)
+
+
+def add_control_points(stage, anchor_path, anchor_geo, rot, points, bias=None,
+                       source=None):
     """Control point prims under the anchor, at model-frame points (stage
-    metres, Z-up), with reference lon/lat/h from PROJ's topocentric
-    conversion. `bias` maps a point name to a deliberate ENU error."""
+    metres, Z-up), with reference lon/lat/h (EPSG:4979). `rot` is the model
+    attitude (column-vector, ENU), `bias` maps a point name to a deliberate
+    ENU error. The ENU offset goes through PROJ's topocentric conversion on
+    the source datum's ellipsoid; for a `source` geographic 3D CRS other than
+    EPSG:4979, anchor_geo is in it and the result is transformed with the
+    engine's operation policy (best_transformer)."""
+    ellipsoid = proj_ellipsoid(source) if source is not None else "+ellps=WGS84"
+    to_4979 = (best_transformer(source, CRS("EPSG:4979"), area_at(*anchor_geo[:2]))
+               if source is not None else None)
     UsdGeom.Xform.Define(stage, anchor_path + "/ControlPoints")
     for name, p in points.items():
         cp = UsdGeom.Xform.Define(stage, "{}/ControlPoints/{}".format(anchor_path, name))
         cp.AddTranslateOp().Set(Gf.Vec3d(*p))
-        enu = attitude(heading, 0, 0) @ np.array(p, dtype=float)
+        enu = rot @ np.array(p, dtype=float)
         if bias and name in bias:
             enu = enu + np.array(bias[name])
+        geo = topocentric(*anchor_geo, enu, ellipsoid)
+        if to_4979 is not None:
+            geo = to_4979.transform(*geo)
         prim = cp.GetPrim()
         prim.CreateAttribute(ATTR_CP_POSITION, Sdf.ValueTypeNames.Double3).Set(
-            Gf.Vec3d(*topocentric(*anchor_geo, enu)))
+            Gf.Vec3d(*geo))
         prim.CreateAttribute(ATTR_CP_CRS, Sdf.ValueTypeNames.Token).Set("EPSG:4979")
+
+
+def box_points(size, top=True):
+    """Ground corners (and top corners) of a box_mesh, model frame."""
+    sx, sy, sz = size[0] / 2, size[1] / 2, size[2]
+    pts = {"SW": (-sx, -sy, 0), "SE": (sx, -sy, 0), "NE": (sx, sy, 0), "NW": (-sx, sy, 0)}
+    if top:
+        pts["TopNE"] = (sx, sy, sz)
+    return pts
 
 
 def fixtures():
@@ -615,10 +779,16 @@ def fixtures():
     ca5_ftus = CRS("EPSG:2229")  # NAD83 / California zone 5 (ftUS), 2D
     to_geo3d = Transformer.from_crs(utm3d, geo3d, always_xy=True)
 
+    wgs72 = CRS("EPSG:4985")     # WGS 72, geographic 3D
+    nad27 = CRS("EPSG:4267").to_3d()
+    ca5_navd88 = CompoundCRS("NAD83 / California zone 5 (ftUS) + NAVD88 height (ftUS)",
+                             [ca5_ftus, CRS("EPSG:6360")])
+
     lib = new_stage(SCENE_DIR / "crs_library.usda")
     lib.SetDefaultPrim(lib.DefinePrim("/CRS"))
     for name, crs in (("WGS84_UTM11N_3D", utm3d), ("WGS84_Geographic3D", geo3d),
-                      ("NAD83_CA5_ftUS_2D", ca5_ftus)):
+                      ("NAD83_CA5_ftUS_2D", ca5_ftus), ("WGS72_Geographic3D", wgs72),
+                      ("NAD27_Geographic3D", nad27), ("CA5_NAVD88_ftUS", ca5_navd88)):
         prim = lib.DefinePrim("/CRS/" + name, TYPE_CRS)
         prim.CreateAttribute(ATTR_WKT, Sdf.ValueTypeNames.Token, custom=False,
                              variability=Sdf.VariabilityUniform).Set(
@@ -646,7 +816,7 @@ def fixtures():
         wing = UsdGeom.Xform.Define(stage, "/SiteA/Wing")
         wing.AddTranslateOp().Set(Gf.Vec3d(*WING_OFFSET))
         box_mesh(stage, "/SiteA/Wing/Box", WING, (0.9, 0.7, 0.3))
-        add_control_points(stage, "/SiteA", geo_a, SITE_A_HEADING, {
+        add_control_points(stage, "/SiteA", geo_a, attitude(SITE_A_HEADING, 0, 0), {
             "SW": (-bx, -by, 0), "SE": (bx, -by, 0), "NE": (bx, by, 0),
             "NW": (-bx, by, 0), "RoofNE": (bx, by, bz),
             "WingFar": (WING_OFFSET[0] + WING[0] / 2, WING_OFFSET[1] + WING[1] / 2, 0)})
@@ -660,7 +830,7 @@ def fixtures():
         bind(b, "/CRS/WGS84_Geographic3D", geo_b)
         expect(b, "pass", "T1: geographic 3D mast standing on Site A's NE corner")
         box_mesh(stage, "/SiteB/Mast", MAST, (0.2, 0.5, 0.9))
-        add_control_points(stage, "/SiteB", geo_b, 0.0, {
+        add_control_points(stage, "/SiteB", geo_b, np.eye(3), {
             "Base": (0, 0, 0), "Top": (0, 0, mz),
             "TopNE": (mx, mx, mz), "TopSW": (-mx, -mx, mz)})
     site("B", site_b)
@@ -675,7 +845,7 @@ def fixtures():
         bind(c, "/CRS/WGS84_UTM11N_3D", pos_c)
         expect(c, "fail", "Harness self-test: control point NE has a 5 cm reference error")
         box_mesh(stage, "/SiteC/Box", SITE_C_BOX, (0.6, 0.6, 0.6))
-        add_control_points(stage, "/SiteC", geo_c, 0.0, {
+        add_control_points(stage, "/SiteC", geo_c, np.eye(3), {
             "SW": (-cx, -cy, 0), "SE": (cx, -cy, 0), "NE": (cx, cy, 0), "NW": (-cx, cy, 0)},
             bias={"NE": SITE_C_BIAS})
     site("C", site_c)
@@ -690,7 +860,7 @@ def fixtures():
         expect(d, "unsupported", "T4-like: 2D CRS (California zone 5, ftUS) needs EGM2008 height")
         box_mesh(stage, "/SiteD/Box", (6.0, 6.0, 3.0), (0.5, 0.8, 0.4))
         add_control_points(stage, "/SiteD", (SITE_A_LONLAT[0] - SITE_D_WEST,
-                                             SITE_A_LONLAT[1], 0.0), 0.0,
+                                             SITE_A_LONLAT[1], 0.0), np.eye(3),
                            {"Origin": (0, 0, 0)})
     site("D", site_d)
 
@@ -702,10 +872,93 @@ def fixtures():
         box_mesh(stage, "/SiteE/Box", (6.0, 6.0, 3.0), (0.8, 0.3, 0.3))
     site("E", site_e)
 
+    # Site F (T2): WGS 72, an equation-based (Helmert) datum shift to WGS 84.
+    geo_f = (SITE_A_LONLAT[0] + SITE_F_EAST, SITE_A_LONLAT[1], 0.0)
+    box_f = (8.0, 8.0, 5.0)
+
+    def site_f(stage, f):
+        bind(f, "/CRS/WGS72_Geographic3D", geo_f)
+        expect(f, "pass", "T2: WGS 72 box, Helmert datum shift to WGS 84 (operation logged)")
+        box_mesh(stage, "/SiteF/Box", box_f, (0.3, 0.75, 0.75))
+        add_control_points(stage, "/SiteF", geo_f, np.eye(3), box_points(box_f), source=wgs72)
+    site("F", site_f)
+
+    # Site G (T3): NAD27. Its grid-based operations (NADCON) need grids we do
+    # not ship; the engine places with the best equation-based one (20 m) and
+    # reports the skipped grid operations (D22).
+    geo_g = (SITE_A_LONLAT[0] + SITE_G_EAST, SITE_A_LONLAT[1], 0.0)
+    box_g = (8.0, 8.0, 5.0)
+
+    def site_g(stage, g):
+        bind(g, "/CRS/NAD27_Geographic3D", geo_g)
+        expect(g, "pass", "T3: NAD27 box without NADCON grids: placed with the best "
+                          "equation-based operation, skipped grid operations reported")
+        box_mesh(stage, "/SiteG/Box", box_g, (0.75, 0.55, 0.85))
+        add_control_points(stage, "/SiteG", geo_g, np.eye(3), box_points(box_g), source=nad27)
+    site("G", site_g)
+
+    # Site H (T4): compound CRS with NAVD88 heights, which need a geoid grid.
+    e_h, n_h = Transformer.from_crs("EPSG:4326", ca5_ftus, always_xy=True).transform(
+        SITE_A_LONLAT[0] + SITE_H_EAST, SITE_A_LONLAT[1])
+
+    def site_h(stage, h):
+        bind(h, "/CRS/CA5_NAVD88_ftUS", (round(e_h, 2), round(n_h, 2), 1200.0))
+        expect(h, "unsupported", "T4: California zone 5 + NAVD88 heights need a geoid grid")
+        box_mesh(stage, "/SiteH/Box", (6.0, 6.0, 3.0), (0.9, 0.85, 0.3))
+    site("H", site_h)
+
+    # Site I (T5): a 1 km runway in UTM 11N, where the matrix shortcut and the
+    # exact point map drift apart most.
+    pos_i = (pos_a[0], pos_a[1] - SITE_I_SOUTH, 0.0)
+    geo_i = to_geo3d.transform(*pos_i)
+    rx, ry, rz = RUNWAY[0] / 2, RUNWAY[1] / 2, RUNWAY[2]
+
+    def site_i(stage, i):
+        bind(i, "/CRS/WGS84_UTM11N_3D", pos_i)
+        expect(i, "pass", "T5: 1 km runway in UTM 11N (matrix vs exact point map)")
+        # In Web Mercator the matrix shortcut is off by about 2.5 cm at the
+        # runway ends; exact points (measurement mode) pass.
+        i.CreateAttribute(ATTR_EXPECT_LOCAL, Sdf.ValueTypeNames.Token).Set("fail")
+        box_mesh(stage, "/SiteI/Runway", RUNWAY, (0.35, 0.35, 0.4))
+        add_control_points(stage, "/SiteI", geo_i, np.eye(3), {
+            "West": (-rx, 0, 0), "Centre": (0, 0, 0), "East": (rx, 0, 0),
+            "EastNE": (rx, ry, rz)})
+    site("I", site_i)
+
+    # Site J (T8): heading 90.
+    geo_j = (SITE_A_LONLAT[0] - SITE_J_WEST, SITE_A_LONLAT[1], 0.0)
+    box_j = (20.0, 6.0, 4.0)
+
+    def site_j(stage, j):
+        bind(j, "/CRS/WGS84_Geographic3D", geo_j, (90.0, 0.0, 0.0))
+        expect(j, "pass", "T8: geographic 3D box, heading 90")
+        box_mesh(stage, "/SiteJ/Box", box_j, (0.4, 0.8, 0.5))
+        add_control_points(stage, "/SiteJ", geo_j, attitude(90.0, 0, 0), box_points(box_j))
+    site("J", site_j)
+
+    # Site K (T8): orientation sampled at 0 and 10, evaluated at the scene
+    # time 5: slerped, which differs from interpolating the angles.
+    geo_k = (SITE_A_LONLAT[0] - SITE_K_WEST, SITE_A_LONLAT[1], 0.0)
+    box_k = (12.0, 4.0, 3.0)
+    (t0, hpr0), (t1, hpr1) = sorted(SITE_K_SAMPLES.items())
+    rot_k = quat_matrix(slerp(quat_attitude(*hpr0), quat_attitude(*hpr1),
+                              (SCENE_TIME - t0) / (t1 - t0)))
+
+    def site_k(stage, k):
+        bind(k, "/CRS/WGS84_Geographic3D", geo_k)
+        ori = k.CreateAttribute(ATTR_ORIENTATION, Sdf.ValueTypeNames.Double3, custom=False)
+        for t, hpr in SITE_K_SAMPLES.items():
+            ori.Set(Gf.Vec3d(*hpr), t)
+        expect(k, "pass", "T8: orientation (0, 0, 0) at 0 and (90, 30, 0) at 10, slerped at 5")
+        box_mesh(stage, "/SiteK/Box", box_k, (0.85, 0.4, 0.6))
+        add_control_points(stage, "/SiteK", geo_k, rot_k, box_points(box_k))
+    site("K", site_k)
+
     scene = new_stage(SCENE_DIR / "scene.usda")
+    scene.GetRootLayer().customLayerData = {"geotest:time": SCENE_TIME}
     world = UsdGeom.Xform.Define(scene, "/World").GetPrim()
     scene.SetDefaultPrim(world)
-    for name in "ABCDE":
+    for name in "ABCDEFGHIJK":
         scene.DefinePrim("/World/Site" + name).GetReferences().AddReference(
             "./site{}.usda".format(name))
     scene.GetRootLayer().Save()
@@ -846,12 +1099,13 @@ def score(stage_path, tolerance):
     stage = Usd.Stage.Open(str(stage_path))
     mpu = UsdGeom.GetStageMetersPerUnit(stage)
     up = UsdGeom.GetStageUpAxis(stage)
-    cps = control_points(stage, UsdGeom.XformCache())
+    time = scene_time(stage)
+    cps = control_points(stage, UsdGeom.XformCache(time))
     ell = Ellipsoid.of(CRS("EPSG:4979"))
     results = []
     for case in test_cases(stage):
         anchor = stage.GetPrimAtPath(case["anchor"])
-        a = resolve_anchor(anchor, mpu, up, *OUTPUTS["global"])
+        a = resolve_anchor(anchor, mpu, up, *OUTPUTS["global"], time)
         points = []
         if a["status"] != "ok":
             result, detail = "unsupported", "{}: {}".format(a["status"], a["reason"])
