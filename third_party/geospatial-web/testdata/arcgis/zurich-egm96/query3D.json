@@ -1,0 +1,62 @@
+{
+ "features": [
+  {
+   "attributes": {
+    "OBJECTID": 1,
+    "GlobalID": "00000000-0000-4000-8000-000000000001",
+    "ESRI3DO_TYPE": "3D_glb",
+    "ESRI3DO_OX": 8.51294297,
+    "ESRI3DO_OY": 47.39215091,
+    "ESRI3DO_OZ": 427.17952808,
+    "ESRI3DO_TX": 0,
+    "ESRI3DO_TY": 0,
+    "ESRI3DO_TZ": 0,
+    "ESRI3DO_SX": 1,
+    "ESRI3DO_SY": 1,
+    "ESRI3DO_SZ": 1,
+    "ESRI3DO_RX": 0,
+    "ESRI3DO_RY": 1,
+    "ESRI3DO_RZ": 0,
+    "ESRI3DO_RDEG": 0.0
+   }
+  },
+  {
+   "attributes": {
+    "OBJECTID": 2,
+    "GlobalID": "00000000-0000-4000-8000-000000000002",
+    "ESRI3DO_TYPE": "3D_glb",
+    "ESRI3DO_OX": 8.5120502,
+    "ESRI3DO_OY": 47.39098808,
+    "ESRI3DO_OZ": 445.95899328,
+    "ESRI3DO_TX": 0,
+    "ESRI3DO_TY": 0,
+    "ESRI3DO_TZ": 0,
+    "ESRI3DO_SX": 1,
+    "ESRI3DO_SY": 1,
+    "ESRI3DO_SZ": 1,
+    "ESRI3DO_RX": 0,
+    "ESRI3DO_RY": 1,
+    "ESRI3DO_RZ": 0,
+    "ESRI3DO_RDEG": 0.0
+   }
+  }
+ ],
+ "assetMaps": [
+  {
+   "parentGlobalId": "00000000-0000-4000-8000-000000000001",
+   "assetName": "box_1.glb",
+   "assetHash": "4f6db576a17abf3022a852897d6b81d94ce6234d70e9033da45f1c6c97508c86",
+   "assetType": "3D_glb",
+   "conversionStatus": "COMPLETED",
+   "assetURL": "assets/4f6db576a17abf3022a852897d6b81d94ce6234d70e9033da45f1c6c97508c86.glb"
+  },
+  {
+   "parentGlobalId": "00000000-0000-4000-8000-000000000002",
+   "assetName": "box_2.glb",
+   "assetHash": "93d2b2803798d3f0c9b0bee75c6795cb2daba246c6f03550809db5ccad365cd0",
+   "assetType": "3D_glb",
+   "conversionStatus": "COMPLETED",
+   "assetURL": "assets/93d2b2803798d3f0c9b0bee75c6795cb2daba246c6f03550809db5ccad365cd0.glb"
+  }
+ ]
+}

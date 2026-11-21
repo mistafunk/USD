@@ -4,6 +4,7 @@
 // recorded data (placeScene). Output CRS: EPSG:4979 for a global view (D13),
 // the view's spatial reference for a local one.
 import type SceneView from "@arcgis/core/views/SceneView.js";
+import { buildWrapper, crsDefinition, fetchObjectLayer } from "./arcgis/objectLayer";
 import { placeScene, type RecordedAnchor } from "./recorded";
 import type { Scene } from "./scene";
 import { USD_BASE, UsdClient } from "./usd/client";
@@ -12,6 +13,9 @@ import type { ModuleInfo, SceneState, StageTestData } from "./usd/types";
 export interface LiveOptions {
   /** Measurement mode (T5): exact per-vertex placement instead of matrices. */
   exact: boolean;
+  /** An ArcGIS 3D object layer (.../FeatureServer/<id>, or a mock directory)
+   *  to load through a generated wrapper layer instead of the test scene. */
+  layer?: string;
 }
 
 /** What the live module returned, for numeric checks (T9). */
@@ -24,6 +28,8 @@ export interface LiveData {
   meshes: { path: string; status: string; matrix: number[];
             linearizationError: number | null }[];
   timings: Record<string, number>;
+  /** 3D object layers: the CRS used, the generated wrapper and skipped features. */
+  objectLayer?: { crs: string; wrapper: string; skipped: string[] };
 }
 
 interface SceneIndex {
@@ -46,13 +52,36 @@ export async function loadLiveScene(
 
   const usd = new UsdClient();
   const info = await timed("init", () => usd.init());
-  const base = `${USD_BASE}/fixtures/scene`;
-  const res = await fetch(`${base}/index.json`);
-  if (!res.ok) throw new Error(`${res.url}: ${res.status} (run: geo.py build wasm32)`);
-  const index = (await res.json()) as SceneIndex;
-  await timed("load", () => usd.load(
-    index.files.map((f) => ({ url: `${base}/${f}`, path: `/scene/${f}` })),
-    `/scene/${index.stage}`));
+  let objectLayer: LiveData["objectLayer"];
+  let fallbackTarget: [number, number, number] | undefined;
+  if (options.layer) {
+    // A 3D object layer: models fetched as they are, placed by a wrapper.
+    const data = await timed("layer", () => fetchObjectLayer(options.layer!));
+    const { definition, promote3D } = crsDefinition(data.layer.spatialReference);
+    const crs = await usd.crsWkt(definition, promote3D);
+    if (!crs.wkt) throw new Error(`CRS ${definition}: ${crs.error}`);
+    const wrapper = buildWrapper(data, crs.wkt);
+    await timed("models", () => usd.fetchFiles(
+      wrapper.models.map((m) => ({ url: m.url, path: `/arcgis/${m.path}` }))));
+    await usd.writeText("/arcgis/layer.usda", wrapper.usda);
+    await timed("load", () => usd.open("/arcgis/layer.usda"));
+    objectLayer = { crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
+                    skipped: wrapper.skipped };
+    const first = data.features[0]?.attributes;
+    const roles = data.layer.infoFor3D.transformFieldRoles;
+    if (first && (data.layer.spatialReference.latestWkid ?? data.layer.spatialReference.wkid) === 4326) {
+      fallbackTarget = [Number(first[roles.originX]), Number(first[roles.originY]),
+                        Number(first[roles.originZ])];
+    }
+  } else {
+    const base = `${USD_BASE}/fixtures/scene`;
+    const res = await fetch(`${base}/index.json`);
+    if (!res.ok) throw new Error(`${res.url}: ${res.status} (run: geo.py build wasm32)`);
+    const index = (await res.json()) as SceneIndex;
+    await timed("load", () => usd.load(
+      index.files.map((f) => ({ url: `${base}/${f}`, path: `/scene/${f}` })),
+      `/scene/${index.stage}`));
+  }
 
   const test: StageTestData = await usd.testData();
   if (test.time !== null) await usd.setTime(test.time);
@@ -92,6 +121,7 @@ export async function loadLiveScene(
     controlPoints: test.controlPoints,
     testCases: test.testCases,
     exactPoints,
+    fallbackTarget,
   });
   return {
     scene,
@@ -106,6 +136,7 @@ export async function loadLiveScene(
         linearizationError: m.linearizationError,
       })),
       timings,
+      objectLayer,
     },
   };
 }

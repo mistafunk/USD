@@ -132,6 +132,7 @@ Everything lives in the OpenUSD fork on the geospatial-web branch. Upstreamable 
 | `pxr/usdImaging/usdGeospatialImaging` | usdImaging adapter, geospatial placement scene index, observer (D16) | Yes, with usdGeospatial |
 | `pxr/usd/plugin/usdGeospatialProj` | PROJ engine plugin, behind a `PXR_BUILD_GEOSPATIAL_PROJ` option (later `usdGeospatialEsriPE` next to it) | Possibly |
 | `build_scripts/`, `cmake/`, `pxr/imaging/*`, `pxr/usdImaging/usdImaging` | WASM port of Hydra and usdImaging | Yes, as separate PRs |
+| `third_party/adobe-usd-gltf` | Adobe's glTF file format plugin (Apache-2.0), for glb models of ArcGIS 3D object layers (D24) | No (Adobe's project) |
 | `third_party/geospatial-web/module` | `geospatialRecord` (C3: the observer's output in the recorded format), `geospatialModule` (C4: embind module and final link) (like upstream's `wasmFetchResolver` sample), built from the root `CMakeLists.txt` behind an option, like `third_party/renderman` | No |
 | `third_party/geospatial-web/app` | The Maps SDK app, RenderNode, worker wrapper, `package.json`, Playwright harness | No |
 | `third_party/geospatial-web/testdata` and `/reference` | Test stages, control points, offline Python reference (option D) | No |

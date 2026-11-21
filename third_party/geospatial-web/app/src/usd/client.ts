@@ -37,6 +37,27 @@ export class UsdClient {
     return this.call("init", { moduleUrl });
   }
 
+  /** Fetches files into the module's file system. */
+  fetchFiles(files: FileSpec[]): Promise<void> {
+    return this.call("fetchFiles", { files });
+  }
+
+  /** Writes a text file (e.g. a generated layer) into the module's file system. */
+  writeText(path: string, text: string): Promise<void> {
+    return this.call("writeText", { path, text });
+  }
+
+  /** Opens a stage from the module's file system. */
+  open(stage: string): Promise<void> {
+    return this.call("open", { stage });
+  }
+
+  /** WKT2 of a CRS definition PROJ accepts, e.g. "EPSG:4326+5773"; with
+   *  promote3D a 2D CRS gets an ellipsoidal height axis. */
+  crsWkt(definition: string, promote3D = false): Promise<{ wkt: string; error: string }> {
+    return this.call("crsWkt", { definition, promote3D });
+  }
+
   /** Fetches files into the module's file system and opens the stage. */
   load(files: FileSpec[], stage: string): Promise<void> {
     return this.call("load", { files, stage });

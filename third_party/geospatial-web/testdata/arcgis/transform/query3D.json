@@ -1,0 +1,34 @@
+{
+ "features": [
+  {
+   "attributes": {
+    "OBJECTID": 1,
+    "GlobalID": "00000000-0000-4000-8000-000000000001",
+    "ESRI3DO_TYPE": "3D_glb",
+    "ESRI3DO_OX": 8.51294297,
+    "ESRI3DO_OY": 47.39215091,
+    "ESRI3DO_OZ": 427.0,
+    "ESRI3DO_TX": 10,
+    "ESRI3DO_TY": 5,
+    "ESRI3DO_TZ": 2,
+    "ESRI3DO_SX": 2,
+    "ESRI3DO_SY": 1,
+    "ESRI3DO_SZ": 1.5,
+    "ESRI3DO_RX": 0,
+    "ESRI3DO_RY": 0,
+    "ESRI3DO_RZ": 1,
+    "ESRI3DO_RDEG": 90.0
+   }
+  }
+ ],
+ "assetMaps": [
+  {
+   "parentGlobalId": "00000000-0000-4000-8000-000000000001",
+   "assetName": "box_1.glb",
+   "assetHash": "a30dc4d6e5ffd329c8e3a8672f0d56fab5d4938b3f1f2a1d6227a6bee039c7de",
+   "assetType": "3D_glb",
+   "conversionStatus": "COMPLETED",
+   "assetURL": "assets/a30dc4d6e5ffd329c8e3a8672f0d56fab5d4938b3f1f2a1d6227a6bee039c7de.glb"
+  }
+ ]
+}

@@ -127,6 +127,22 @@ passes); T6 0.001 px at 1 m in both views; T11 every result names `proj`. Native
 `reference -- compare` 62 checks ok. **I1 exit met** (browser vs native within 1 cm on every case both can do;
 measured 0 mm). WASM ctest run of the changed C++ pending (Simon).
 
+**Update 2026-11-21, ArcGIS 3D object layers (Claude Code):** vanilla models of 3D object layers are placed through a
+generated wrapper layer (D24, D23 pending). Read from a real layer (Zurich office 4th floor, item a457bef2..., with
+Simon's go-ahead): the layer's `spatialReference` (`wkid` 4326, `vcsWkid` 5773 EGM96) and per feature the
+`infoFor3D.transformFieldRoles` fields (`ESRI3DO_OX/OY/OZ` origin in the layer SR, translation, scale, rotation axis
+and degrees); `query3D` gives the asset maps; models are glb only (USD is an upload format, not a query format),
+CityEngine exports: glTF Y-up, metres, x east, y up, z south, centred on the origin. Done:
+- `third_party/adobe-usd-gltf`: Adobe's glTF plugin from the 3dtiles prototype, ported to v26.08, native and WASM
+  (tinygltf pinned in `geo.py`, OpenImageIO optional, warnings of the vendored code silenced, two format bugs fixed).
+- Module: `crsWkt(definition, promote3D)`; worker: `fetchFiles`, `writeText`, `open`, `crsWkt`.
+- App: `?layer=<url>` (REST or mock) builds the wrapper (`src/arcgis/objectLayer.ts`): one `GeospatialCRS` (compound
+  with the vertical CRS, else promoted to 3D: z taken as ellipsoidal), per feature an anchor at the origin and a child
+  prim with the feature's transform (in Y-up axes) referencing the glb.
+- Mocks (`reference.py arcgis-mock`, `testdata/arcgis`) and `tests/objectLayer.spec.ts`: WGS 84 mock placed at the
+  origins in both views; EGM96 mock reported unsupported, naming the missing grid; a rotated, scaled, translated
+  model matches R(S p) + T. All 17 browser specs pass.
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -263,3 +279,11 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
   emulation of the shader's float32 arithmetic), in both views.
 - (I1, D22) Skipped grid operations are now specific to the site: NAD27 at Redlands skips "NAD27 to NAD83 (1) + NAD83
   to WGS 84 (54)" (NADCON5 CONUS, 2.15 m).
+- (3DOL) **Transform semantics are assumed:** scale, then rotate about an east/north/up axis (right-handed), then
+  translate, in metres (from the SDK's MeshTransform; order and frame undocumented). The Zurich features are all
+  identity. Verify on a layer with a rotated feature before relying on it.
+- (3DOL) Without `vcsWkid` the wrapper takes z as ellipsoidal height (promoted 3D CRS); the layer does not say.
+- (3DOL) Next: D23 (grids: libtiff in PROJ natively and for WASM, pinned EGM96/NADCON5/NAVD88 geoid, on-demand fetch
+  in the browser), then the live Zurich layer at its correct height. Its glb are 126 MB and 63 MB.
+- (3DOL, glTF) USD whole-archives only its own libraries; a plugin built outside `pxr/` lost its file format
+  registration in the static WASM link until the module whole-archived it (same class as the C2 plugin fix).

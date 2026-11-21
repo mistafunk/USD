@@ -16,6 +16,8 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | File | Purpose |
 |---|---|
 | `src/meshPass.ts` | WebGL2 pass in a `RenderNode`. Per mesh: float32-exact render origin + Float64 matrix; modelView = `viewMatrix` x translate(origin) x matrix in Float64, cast to float32 once |
+| `src/arcgis/objectLayer.ts` | ArcGIS 3D object layers: reads the layer and `query3D`, builds the wrapper layer (schemas, origin, transform) that references the glb models |
+| `tests/objectLayer.spec.ts` | Wrapper layers on the mock layers in `testdata/arcgis` |
 | `src/live.ts` | Live data: loads the test scene through the worker, places it in the view's output CRS, scores it |
 | `tests/i1.spec.ts` | I1: the whole browser test plan on live data (harness, T2, T3, T5, T6, T9, T11); report `reports/i1-*` |
 | `src/usd/` | OpenUSD in a Web Worker: `worker.ts` owns the module and stage, `client.ts` is the promise API, `types.ts` the data |
@@ -32,7 +34,9 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | `tests/w2.spec.ts`, `tests/report.ts` | W2: runs the harness in both views, expects every case's outcome; writes `reports/w2-<time>.{json,html}` and `reports/latest.*` (git-ignored) |
 
 URL options: `?view=global|local`, `&data=live|recorded|w0` (default live: the OpenUSD module in a worker, I1),
-`&exact=1` (live: exact per-vertex placement, the measurement mode of T5), `&src=recorded|recorded-cpp` (recorded data from the reference
+`&exact=1` (live: exact per-vertex placement, the measurement mode of T5),
+`&layer=<url>` (live: an ArcGIS 3D object layer, `.../FeatureServer/<id>` or a mock such as
+`/usd/fixtures/arcgis/zurich-egm96`, placed through a generated wrapper layer, `src/arcgis/objectLayer.ts`), `&src=recorded|recorded-cpp` (recorded data from the reference
 export or from the C++ observer, `geo.py record`), and for W0 `&naive=1`, which bakes absolute render coordinates into float32 vertices (what a
 float32-only pipeline does) to show the jitter the origin split avoids.
 

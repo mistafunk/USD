@@ -19,6 +19,12 @@ async function init(moduleUrl: string) {
 }
 
 async function load(files: FileSpec[], stage: string) {
+  await fetchFiles(files);
+  open(stage);
+}
+
+/** Fetches files in parallel into the in-memory file system. */
+async function fetchFiles(files: FileSpec[]) {
   const m = need(module);
   // Fetch in parallel, then write into the in-memory file system.
   const blobs = await Promise.all(files.map(async (f) => {
@@ -26,10 +32,16 @@ async function load(files: FileSpec[], stage: string) {
     if (!res.ok) throw new Error(`${f.url}: HTTP ${res.status}`);
     return new Uint8Array(await res.arrayBuffer());
   }));
-  files.forEach((f, i) => {
-    mkdirs(m, f.path.slice(0, f.path.lastIndexOf("/")));
-    m.FS.writeFile(f.path, blobs[i]);
-  });
+  files.forEach((f, i) => writeFile(f.path, blobs[i]));
+}
+
+function writeFile(path: string, data: Uint8Array | string) {
+  const m = need(module);
+  mkdirs(m, path.slice(0, path.lastIndexOf("/")));
+  m.FS.writeFile(path, data);
+}
+
+function open(stage: string) {
   const error = need(scene).open(stage);
   if (error) throw new Error(error);
 }
@@ -91,6 +103,10 @@ self.onmessage = async (event: MessageEvent) => {
     switch (op) {
       case "init": result = await init(args.moduleUrl); break;
       case "load": result = await load(args.files, args.stage); break;
+      case "fetchFiles": result = await fetchFiles(args.files); break;
+      case "writeText": result = writeFile(args.path, args.text); break;
+      case "open": result = open(args.stage); break;
+      case "crsWkt": result = need(module).crsWkt(args.definition, args.promote3D); break;
       case "setOutput": result = setOutput(args.crs, args.measure, args.exact); break;
       case "testData": result = need(scene).testData(); break;
       case "setTime": result = need(scene).setTime(args.time); break;

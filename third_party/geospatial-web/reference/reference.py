@@ -14,6 +14,8 @@ layout the C3 scene index observer will produce (docs/RECORDED_FORMAT.md).
                                      placement scene index test
     reference.py compare DIR         compare recorded data from the C++
                                      observer (geo.py record) with the export
+    reference.py arcgis-mock         mock ArcGIS 3D object layers (layer.json,
+                                     query3D.json, glb models) for the app
 
 Placement (proposal, "Geospatial model attitude and stage axes" and
 "Evaluation"), for a point x in the anchor's model frame, in stage units:
@@ -51,6 +53,7 @@ C0_LIBRARY = (REPO / "pxr" / "usd" / "usdGeospatial" / "testenv" /
               "testUsdGeospatialSchemas" / "crsLibrary.usda")
 PROJ_TEST_DIR = (REPO / "pxr" / "usd" / "plugin" / "usdGeospatialProj" /
                  "testenv" / "testUsdGeospatialProjPlacement")
+ARCGIS_MOCK_DIR = GEO_DIR / "testdata" / "arcgis"
 IMAGING_TEST_DIR = (REPO / "pxr" / "usdImaging" / "usdGeospatialImaging" /
                     "testenv" / "testUsdGeospatialImagingPlacement")
 
@@ -1082,6 +1085,105 @@ def imaging_expected():
     export(IMAGING_TEST_DIR / "scene.usda", IMAGING_TEST_DIR)
     print("wrote {}".format(IMAGING_TEST_DIR))
 
+def write_glb(path, size):
+    """A box glb in the convention of CityEngine's exports for ArcGIS 3D
+    object layers (glTF Y-up, metres): x east, y up, z south, centred on the
+    origin horizontally, from y = 0 up."""
+    import hashlib
+    sx, sy, sz = size[0] / 2, size[1], size[2] / 2   # east, up, north extents
+    pos = [(-sx, 0, -sz), (sx, 0, -sz), (sx, 0, sz), (-sx, 0, sz),
+           (-sx, sy, -sz), (sx, sy, -sz), (sx, sy, sz), (-sx, sy, sz)]
+    tris = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1,
+            1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0]
+    pbin = b"".join(struct.pack("<3f", *q) for q in pos)
+    ibin = b"".join(struct.pack("<H", i) for i in tris)
+    ibin += b"\0" * (-len(ibin) % 4)
+    binary = pbin + ibin
+    gltf = {
+        "asset": {"version": "2.0", "generator": "geospatial-web reference.py"},
+        "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0, "name": "Box"}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+        "buffers": [{"byteLength": len(binary)}],
+        "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": len(pbin)},
+                        {"buffer": 0, "byteOffset": len(pbin), "byteLength": len(tris) * 2}],
+        "accessors": [{"bufferView": 0, "componentType": 5126, "count": 8, "type": "VEC3",
+                       "min": [-sx, 0, -sz], "max": [sx, sy, sz]},
+                      {"bufferView": 1, "componentType": 5123, "count": len(tris),
+                       "type": "SCALAR"}],
+    }
+    js = json.dumps(gltf).encode()
+    js += b" " * (-len(js) % 4)
+    data = struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(js) + 8 + len(binary))
+    data += struct.pack("<I4s", len(js), b"JSON") + js
+    data += struct.pack("<I4s", len(binary), b"BIN\0") + binary
+    digest = hashlib.sha256(data).hexdigest()
+    (path / "assets").mkdir(parents=True, exist_ok=True)
+    (path / "assets" / (digest + ".glb")).write_bytes(data)
+    return digest
+
+
+ARCGIS_ROLES = {
+    "globalID": "GlobalID",
+    "originX": "ESRI3DO_OX", "originY": "ESRI3DO_OY", "originZ": "ESRI3DO_OZ",
+    "translationX": "ESRI3DO_TX", "translationY": "ESRI3DO_TY", "translationZ": "ESRI3DO_TZ",
+    "scaleX": "ESRI3DO_SX", "scaleY": "ESRI3DO_SY", "scaleZ": "ESRI3DO_SZ",
+    "rotationX": "ESRI3DO_RX", "rotationY": "ESRI3DO_RY", "rotationZ": "ESRI3DO_RZ",
+    "rotationDeg": "ESRI3DO_RDEG",
+}
+
+
+def arcgis_mock():
+    """Mock ArcGIS 3D object layers in the REST API's shape (the layer
+    resource as layer.json, a query3D response as query3D.json, glb assets),
+    modelled on the Zurich office layer (WGS 84, EGM96 heights, transform
+    field roles ESRI3DO_*). The app loads them with ?layer=/usd/fixtures/
+    arcgis/<name>, without touching a live service."""
+    def feature(oid, origin, size, t=(0, 0, 0), s=(1, 1, 1), axis=(0, 1, 0), deg=0.0):
+        return oid, origin, size, t, s, axis, deg
+    zurich = [feature(1, (8.51294297, 47.39215091, 427.17952808), (49.25, 3.16, 34.8)),
+              feature(2, (8.5120502, 47.39098808, 445.95899328), (20.0, 10.0, 20.0))]
+    layers = {
+        "zurich-ellipsoidal": ({"wkid": 4326, "latestWkid": 4326}, zurich),
+        "zurich-egm96": ({"wkid": 4326, "latestWkid": 4326, "vcsWkid": 5773,
+                          "latestVcsWkid": 5773}, zurich),
+        # 2 x scale east, 1.5 x up, turned 90 degrees counter-clockwise, then
+        # moved 10 m east, 5 m north, 2 m up.
+        "transform": ({"wkid": 4326, "latestWkid": 4326},
+                      [feature(1, (8.51294297, 47.39215091, 427.0), (8.0, 4.0, 2.0),
+                               t=(10, 5, 2), s=(2, 1, 1.5), axis=(0, 0, 1), deg=90.0)]),
+    }
+    for name, (sr, features) in layers.items():
+        d = ARCGIS_MOCK_DIR / name
+        if d.exists():
+            shutil.rmtree(d)
+        d.mkdir(parents=True)
+        layer = {"_note": "mock (reference.py arcgis-mock), not served data",
+                 "name": name, "type": "Feature Layer",
+                 "geometryType": "esriGeometryMultiPatch", "hasZ": True,
+                 "spatialReference": sr,
+                 "infoFor3D": {"transformFieldRoles": ARCGIS_ROLES,
+                               "queryFormats": ["3D_shapebuffer", "3D_glb"]}}
+        out = {"features": [], "assetMaps": []}
+        for oid, origin, size, t, s, axis, deg in features:
+            gid = "00000000-0000-4000-8000-{:012d}".format(oid)
+            digest = write_glb(d, size)
+            r = ARCGIS_ROLES
+            out["features"].append({"attributes": {
+                "OBJECTID": oid, r["globalID"]: gid, "ESRI3DO_TYPE": "3D_glb",
+                r["originX"]: origin[0], r["originY"]: origin[1], r["originZ"]: origin[2],
+                r["translationX"]: t[0], r["translationY"]: t[1], r["translationZ"]: t[2],
+                r["scaleX"]: s[0], r["scaleY"]: s[1], r["scaleZ"]: s[2],
+                r["rotationX"]: axis[0], r["rotationY"]: axis[1], r["rotationZ"]: axis[2],
+                r["rotationDeg"]: deg}})
+            out["assetMaps"].append({
+                "parentGlobalId": gid, "assetName": "box_{}.glb".format(oid),
+                "assetHash": digest, "assetType": "3D_glb", "conversionStatus": "COMPLETED",
+                "assetURL": "assets/{}.glb".format(digest)})
+        (d / "layer.json").write_text(json.dumps(layer, indent=1) + "\n")
+        (d / "query3D.json").write_text(json.dumps(out, indent=1) + "\n")
+        print("wrote {}".format(d))
+
+
 # ---------------------------------------------------------------------------
 # check
 
@@ -1228,6 +1330,7 @@ def main():
     sub.add_parser("fixtures")
     sub.add_parser("proj-expected")
     sub.add_parser("imaging-expected")
+    sub.add_parser("arcgis-mock")
     s = sub.add_parser("compare")
     s.add_argument("dir", nargs="?", default=str(RECORDED_DIR.parent / "recorded-cpp"))
     s.add_argument("--ref", default=str(RECORDED_DIR))
@@ -1246,6 +1349,8 @@ def main():
         proj_expected()
     elif args.cmd == "imaging-expected":
         imaging_expected()
+    elif args.cmd == "arcgis-mock":
+        arcgis_mock()
     elif args.cmd == "compare":
         sys.exit(0 if compare(Path(args.dir), Path(args.ref), args.tolerance) else 1)
     elif args.cmd == "export":

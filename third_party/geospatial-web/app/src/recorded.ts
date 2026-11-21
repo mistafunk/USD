@@ -133,6 +133,8 @@ export interface PlaceInput {
   /** Exact mode (measurement mode, T5): meshes drawn from framePoints and
    *  control points scored at these exact output positions. */
   exactPoints?: Map<string, number[]>;
+  /** Camera target (lon, lat, h) when no anchor could be placed. */
+  fallbackTarget?: [number, number, number];
 }
 
 export function placeScene(view: SceneView, input: PlaceInput): Scene {
@@ -199,10 +201,10 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
   // Camera presets are relative to Site B's anchor (the building corner).
   const ok = input.anchors.filter((a) => a.status === "ok");
   const ref = ok.find((a) => a.path.endsWith("/SiteB")) ?? ok[0];
-  if (!ref) throw new Error("no placeable anchor in the data");
+  if (!ref && !input.fallbackTarget) throw new Error("no placeable anchor in the data");
   return {
     name: input.name,
-    target: toLonLatH(input.output.frame, ref.origin!),
+    target: ref ? toLonLatH(input.output.frame, ref.origin!) : input.fallbackTarget!,
     presets: PRESETS,
     meshes,
     anchors: status,

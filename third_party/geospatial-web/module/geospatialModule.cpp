@@ -35,6 +35,8 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <proj.h>
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -388,6 +390,35 @@ GetInfo()
     return o;
 }
 
+/// The WKT2 (2019) of a CRS definition PROJ accepts, e.g. "EPSG:4326" or a
+/// compound "EPSG:4326+5773", for authoring crs:wkt (wrapper layers for
+/// ArcGIS 3D object layers). With \p promote3D a 2D geographic or projected
+/// CRS gets an ellipsoidal height axis. Returns { wkt, error }.
+val
+CrsWkt(const std::string& definition, bool promote3D)
+{
+    val o = val::object();
+    PJ_CONTEXT* ctx = proj_context_create();
+    PJ* crs = proj_create(ctx, definition.c_str());
+    if (crs && promote3D) {
+        const PJ_TYPE type = proj_get_type(crs);
+        if (type == PJ_TYPE_GEOGRAPHIC_2D_CRS || type == PJ_TYPE_PROJECTED_CRS) {
+            if (PJ* promoted = proj_crs_promote_to_3D(ctx, nullptr, crs)) {
+                proj_destroy(crs);
+                crs = promoted;
+            }
+        }
+    }
+    const char* wkt = crs && proj_is_crs(crs)
+        ? proj_as_wkt(ctx, crs, PJ_WKT2_2019, nullptr) : nullptr;
+    o.set("wkt", std::string(wkt ? wkt : ""));
+    o.set("error", wkt ? std::string() : std::string(
+        proj_context_errno_string(ctx, proj_context_errno(ctx))));
+    proj_destroy(crs);
+    proj_context_destroy(ctx);
+    return o;
+}
+
 /// Caps USD's work threads, e.g. to the module's pthread pool.
 void
 SetThreadLimit(int n)
@@ -413,5 +444,6 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
         .function("resolve", &GeospatialScene::Resolve)
         .function("testData", &GeospatialScene::TestData);
     emscripten::function("info", &GetInfo);
+    emscripten::function("crsWkt", &CrsWkt);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

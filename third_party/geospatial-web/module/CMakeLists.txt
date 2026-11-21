@@ -43,12 +43,30 @@ add_executable(geospatialModule geospatialModule.cpp)
 # Whole-archive linking of the USD libraries and the engine plugin, so their
 # registry functions (TfType, scene index plugins, adapters, the PROJ engine)
 # survive, as in extras/usd/examples/wasmFetchResolver.
+# File format plugins for served models: glb from ArcGIS 3D object layers
+# (third_party/adobe-usd-gltf, D24).
+set(formatPlugins "")
+if (TARGET usdGltf)
+    set(formatPlugins usdGltf)
+endif()
+
 _pxr_target_link_libraries(geospatialModule
     ${geospatialLibraries}
     usdGeospatialProj
+    ${formatPlugins}
 )
+
+# USD whole-archives only its own libraries; a plugin built outside pxr/ is
+# linked like any external library, so its registrations (the file format's
+# TfType) would be dropped. Pull in all of it.
+foreach(plugin ${formatPlugins})
+    target_link_options(geospatialModule PRIVATE
+        "SHELL:-Wl,--whole-archive $<TARGET_FILE:${plugin}> -Wl,--no-whole-archive")
+    add_dependencies(geospatialModule ${plugin})
+endforeach()
 target_include_directories(geospatialModule
     PRIVATE ${CMAKE_BINARY_DIR}/include)
+target_link_libraries(geospatialModule PRIVATE PROJ::proj)
 
 target_link_options(geospatialModule PRIVATE
     "SHELL:-lembind"
@@ -90,6 +108,11 @@ install(
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../testdata/scene/
     DESTINATION ${webDir}/fixtures/scene
+)
+
+install(
+    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../testdata/arcgis/
+    DESTINATION ${webDir}/fixtures/arcgis
 )
 
 # The scene's files, so the app's worker knows what to fetch.

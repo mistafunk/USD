@@ -10,6 +10,7 @@ python ../tools/geo.py reference -- check      # scores control points with the 
 python ../tools/geo.py reference -- proj-expected  # C++ PROJ engine test fixtures + pyproj expectations
 python ../tools/geo.py reference -- imaging-expected  # scene + export for the C++ placement scene index test
 python ../tools/geo.py reference -- compare    # ../app/public/recorded-cpp (geo.py record) vs the export
+python ../tools/geo.py reference -- arcgis-mock   # ../testdata/arcgis: mock 3D object layers (REST shape, glb)
 ```
 
 `geo.py` creates `<workspace>/venv-reference` with the project venv's Python (3.12, `VENV_PYTHON` in `geo.py`;

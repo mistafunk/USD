@@ -37,6 +37,9 @@ const viewingMode = params.get("view") === "local" ? "local" : "global";
 const data = (["recorded", "w0"] as const).find((d) => d === params.get("data")) ?? "live";
 // Measurement mode (T5): exact per-vertex placement instead of matrices.
 const exact = params.get("exact") === "1";
+// Live only: an ArcGIS 3D object layer (.../FeatureServer/<id>, or a mock
+// directory such as /usd/fixtures/arcgis/zurich-egm96) instead of the test scene.
+const objectLayer = params.get("layer") ?? undefined;
 // Directory of recorded data under public/: the offline reference's export
 // (recorded) or the C++ observer's (recorded-cpp, geo.py record).
 const recordedDir = /^[a-z0-9-]+$/.test(params.get("src") ?? "")
@@ -159,7 +162,7 @@ state.stats = pass.stats;
 
 view.when(async () => {
   if (data === "live") {
-    const loaded = await loadLiveScene(view, { exact });
+    const loaded = await loadLiveScene(view, { exact, layer: objectLayer });
     scene = loaded.scene;
     state.live = loaded.live;
   } else {

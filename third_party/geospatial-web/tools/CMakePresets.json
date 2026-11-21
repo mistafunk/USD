@@ -23,7 +23,8 @@
         "PXR_BUILD_TUTORIALS": "OFF",
         "PXR_ENABLE_MATERIALX_SUPPORT": "OFF",
         "PXR_BUILD_GEOSPATIAL_PROJ": "ON",
-        "PXR_BUILD_GEOSPATIAL_WEB": "ON"
+        "PXR_BUILD_GEOSPATIAL_WEB": "ON",
+        "PXR_BUILD_ADOBE_GLTF": "ON"
       }
     },
     {

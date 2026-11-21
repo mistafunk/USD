@@ -82,6 +82,12 @@ usdImaging, the placement scene index and the PROJ engine) and the test fixtures
 (workspace from `USD_GEO_WS`, else five levels above `app/`), as nginx serves it in the container.
 `geo.py test web -- c4` runs the C4 browser check (`app/c4.html`).
 
+## glTF plugin
+
+`third_party/adobe-usd-gltf` (D24) needs tinygltf's headers: `geo.py bootstrap native|wasm32 --steps tinygltf` (pinned
+v2.9.7, part of the full bootstrap). The browser module whole-archives the plugin, since USD only does that for its
+own libraries.
+
 ## Reference
 
 `geo.py reference -- <command>` runs `reference/reference.py` in `venv-reference`. The first run replaces pyproj's

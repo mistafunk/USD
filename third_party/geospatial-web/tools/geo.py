@@ -54,6 +54,11 @@ SQLITE = dict(
     name="sqlite-amalgamation-3540100",
     url="https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
     sha256="0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9")
+# Header-only, for the Adobe glTF file format plugin (third_party/adobe-usd-gltf).
+TINYGLTF = dict(
+    name="tinygltf-2.9.7",
+    url="https://github.com/syoyo/tinygltf/archive/refs/tags/v2.9.7.tar.gz",
+    sha256="bf92fe53b86302f9415e77504ecd81a58659292ed04dffec873f5c71665046a0")
 CMAKE_MIN = (3, 27)
 # Python of the project venv: the native build's Python bindings, usdview,
 # usdGenSchema, and (via PATH) emcc, which needs >= 3.10.
@@ -382,6 +387,16 @@ def step_sqlite(log, target, args):
               ["-DSQLITE_SOURCE_DIR={}".format(src)], args.jobs)
 
 
+def step_tinygltf(log, target, args):
+    """Installs tinygltf's headers to deps/<target>/include/tinygltf."""
+    src = fetch(TINYGLTF)
+    dst = deps_dir(target) / "include" / "tinygltf"
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in ("tiny_gltf.h", "json.hpp", "stb_image.h", "stb_image_write.h"):
+        shutil.copy2(src / name, dst / name)
+    log.write("[geo] tinygltf headers in {}\n".format(dst))
+
+
 def step_proj(log, target, args):
     src = fetch(PROJ)
     prefix = deps_dir(target)
@@ -447,9 +462,11 @@ STEP_BUILD_DIRS = {"sqlite": "sqlite3", "proj": "proj", "usd-deps": "build_usd"}
 
 BOOTSTRAP_STEPS = {
     "native": [("venv", step_venv), ("sqlite", step_sqlite),
-               ("proj", step_proj), ("usd-deps", step_usd_deps)],
+               ("proj", step_proj), ("tinygltf", step_tinygltf),
+               ("usd-deps", step_usd_deps)],
     "wasm32": [("emsdk", step_emsdk), ("sqlite", step_sqlite),
-               ("proj", step_proj), ("usd-deps", step_usd_deps)],
+               ("proj", step_proj), ("tinygltf", step_tinygltf),
+               ("usd-deps", step_usd_deps)],
 }
 
 
