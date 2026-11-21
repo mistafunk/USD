@@ -1,0 +1,87 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def GeospatialCRS "Utm" (
+    doc = "A CRS definition in the stage; resolution only reads its WKT."
+)
+{
+    uniform token crs:wkt = "PROJCRS[\"test\"]"
+}
+
+def Xform "World"
+{
+    def Xform "Site" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = </Utm>
+    )
+    {
+        double3 crs:position = (500000, 4000000, 10)
+        double3 crs:orientation = (30, 0, 0)
+
+        def Xform "Building"
+        {
+            def Xform "Room"
+            {
+            }
+        }
+
+        def Xform "Nested" (
+            prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+            prepend references = </Utm>
+        )
+        {
+            double3 crs:position = (500100, 4000000, 0)
+
+            def Xform "Child"
+            {
+            }
+        }
+
+        def Xform "Broken" (
+            prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        )
+        {
+            double3 crs:position = (0, 0, 0)
+
+            def Xform "Child"
+            {
+            }
+        }
+
+        def Xform "MisplacedPosition"
+        {
+            double3 crs:position = (1, 2, 3)
+        }
+
+        def Xform "NoPosition" (
+            prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+            prepend references = </Utm>
+        )
+        {
+        }
+
+        def Xform "BlockedPosition" (
+            prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+            prepend references = </Utm>
+        )
+        {
+            double3 crs:position = None
+        }
+
+        def Xform "NanPosition" (
+            prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+            prepend references = </Utm>
+        )
+        {
+            double3 crs:position = (nan, 0, 0)
+        }
+    }
+
+    def Xform "Unbound"
+    {
+    }
+}
