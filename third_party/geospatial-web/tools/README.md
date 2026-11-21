@@ -74,6 +74,14 @@ usdview from a native install with the project venv's Python and the install's `
 (`USDGEOSPATIALIMAGING_OUTPUT_CRS`; `--origin` sets `USDGEOSPATIALIMAGING_DISPLAY_ORIGIN`). `--crs none` shows the
 unplaced stage. The log prints the environment and command, for an IDE run configuration.
 
+## Browser module
+
+`geo.py build wasm32` installs the OpenUSD browser module (`module/geospatialModule`, an ES6 embind module with
+usdImaging, the placement scene index and the PROJ engine) and the test fixtures to
+`install/wasm32/share/geospatial-web/{module,fixtures}`. The Vite dev server serves that directory at `/usd`
+(workspace from `USD_GEO_WS`, else five levels above `app/`), as nginx serves it in the container.
+`geo.py test web -- c4` runs the C4 browser check (`app/c4.html`).
+
 ## Recorded data from C++
 
 `geo.py record [native-debug]` runs `install/<preset>/bin/geospatialRecord` (from `module/`, option

@@ -101,6 +101,19 @@ only). All 7 `UsdGeospatial` ctests pass natively. `geo.py record` + `reference 
 Playwright W1/W2 on the C++ dump (`GEO_RECORDED_SRC=recorded-cpp`) pass with the same scores as the reference.
 **C3 exit met natively:** Simon confirmed the placed scene in usdview (`USDGEOSPATIALIMAGING_OUTPUT_CRS=EPSG:4979`; now `geo.py usdview`). WASM build of the new library not run yet.
 
+**Update 2026-11-21, C4 (Claude Code):** `module/geospatialModule` (wasm32 only): an ES6 embind module
+(`createGeospatialModule`) with usdImaging, `usdGeospatialImaging` and the PROJ engine linked whole-archive.
+`GeospatialScene`: `open`, `setOutput(crs, measure)` (builds the usdImaging chain plus the placement scene index and
+observer; 2D outputs promoted), `setTime`, `sync`, `anchors`, `meshes` (typed-array views, copied by the worker),
+`resolve(anchor, crs, points)` (C1 query, exact points); `info()`, `setThreadLimit(n)`. Installed with the C1 and scene
+fixtures to `install/wasm32/share/geospatial-web`, served by Vite at `/usd`. App side: `src/usd/worker.ts` (owns
+module and stage, fetches files into MEMFS, transfers buffers), `src/usd/client.ts`, check page `c4.html`.
+Playwright `c4` (headless Chromium, GPU not needed): the five C1 cases match pyproj at 0.000 mm (origins and model
+points) with the grid cases reported unsupported, and the live scene chain matches the reference export in both
+outputs (matrices within 4e-8). Under Node the same module gives the same C1 results. Init 158 ms, first placement
+of the test scene 54 ms. **C4 exit met.** Size: `geospatialModule.wasm` 30.7 MB (Release), of which the embedded
+`proj.db` is 10.7 MB; served precompressed, 7.2 MB with gzip (4.6 MB with brotli); proj.db trimmed at I2 (D17).
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -207,3 +220,17 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
 - (C3) usdview's bounding box, "Local to World Xform" and the Vis column come from UsdGeom on the stage, not from
   Hydra, so they show the unplaced scene (identity transforms, Sites D and E visible) while the viewport is placed.
   Expected with a scene index that only changes Hydra data.
+- (C4) **Threads.** The module runs without a pre-started pthread pool and reports 24 work threads (the machine's
+  cores); placement of small scenes is fast enough that whether TBB's threads ever start does not show. Before I1
+  with real models: measure, then pre-start a pool (`-sPTHREAD_POOL_SIZE`) and cap `setThreadLimit` to it.
+- (C4, I2) **proj.db is untrimmed** (10.7 MB raw, a third of the module). Decided (D17): serve the module
+  precompressed now (`geospatialModule.wasm.gz`, 7.2 MB, written at install; nginx `gzip_static`, dev server too),
+  trim proj.db at I2. Trimming means a reduced database that keeps every referenced datum, ellipsoid, operation and
+  extent consistent.
+- (C4, I1) `geo.py serve docker` mounts `install/wasm32/share/geospatial-web` as the site root, while the app loads
+  the module from `/usd/`; I1 installs the built app next to it and maps `/usd/` (dev server already does).
+- (C4) `pxr_cpp_bin` installs only the `.js` of an Emscripten program, not its `.wasm` (upstream; seen with
+  `geospatialRecord`, now native-only). Emscripten programs only see host files through NODEFS mounts, as upstream's
+  `test.pre.js` does for tests.
+- (C4) WASM matrices differ from native by up to 4e-8 (native vs pyproj: 0 to 1e-9), most likely the C library's
+  trigonometry; well within tolerance.

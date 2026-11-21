@@ -132,7 +132,7 @@ Everything lives in the OpenUSD fork on the geospatial-web branch. Upstreamable 
 | `pxr/usdImaging/usdGeospatialImaging` | usdImaging adapter, geospatial placement scene index, observer (D16) | Yes, with usdGeospatial |
 | `pxr/usd/plugin/usdGeospatialProj` | PROJ engine plugin, behind a `PXR_BUILD_GEOSPATIAL_PROJ` option (later `usdGeospatialEsriPE` next to it) | Possibly |
 | `build_scripts/`, `cmake/`, `pxr/imaging/*`, `pxr/usdImaging/usdImaging` | WASM port of Hydra and usdImaging | Yes, as separate PRs |
-| `third_party/geospatial-web/module` | `geospatialRecord` (C3: the observer's output in the recorded format), embind module and final link (like upstream's `wasmFetchResolver` sample), built from the root `CMakeLists.txt` behind an option, like `third_party/renderman` | No |
+| `third_party/geospatial-web/module` | `geospatialRecord` (C3: the observer's output in the recorded format), `geospatialModule` (C4: embind module and final link) (like upstream's `wasmFetchResolver` sample), built from the root `CMakeLists.txt` behind an option, like `third_party/renderman` | No |
 | `third_party/geospatial-web/app` | The Maps SDK app, RenderNode, worker wrapper, `package.json`, Playwright harness | No |
 | `third_party/geospatial-web/testdata` and `/reference` | Test stages, control points, offline Python reference (option D) | No |
 | `third_party/geospatial-web/tools` | Local bootstrap, build, test and serve scripts, CMake presets, nginx config and Docker files. No GitHub workflows. | No |

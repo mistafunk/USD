@@ -16,6 +16,8 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | File | Purpose |
 |---|---|
 | `src/meshPass.ts` | WebGL2 pass in a `RenderNode`. Per mesh: float32-exact render origin + Float64 matrix; modelView = `viewMatrix` x translate(origin) x matrix in Float64, cast to float32 once |
+| `src/usd/` | OpenUSD in a Web Worker: `worker.ts` owns the module and stage, `client.ts` is the promise API, `types.ts` the data |
+| `c4.html`, `src/c4.ts` | C4 check page: C1 cases and the live scene chain in the browser vs pyproj (`tests/c4.spec.ts`) |
 | `src/main.ts` | SceneView (`?view=global` or `local`), content (`?data=recorded` or `w0`), camera presets, status panel, `window.__app` test hooks |
 | `src/recorded.ts` | Loads and places recorded data (D13); global frame from the SDK's own geographic-to-render mapping |
 | `src/w0Scene.ts`, `src/shapes.ts` | W0 test meshes in Zurich |
