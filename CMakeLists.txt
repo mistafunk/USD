@@ -56,6 +56,10 @@ if (PXR_BUILD_PRMAN_PLUGIN)
     endif()
 endif()
 
+if (PXR_BUILD_ADOBE_GLTF)
+    add_subdirectory(third_party/adobe-usd-gltf)
+endif()
+
 if (PXR_BUILD_GEOSPATIAL_WEB)
     if (NOT (PXR_BUILD_USD_IMAGING AND PXR_BUILD_GEOSPATIAL_PROJ))
         message(FATAL_ERROR "PXR_BUILD_GEOSPATIAL_WEB requires "
