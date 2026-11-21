@@ -102,12 +102,30 @@ _IsFinite(const GfVec3d& v)
     return std::isfinite(v[0]) && std::isfinite(v[1]) && std::isfinite(v[2]);
 }
 
-// Evaluates crs:orientation at \p time: Core value resolution selects the
-// samples, then held interpolation or quaternion slerp along the shorter
-// arc. An exactly 180-degree relative turn has no unique path and fails.
 bool
-_EvaluateOrientation(const UsdAttribute& attr, UsdTimeCode time,
-                     GfQuatd* result, std::string* error)
+_HasDirections(const std::vector<TfToken>& axes,
+               std::set<std::string> expected)
+{
+    std::set<std::string> got;
+    for (const TfToken& axis : axes) {
+        got.insert(axis.GetString());
+    }
+    return got == expected && axes.size() == expected.size();
+}
+
+std::string
+_JoinOperations(const std::string& a, const std::string& b)
+{
+    if (a.empty()) return b;
+    if (b.empty() || a == b) return a;
+    return a + "; then " + b;
+}
+
+} // anonymous namespace
+
+bool
+UsdGeospatialEvaluateOrientation(const UsdAttribute& attr, UsdTimeCode time,
+                                 GfQuatd* result, std::string* error)
 {
     *result = GfQuatd::GetIdentity();
     if (!attr || !attr.HasAuthoredValueOpinion()) {
@@ -163,26 +181,70 @@ _EvaluateOrientation(const UsdAttribute& attr, UsdTimeCode time,
     return true;
 }
 
-bool
-_HasDirections(const std::vector<TfToken>& axes,
-               std::set<std::string> expected)
+GfMatrix4d
+UsdGeospatialComputeEnuToEcef(const UsdGeospatialCrsInfo& geographic,
+                              const GfVec3d& lonLatH)
 {
-    std::set<std::string> got;
-    for (const TfToken& axis : axes) {
-        got.insert(axis.GetString());
+    const double e2 = _EccentricitySquared(geographic.inverseFlattening);
+    const std::array<GfVec3d, 3> basis = _EnuBasis(lonLatH[0], lonLatH[1]);
+    const GfVec3d origin = _ToEcef(geographic.semiMajorAxis, e2, lonLatH);
+    GfMatrix4d m(1.0);
+    for (int k = 0; k < 3; ++k) {
+        m.SetRow(k, GfVec4d(basis[k][0], basis[k][1], basis[k][2], 0.0));
     }
-    return got == expected && axes.size() == expected.size();
+    m.SetRow(3, GfVec4d(origin[0], origin[1], origin[2], 1.0));
+    return m;
 }
 
-std::string
-_JoinOperations(const std::string& a, const std::string& b)
+UsdGeospatialPlacementInputs
+UsdGeospatialComputePlacementInputs(const UsdPrim& anchor, UsdTimeCode time)
 {
-    if (a.empty()) return b;
-    if (b.empty() || a == b) return a;
-    return a + "; then " + b;
-}
+    UsdGeospatialPlacementInputs inputs;
+    inputs.anchorPath = anchor ? anchor.GetPath() : SdfPath();
+    const char* path = inputs.anchorPath.GetText();
 
-} // anonymous namespace
+    if (!anchor || !anchor.HasAPI<UsdGeospatialCRSBindingAPI>()) {
+        inputs.error = TfStringPrintf(
+            "<%s> is not directly bound (GeospatialCRSBindingAPI)", path);
+        return inputs;
+    }
+    const UsdGeospatialBinding binding = UsdGeospatialResolveBinding(anchor);
+    if (!binding.error.empty()) {
+        inputs.error = binding.error;
+        return inputs;
+    }
+    inputs.wkt = binding.wkt.GetString();
+
+    const UsdAttribute positionAttr =
+        anchor.GetAttribute(UsdGeospatialTokens->crsPosition);
+    if (!positionAttr || !positionAttr.HasAuthoredValueOpinion()) {
+        inputs.error = TfStringPrintf("<%s> has no crs:position", path);
+        return inputs;
+    }
+    if (!positionAttr.Get(&inputs.position, time)) {
+        inputs.error = TfStringPrintf("<%s> crs:position is blocked", path);
+        return inputs;
+    }
+    std::string orientationError;
+    if (!UsdGeospatialEvaluateOrientation(
+            anchor.GetAttribute(UsdGeospatialTokens->crsOrientation), time,
+            &inputs.attitude, &orientationError)) {
+        inputs.error =
+            TfStringPrintf("<%s> %s", path, orientationError.c_str());
+        return inputs;
+    }
+
+    const UsdStageWeakPtr stage = anchor.GetStage();
+    inputs.metersPerUnit = UsdGeomGetStageMetersPerUnit(stage);
+    inputs.upAxis = UsdGeomGetStageUpAxis(stage);
+
+    GfMatrix4d local(1.0);
+    bool resetsXformStack = false;
+    UsdGeomXformable(anchor).GetLocalTransformation(
+        &local, &resetsXformStack, time);
+    inputs.hasOwnTransform = local != GfMatrix4d(1.0);
+    return inputs;
+}
 
 // --- UsdGeospatialPlacement ------------------------------------------------
 
@@ -279,9 +341,16 @@ UsdGeospatialPlacement
 UsdGeospatialPlacementQuery::Resolve(const UsdPrim& anchor,
                                      UsdTimeCode time) const
 {
+    return Resolve(UsdGeospatialComputePlacementInputs(anchor, time));
+}
+
+UsdGeospatialPlacement
+UsdGeospatialPlacementQuery::Resolve(
+    const UsdGeospatialPlacementInputs& inputs) const
+{
     using Status = UsdGeospatialPlacement::Status;
     UsdGeospatialPlacement r;
-    r._anchorPath = anchor ? anchor.GetPath() : SdfPath();
+    r._anchorPath = inputs.anchorPath;
     r._engine = _engine ? _engine->GetName() : std::string();
     const char* path = r._anchorPath.GetText();
 
@@ -294,55 +363,31 @@ UsdGeospatialPlacementQuery::Resolve(const UsdPrim& anchor,
     if (!IsValid()) {
         return fail(Status::Error, _error);
     }
-    if (!anchor || !anchor.HasAPI<UsdGeospatialCRSBindingAPI>()) {
+    if (!inputs.error.empty()) {
+        return fail(Status::Error, inputs.error);
+    }
+    if (inputs.wkt.empty()) {
         return fail(Status::Error, TfStringPrintf(
-            "<%s> is not directly bound (GeospatialCRSBindingAPI)", path));
+            "<%s> direct binding without a CRS definition (crs:wkt)", path));
     }
-    const UsdGeospatialBinding binding = UsdGeospatialResolveBinding(anchor);
-    if (!binding.error.empty()) {
-        return fail(Status::Error, binding.error);
-    }
-
-    // Authored placement inputs.
-    const UsdAttribute positionAttr =
-        anchor.GetAttribute(UsdGeospatialTokens->crsPosition);
-    GfVec3d position;
-    if (!positionAttr || !positionAttr.HasAuthoredValueOpinion()) {
-        return fail(Status::Error,
-                    TfStringPrintf("<%s> has no crs:position", path));
-    }
-    if (!positionAttr.Get(&position, time)) {
-        return fail(Status::Error,
-                    TfStringPrintf("<%s> crs:position is blocked", path));
-    }
+    const GfVec3d& position = inputs.position;
     if (!_IsFinite(position)) {
         return fail(Status::Error,
                     TfStringPrintf("<%s> crs:position is not finite", path));
     }
-    GfQuatd attitude;
-    std::string orientationError;
-    if (!_EvaluateOrientation(
-            anchor.GetAttribute(UsdGeospatialTokens->crsOrientation), time,
-            &attitude, &orientationError)) {
-        return fail(Status::Error,
-                    TfStringPrintf("<%s> %s", path, orientationError.c_str()));
-    }
+    const GfQuatd& attitude = inputs.attitude;
 
     // The anchor's own ordinary transform is a post-placement adjustment in
     // the working chart; that convention is still a candidate in the
     // proposal and not implemented yet.
-    GfMatrix4d local(1.0);
-    bool resetsXformStack = false;
-    UsdGeomXformable(anchor).GetLocalTransformation(
-        &local, &resetsXformStack, time);
-    if (local != GfMatrix4d(1.0)) {
+    if (inputs.hasOwnTransform) {
         return fail(Status::Unsupported, TfStringPrintf(
             "<%s> has its own ordinary transform; post-placement adjustment "
             "of an anchor is not supported yet", path));
     }
 
     // The source CRS and the anchor's geodetic position.
-    const std::string wkt = binding.wkt.GetString();
+    const std::string& wkt = inputs.wkt;
     const UsdGeospatialCrsInfo source = _engine->DescribeCrs(wkt);
     if (!source.valid) {
         return fail(Status::Error, TfStringPrintf(
@@ -354,6 +399,7 @@ UsdGeospatialPlacementQuery::Resolve(const UsdPrim& anchor,
             "default vertical reference, which is not supported yet",
             path, source.name.c_str()));
     }
+    r._sourceCrs = source.name;
     const bool axesOk = source.isGeocentric
         ? _HasDirections(source.axisDirections,
                          {"geocentricX", "geocentricY", "geocentricZ"})
@@ -400,9 +446,8 @@ UsdGeospatialPlacementQuery::Resolve(const UsdPrim& anchor,
 
     // Model point map: stage units -> model ENU metres -> attitude ->
     // source ECEF.
-    const UsdStageWeakPtr stage = anchor.GetStage();
-    const double metersPerUnit = UsdGeomGetStageMetersPerUnit(stage);
-    const bool yUp = UsdGeomGetStageUpAxis(stage) == UsdGeomTokens->y;
+    const double metersPerUnit = inputs.metersPerUnit;
+    const bool yUp = inputs.upAxis == UsdGeomTokens->y;
     // Stage (x, y, z) to model (E, N, U): Z-up identity, Y-up (x, -z, y).
     const std::array<GfVec3d, 3> axisMap = yUp
         ? std::array<GfVec3d, 3>{GfVec3d(1, 0, 0), GfVec3d(0, 0, 1),

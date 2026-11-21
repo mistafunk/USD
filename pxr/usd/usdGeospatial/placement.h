@@ -16,13 +16,78 @@
 #include "pxr/usd/usd/timeCode.h"
 #include "pxr/usd/sdf/path.h"
 #include "pxr/base/gf/matrix4d.h"
+#include "pxr/base/gf/quatd.h"
 #include "pxr/base/gf/vec3d.h"
+#include "pxr/base/tf/token.h"
 
 #include <array>
 #include <string>
 #include <vector>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+class UsdAttribute;
+
+/// \struct UsdGeospatialPlacementInputs
+///
+/// The authored data that places one directly bound model anchor, read at
+/// one time. UsdGeospatialComputePlacementInputs() reads it from a prim;
+/// clients without a UsdPrim (e.g. a Hydra scene index) fill it from their
+/// own data and call UsdGeospatialPlacementQuery::Resolve() with it.
+///
+struct UsdGeospatialPlacementInputs
+{
+    /// The anchor, for messages.
+    SdfPath anchorPath;
+
+    /// Why the inputs could not be read; Resolve() reports it as an error.
+    std::string error;
+
+    /// The anchor's composed crs:wkt.
+    std::string wkt;
+
+    /// crs:position, in the source CRS's coordinate tuple.
+    GfVec3d position;
+
+    /// crs:orientation evaluated as a rotation acting on east/north/up
+    /// vectors (see UsdGeospatialEvaluateOrientation()).
+    GfQuatd attitude = GfQuatd::GetIdentity();
+
+    /// The stage's metersPerUnit and upAxis (UsdGeomTokens->y or ->z).
+    double metersPerUnit = 1.0;
+    TfToken upAxis;
+
+    /// True if the anchor has an ordinary transform of its own (relative
+    /// to its parent), which is not supported yet.
+    bool hasOwnTransform = false;
+};
+
+/// Reads the placement inputs of the directly bound model anchor \p anchor
+/// at \p time. If the binding is broken or crs:position or
+/// crs:orientation are missing, blocked or cannot be interpolated, the
+/// result's error says why.
+USDGEOSPATIAL_API
+UsdGeospatialPlacementInputs UsdGeospatialComputePlacementInputs(
+    const UsdPrim& anchor, UsdTimeCode time = UsdTimeCode::Default());
+
+/// Evaluates crs:orientation (heading, pitch, roll in degrees) at \p time
+/// as a rotation acting on east/north/up vectors: Core value resolution
+/// selects the samples, then held interpolation or quaternion slerp along
+/// the shorter arc. An unauthored attribute gives the identity. Returns
+/// false, with \p error set, for a blocked or non-finite value and for
+/// samples 180 degrees apart, whose interpolation path is not unique.
+USDGEOSPATIAL_API
+bool UsdGeospatialEvaluateOrientation(
+    const UsdAttribute& orientation, UsdTimeCode time,
+    GfQuatd* attitude, std::string* error);
+
+/// The east/north/up frame at \p lonLatH (degrees, degrees, metres) on the
+/// ellipsoid of the geographic CRS described by \p geographic: the matrix
+/// from frame coordinates (metres) to geocentric coordinates, in USD's
+/// row-vector convention.
+USDGEOSPATIAL_API
+GfMatrix4d UsdGeospatialComputeEnuToEcef(
+    const UsdGeospatialCrsInfo& geographic, const GfVec3d& lonLatH);
 
 /// \class UsdGeospatialPlacement
 ///
@@ -68,6 +133,9 @@ public:
     const std::string& GetReason() const { return _reason; }
     const SdfPath& GetAnchorPath() const { return _anchorPath; }
 
+    /// The name of the anchor's CRS, once its definition has been read.
+    const std::string& GetSourceCrs() const { return _sourceCrs; }
+
     /// The engine, operations and accuracy (metres, negative if unknown)
     /// behind the result, as the proposal requires every result to state.
     const std::string& GetEngine() const { return _engine; }
@@ -112,6 +180,7 @@ private:
     Status _status = Status::Error;
     std::string _reason;
     SdfPath _anchorPath;
+    std::string _sourceCrs;
     std::string _engine;
     std::string _operation;
     double _accuracy = -1.0;
@@ -158,6 +227,11 @@ public:
     UsdGeospatialPlacement Resolve(
         const UsdPrim& anchor,
         UsdTimeCode time = UsdTimeCode::Default()) const;
+
+    /// Resolves a model anchor from its placement inputs.
+    USDGEOSPATIAL_API
+    UsdGeospatialPlacement Resolve(
+        const UsdGeospatialPlacementInputs& inputs) const;
 
 private:
     std::string _output;
