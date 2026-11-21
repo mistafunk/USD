@@ -27,7 +27,7 @@ public:
             UsdPrim const& prim,
             TfToken const& subprim,
             TfToken const& appliedInstanceName,
-            const UsdImagingDataSourceStageGlobals &stageGlobals);
+            const UsdImagingDataSourceStageGlobals &stageGlobals) override;
 
     USDIMAGING_API
     HdDataSourceLocatorSet InvalidateImagingSubprim(
@@ -35,7 +35,7 @@ public:
             TfToken const& subprim,
             TfToken const& appliedInstanceName,
             TfTokenVector const& properties,
-            UsdImagingPropertyInvalidationType invalidationType);
+            UsdImagingPropertyInvalidationType invalidationType) override;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
