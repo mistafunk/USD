@@ -22,6 +22,7 @@ function table(r: HarnessReport): string {
   const s = r.summary;
   return `<h2>${esc(r.view)} view <small>(${esc(r.output)}; ${esc(r.engine)}; ` +
     `tolerance ${r.tolerance} m)</small></h2>` +
+    `<p><small>WebGL: ${esc(r.renderer ?? "unknown")}</small></p>` +
     `<p>${s.pass} pass, ${s.fail} fail, ${s.unsupported} unsupported, ` +
     `<b>${s.unexpected} unexpected</b></p>` +
     `<table><thead><tr><th></th><th>Case / control point</th><th>Expected</th><th>Result</th>` +

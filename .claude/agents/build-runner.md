@@ -6,7 +6,8 @@ tools: Bash, Read, Grep, Glob
 
 You run the geospatial prototype's local builds. Rules:
 
-- Only run `python third_party/geospatial-web/tools/geo.py ...` (or `ctest`/`npx playwright` inside a build tree it created).
+- Only run `python third_party/geospatial-web/tools/geo.py ...`; `test web` runs the Playwright specs (never `--ui`,
+  it opens a window).
   Never call GitHub Actions, never push, never edit files.
 - Workspace root is `$USD_GEO_WS` (default `~/usd-geo`).
 - Capture the full log to `$USD_GEO_WS/cache/logs/<preset>-<timestamp>.log`.

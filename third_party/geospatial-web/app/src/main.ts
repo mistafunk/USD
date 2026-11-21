@@ -41,6 +41,8 @@ interface AppState {
   scene: string;
   crossOriginIsolated: boolean;
   sharedArrayBuffer: boolean;
+  /** WebGL renderer string, e.g. a GPU or SwiftShader (software). */
+  renderer: string;
   stats: PassStats | null;
   anchors: Scene["anchors"];
   errors: string[];
@@ -60,6 +62,7 @@ const state: AppState = {
   scene: "",
   crossOriginIsolated: globalThis.crossOriginIsolated === true,
   sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
+  renderer: webglRenderer(),
   stats: null,
   anchors: [],
   errors: [],
@@ -68,6 +71,15 @@ const state: AppState = {
 (globalThis as unknown as { __app: AppState }).__app = state;
 addEventListener("error", (e) => state.errors.push(String(e.message)));
 addEventListener("unhandledrejection", (e) => state.errors.push(String(e.reason)));
+
+function webglRenderer(): string {
+  const gl = document.createElement("canvas").getContext("webgl2");
+  if (!gl) return "no WebGL2";
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+  gl.getExtension("WEBGL_lose_context")?.loseContext();
+  return name;
+}
 
 // Keyless Esri imagery tiles (Web Mercator tiling, so it works in both modes).
 const basemap = new Basemap({
@@ -139,7 +151,11 @@ view.when(async () => {
     const m = scene?.renderMatrices.get(mesh);
     return m ? transformPoint(m, p) : null;
   };
-  state.score = () => (state.report = scene?.score?.() ?? null);
+  state.score = () => {
+    const r = scene?.score?.() ?? null;
+    if (r) r.renderer = state.renderer;
+    return (state.report = r);
+  };
   state.ready = true;
 }).catch((err: unknown) => state.errors.push("scene: " + String(err)));
 
@@ -195,6 +211,7 @@ setInterval(() => {
   statusEl.textContent = [
     `${viewingMode}: ${state.scene || "loading"}`,
     `crossOriginIsolated ${state.crossOriginIsolated}  SAB ${state.sharedArrayBuffer}`,
+    `WebGL ${state.renderer}`,
     `frames ${pass.stats.frames}  meshes ${pass.stats.meshes}  tris ${pass.stats.triangles}`,
     `near ${pass.stats.near.toFixed(2)} m (${view.constraints.clipDistance.mode})` +
       `  camera z ${cam?.position.z?.toFixed(2) ?? "-"} m`,

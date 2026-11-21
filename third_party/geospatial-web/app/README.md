@@ -7,7 +7,7 @@ live WASM module's output.
 ```
 npm ci
 npm run dev          # http://localhost:5173  (or: python tools/geo.py serve dev)
-npm test             # Playwright, headless Chromium with software WebGL2
+npm test             # Playwright, headless Chromium on the GPU (or: python ../tools/geo.py test web)
 npm run typecheck
 ```
 
@@ -31,6 +31,11 @@ URL options: `?view=global|local`, `&data=recorded|w0`, and for W0 `&naive=1`, w
 float32-only pipeline does) to show the jitter the origin split avoids.
 
 Notes:
+- Tests render WebGL on the GPU by default (all specs in about 30 s on an RTX 2080). `GEO_SOFTWARE_GL=1` forces
+  SwiftShader (about 3 min); without a usable GPU, Chromium falls back to it by itself. `GEO_BROWSER_CHANNEL=chrome`
+  drives the installed Google Chrome instead of Playwright's Chromium (on AlmaLinux Playwright downloads its
+  Ubuntu 24.04 build, which works, GPU included). No X11 or Wayland specific flags. The panel and the W2 report show
+  the WebGL renderer that was used.
 - The SDK loads its assets (including a worker script) from `js.arcgis.com` by default. Under
   `COEP: require-corp` the worker is blocked (`ERR_BLOCKED_BY_RESPONSE`, no CORP header), so the assets are
   self-hosted and `esriConfig.assetsPath` points at them. Basemap tiles and other CORS fetches are fine.

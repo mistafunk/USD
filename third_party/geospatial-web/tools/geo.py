@@ -20,6 +20,7 @@ Usage:
     python third_party/geospatial-web/tools/geo.py bootstrap native|wasm32 [--steps ...]
     python third_party/geospatial-web/tools/geo.py build native-debug|native-release|wasm32
     python third_party/geospatial-web/tools/geo.py test <preset> [-- <ctest args>]
+    python third_party/geospatial-web/tools/geo.py test web [--ui | --headed] [-- <playwright args>]
     python third_party/geospatial-web/tools/geo.py reference [-- <args>]
     python third_party/geospatial-web/tools/geo.py serve dev|docker
 """
@@ -490,17 +491,69 @@ def cmd_build(args):
     logged(args.preset, body)
 
 
+def split_test_args(args):
+    """argparse.REMAINDER also swallows our own flags after the preset name;
+    take --ui and --headed back out of the part before '--'."""
+    rest = list(args.ctest_args)
+    cut = rest.index("--") if "--" in rest else len(rest)
+    own, passthrough = rest[:cut], rest[cut + 1:]
+    keep = []
+    for a in own:
+        if a in ("--ui", "--headed"):
+            setattr(args, a[2:], True)
+        else:
+            keep.append(a)
+    args.ctest_args = keep + passthrough
+
+
 def cmd_test(args):
+    split_test_args(args)
+    if args.preset == "web":
+        return cmd_test_web(args)
+    if args.ui or args.headed:
+        fail("--ui and --headed only apply to: geo.py test web")
     check_layout()
     ensure_user_presets()
     env = target_env(PRESETS[args.preset])
     if not (WS / "build" / args.preset / "CTestTestfile.cmake").exists():
         fail("nothing built for {}; run: geo.py build {}".format(
             args.preset, args.preset))
-    extra = [a for a in args.ctest_args if a != "--"]
+    extra = args.ctest_args
     logged("test-" + args.preset, lambda log: run(
         ["ctest", "--preset", args.preset, "-j", args.jobs] + extra,
         log, cwd=REPO, env=env))
+
+
+def web_tool(name):
+    """npm or npx for the web app, with its node_modules installed."""
+    if not (WEB_APP / "package.json").exists():
+        fail("web app not set up yet (milestone W0): {}".format(WEB_APP))
+    tool = shutil.which(name)
+    if not tool:
+        fail("{} not found; install Node.js LTS".format(name))
+    if not (WEB_APP / "node_modules").exists():
+        subprocess.run([shutil.which("npm") or "npm", "ci"], cwd=WEB_APP,
+                       env=base_env(), check=True)
+    return tool
+
+
+def cmd_test_web(args):
+    """Playwright specs in the web app (W0, W1, W2). Headless runs are
+    logged; --ui opens Playwright's UI mode (pick, watch and step through
+    tests), --headed shows the browser during a normal run."""
+    npx = web_tool("npx")
+    env = base_env()
+    extra = args.ctest_args
+    # Downloads the pinned Chromium once; a no-op when it is present.
+    subprocess.run([npx, "playwright", "install", "chromium"], cwd=WEB_APP,
+                   env=env, check=True)
+    cmd = [npx, "playwright", "test"] + extra
+    if args.ui:
+        sys.exit(subprocess.call(cmd + ["--ui"], cwd=WEB_APP, env=env))
+    if args.headed:
+        cmd.append("--headed")
+    logged("test-web", lambda log: run(cmd, log, cwd=WEB_APP, env=env))
+    info("harness report: {}".format(WEB_APP / "reports" / "latest.html"))
 
 
 # --------------------------------------------------------------------------
@@ -539,15 +592,8 @@ def container_tool():
 
 def cmd_serve(args):
     if args.mode == "dev":
-        if not (WEB_APP / "package.json").exists():
-            fail("web app not set up yet (milestone W0): {}".format(WEB_APP))
-        npm = shutil.which("npm")
-        if not npm:
-            fail("npm not found; install Node.js LTS")
-        env = base_env()
-        if not (WEB_APP / "node_modules").exists():
-            subprocess.run([npm, "ci"], cwd=WEB_APP, env=env, check=True)
-        sys.exit(subprocess.call([npm, "run", "dev"], cwd=WEB_APP, env=env))
+        npm = web_tool("npm")
+        sys.exit(subprocess.call([npm, "run", "dev"], cwd=WEB_APP, env=base_env()))
 
     site = WS / "install" / "wasm32" / SITE_SUBDIR
     if not site.is_dir():
@@ -667,10 +713,16 @@ def main():
     s.add_argument("-j", "--jobs", default=jobs)
     s.set_defaults(fn=cmd_build)
 
-    s = sub.add_parser("test", help="run ctest for a preset")
-    s.add_argument("preset", choices=PRESETS)
+    s = sub.add_parser("test", help="run ctest for a preset, or the web "
+                                    "app's Playwright tests (web)")
+    s.add_argument("preset", choices=list(PRESETS) + ["web"])
     s.add_argument("-j", "--jobs", default=jobs)
-    s.add_argument("ctest_args", nargs=argparse.REMAINDER)
+    s.add_argument("--ui", action="store_true",
+                   help="web: Playwright UI mode (interactive)")
+    s.add_argument("--headed", action="store_true",
+                   help="web: show the browser during the run")
+    s.add_argument("ctest_args", nargs=argparse.REMAINDER,
+                   help="passed to ctest or playwright after --")
     s.set_defaults(fn=cmd_test)
 
     s = sub.add_parser("reference", help="run the offline Python reference")

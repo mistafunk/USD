@@ -58,6 +58,8 @@ export interface HarnessReport {
   view: string;
   output: string;
   engine: string;
+  /** WebGL renderer the scores were taken with (set by the app). */
+  renderer?: string;
   tolerance: number;
   time: string;
   cases: CaseResult[];

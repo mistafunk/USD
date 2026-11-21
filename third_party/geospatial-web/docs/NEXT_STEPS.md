@@ -95,3 +95,6 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
 - (W2) Control points use test-only `geotest:` attributes, not proposal schema. Surveyed control points (5 cm tolerance)
   still need a real survey; the current ones are synthetic (1 cm, client vs reference).
 - (W2) Playwright: the SDK cancels tile requests when the camera jumps; specs ignore `ERR_ABORTED` on tile URLs only.
+- (W2) Playwright ran WebGL in software (SwiftShader) everywhere, which made the specs slow (2 min 49 s, W0 global
+  55 s). The GPU is now the default: 30 s for all specs on an RTX 2080; `GEO_SOFTWARE_GL=1` keeps the software path.
+  Playwright's Ubuntu 24.04 fallback build on AlmaLinux is not the issue: it uses the GPU as fast as system Chrome.

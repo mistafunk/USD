@@ -38,6 +38,7 @@ python third_party/geospatial-web/tools/geo.py bootstrap native     # venv, SQLi
 python third_party/geospatial-web/tools/geo.py bootstrap wasm32     # emsdk, SQLite, PROJ, then build_usd.py --build-target wasm
 python third_party/geospatial-web/tools/geo.py build native-debug
 python third_party/geospatial-web/tools/geo.py test native-debug -- -R usdGeospatial
+python third_party/geospatial-web/tools/geo.py test web              # Playwright: W0, W1, W2 specs
 ```
 
 - `bootstrap <target> --steps a,b` runs a subset (`native`: venv,sqlite,proj,usd-deps; `wasm32`: emsdk,sqlite,proj,usd-deps).
@@ -46,7 +47,11 @@ python third_party/geospatial-web/tools/geo.py test native-debug -- -R usdGeospa
 - `bootstrap wasm32 --imaging` passes `--imaging` to `build_usd.py`, which builds OpenSubdiv for WASM. Not needed before C2.
 - `build` writes a git-ignored `CMakeUserPresets.json` at the repo root that includes this directory's presets,
   since CMake and CLion only read presets from the source root.
-- Every command logs to `cache/logs/<name>-<timestamp>.log`.
+- `test web` runs the app's Playwright specs (installs npm packages and Chromium when missing). `--ui` opens
+  Playwright's UI mode to pick, watch and step through tests; `--headed` shows the browser during a normal run;
+  anything after `--` goes to Playwright (e.g. `-- -g w2`). The W2 report is `app/reports/latest.html`.
+  Rendering uses the GPU; set `GEO_SOFTWARE_GL=1` for software WebGL (see `app/README.md`).
+- Every command logs to `cache/logs/<name>-<timestamp>.log` (except interactive `test web --ui` and `serve`).
 
 ## Platform notes
 
