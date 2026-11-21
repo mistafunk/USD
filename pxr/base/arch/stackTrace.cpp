@@ -1676,6 +1676,8 @@ ArchGetStackFrames(size_t maxdepth, size_t skip, uintptr_t *frames)
 size_t
 ArchGetStackFrames(size_t, size_t, uintptr_t *)
 {
+    // No stack walking on this platform: no frames captured.
+    return 0;
 }
 
 #endif
