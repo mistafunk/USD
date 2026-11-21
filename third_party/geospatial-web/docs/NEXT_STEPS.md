@@ -17,8 +17,12 @@ three meshes (10 m box, 1 m box, 5 cm pole) at float32-exact origins in a global
 Playwright (headless Chromium, software WebGL2) passes for both modes: `crossOriginIsolated` and SharedArrayBuffer true,
 SDK and basemap load under COEP `require-corp` with no failed requests or console errors. Screenshots at overview,
 street level and 1 m show clean geometry with the origin split; the naive float32 variant is visibly bent at street level
-and displaced by more than a metre at 1 m. Still open for the W0 exit: an interactive look on a real GPU while moving the
-camera (`geo.py serve dev`), which headless screenshots cannot show.
+and displaced by more than a metre at 1 m. **W0 done:** Simon confirmed on a real GPU that origin mode is steady while
+the camera moves and naive mode jitters. Both `bootstrap native` and `bootstrap wasm32` (including `usd-deps`) completed.
+
+**Update 2026-11-21, open questions:** all settled except the E1 Esri-engine question and where the C++ goes upstream
+(I2). New: D14 (`GeospatialCRS`). Autodesk diff sized in `WASM_GAP.md`; the GPU-free subset gains hdar and hio.
+Next: C0 (`usdGeospatial` schema library) and C2 (WASM port) in parallel.
 
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).

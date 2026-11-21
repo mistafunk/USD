@@ -5,10 +5,12 @@ Source: https://github.com/Tamrat-B/OpenUSD-proposals/pull/1 (head 4120379fa1247
 
 ## Schemas
 
-- **`CoordinateReferenceSystem`** (concrete typed prim): `uniform token crs:wkt`, an OGC WKT2 (ISO 19162:2019) string.
+- **`GeospatialCRS`** (concrete typed prim, D14; the proposal's USDA examples still say `CoordinateReferenceSystem`):
+  `uniform token crs:wkt`, an OGC WKT2 (ISO 19162:2019) string.
   Token, not string, for cheap comparison. Can live in the stage or in a shared CRS library layer.
 - **`GeospatialCRSBindingAPI`** (applied, on a directly bound model anchor):
-  - binding to a `CoordinateReferenceSystem` prim (by reference; the binding is inherited down the hierarchy),
+  - binding: the anchor composes in a `GeospatialCRS` prim through an ordinary USD reference (or inherit, or any Core
+    arc), so `crs:wkt` is read on the anchor itself after composition; no relationship. Inherited down the hierarchy,
   - `double3 crs:position` (varying, no fallback): absolute position in the source WKT's units and height reference.
     Projected: easting, northing, up. Geographic 3D: lon, lat, height. Geocentric: X, Y, Z.
     Tuple order is independent of WKT axis order and stage `upAxis`.
