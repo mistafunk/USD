@@ -20,7 +20,8 @@ PXR_NAMESPACE_OPEN_SCOPE
     (engine)                                                \
     (applyToXform)                                          \
     (displayOrigin)                                         \
-    (measureLinearization)
+    (measureLinearization)                                  \
+    (exactPoints)
 
 TF_DECLARE_PUBLIC_TOKENS(
     UsdGeospatialImagingPlacementSceneIndexTokens, USDGEOSPATIALIMAGING_API,

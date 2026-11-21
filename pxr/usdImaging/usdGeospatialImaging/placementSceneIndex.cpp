@@ -89,13 +89,19 @@ _DisplayToStage(double metersPerUnit, const TfToken &upAxis)
     return m;
 }
 
-// Largest distance over the mesh's points between the exact point map and
-// the matrix, in frame units.
-std::optional<double>
-_MeasureLinearization(const UsdGeospatialPlacement &placement,
-                      const HdContainerDataSourceHandle &primSource,
-                      const GfMatrix4d &toAnchor,
-                      const GfMatrix4d &modelToFrame)
+// The exact point map of a mesh's points into the anchor's frame, and the
+// largest distance between it and the matrix, in frame units.
+struct _ExactPoints
+{
+    VtVec3fArray framePoints;
+    double linearizationError = 0.0;
+};
+
+std::optional<_ExactPoints>
+_ComputeExactPoints(const UsdGeospatialPlacement &placement,
+                    const HdContainerDataSourceHandle &primSource,
+                    const GfMatrix4d &toAnchor,
+                    const GfMatrix4d &modelToFrame)
 {
     const HdSampledDataSourceHandle pointsDs =
         HdPrimvarsSchema::GetFromParent(primSource)
@@ -117,12 +123,15 @@ _MeasureLinearization(const UsdGeospatialPlacement &placement,
     if (!placement.ComputeFramePoints(model, &exact)) {
         return std::nullopt;
     }
-    double worst = 0.0;
+    _ExactPoints result;
+    result.framePoints.resize(points.size());
     for (size_t i = 0; i < points.size(); ++i) {
         const GfVec3d linear = modelToFrame.Transform(GfVec3d(points[i]));
-        worst = std::max(worst, (exact[i] - linear).GetLength());
+        result.linearizationError = std::max(
+            result.linearizationError, (exact[i] - linear).GetLength());
+        result.framePoints[i] = GfVec3f(exact[i]);
     }
-    return worst;
+    return result;
 }
 
 } // anonymous namespace
@@ -158,6 +167,11 @@ UsdGeospatialImagingPlacementSceneIndex(
       _GetValue<bool>(
           inputArgs,
           UsdGeospatialImagingPlacementSceneIndexTokens->measureLinearization,
+          false))
+  , _exactPoints(
+      _GetValue<bool>(
+          inputArgs,
+          UsdGeospatialImagingPlacementSceneIndexTokens->exactPoints,
           false))
 {
     if (const auto ds = HdVec3dDataSource::Cast(
@@ -224,6 +238,13 @@ UsdGeospatialImagingPlacementSceneIndex::GetPrim(
                 placement.IsLocalFrame()
                     ? UsdGeospatialImagingPlacementSchemaTokens->enu
                     : UsdGeospatialImagingPlacementSchemaTokens->crs));
+        if (!placement.GetSkippedOperations().empty()) {
+            const std::vector<std::string>& skipped =
+                placement.GetSkippedOperations();
+            builder.SetSkippedOperations(
+                HdRetainedTypedSampledDataSource<VtStringArray>::New(
+                    VtStringArray(skipped.begin(), skipped.end())));
+        }
         if (placement.GetAccuracy() >= 0.0) {
             builder.SetAccuracy(HdRetainedTypedSampledDataSource<double>::New(
                 placement.GetAccuracy()));
@@ -238,13 +259,19 @@ UsdGeospatialImagingPlacementSceneIndex::GetPrim(
                 HdRetainedTypedSampledDataSource<GfMatrix4d>::New(
                     modelToFrame));
 
-            if (_measureLinearization &&
+            if ((_measureLinearization || _exactPoints) &&
                 prim.primType == HdPrimTypeTokens->mesh) {
-                if (const std::optional<double> error =
-                        _MeasureLinearization(placement, prim.dataSource,
-                                              toAnchor, modelToFrame)) {
+                if (const std::optional<_ExactPoints> exact =
+                        _ComputeExactPoints(placement, prim.dataSource,
+                                            toAnchor, modelToFrame)) {
                     builder.SetLinearizationError(
-                        HdRetainedTypedSampledDataSource<double>::New(*error));
+                        HdRetainedTypedSampledDataSource<double>::New(
+                            exact->linearizationError));
+                    if (_exactPoints) {
+                        builder.SetFramePoints(
+                            HdRetainedTypedSampledDataSource<VtVec3fArray>::New(
+                                exact->framePoints));
+                    }
                 }
             }
 

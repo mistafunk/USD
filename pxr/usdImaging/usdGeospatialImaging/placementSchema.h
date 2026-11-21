@@ -40,10 +40,12 @@ PXR_NAMESPACE_OPEN_SCOPE
     (engine) \
     (operation) \
     (accuracy) \
+    (skippedOperations) \
     (sourceCrs) \
     (origin) \
     (frame) \
     (modelToFrame) \
+    (framePoints) \
     (linearizationError) \
     (ok) \
     (unsupported) \
@@ -113,6 +115,11 @@ public:
     USDGEOSPATIALIMAGING_API
     HdDoubleDataSourceHandle GetAccuracy() const;
 
+    /// More accurate operations the engine skipped because it lacks data they
+    /// need (e.g. grid files).
+    USDGEOSPATIALIMAGING_API
+    HdStringArrayDataSourceHandle GetSkippedOperations() const;
+
     /// Name of the anchor's CRS.
     USDGEOSPATIALIMAGING_API
     HdStringDataSourceHandle GetSourceCrs() const;
@@ -133,6 +140,12 @@ public:
     /// UsdGeospatialPlacement::GetModelToFrame.
     USDGEOSPATIALIMAGING_API
     HdMatrixDataSourceHandle GetModelToFrame() const;
+
+    /// For meshes, when exact points are requested: the exact point map of
+    /// every mesh point into the frame at origin (frame units, relative to
+    /// origin), so a client can draw without the modelToFrame shortcut.
+    USDGEOSPATIALIMAGING_API
+    HdVec3fArrayDataSourceHandle GetFramePoints() const;
 
     /// For meshes, when measuring is enabled: the largest distance over the
     /// points between the exact point map and modelToFrame, in frame units.
@@ -189,6 +202,10 @@ public:
     USDGEOSPATIALIMAGING_API
     static const HdDataSourceLocator &GetAccuracyLocator();
 
+    /// Prim-level relative data source locator to locate skippedOperations.
+    USDGEOSPATIALIMAGING_API
+    static const HdDataSourceLocator &GetSkippedOperationsLocator();
+
     /// Prim-level relative data source locator to locate sourceCrs.
     USDGEOSPATIALIMAGING_API
     static const HdDataSourceLocator &GetSourceCrsLocator();
@@ -204,6 +221,10 @@ public:
     /// Prim-level relative data source locator to locate modelToFrame.
     USDGEOSPATIALIMAGING_API
     static const HdDataSourceLocator &GetModelToFrameLocator();
+
+    /// Prim-level relative data source locator to locate framePoints.
+    USDGEOSPATIALIMAGING_API
+    static const HdDataSourceLocator &GetFramePointsLocator();
 
     /// Prim-level relative data source locator to locate linearizationError.
     USDGEOSPATIALIMAGING_API
@@ -229,10 +250,12 @@ public:
         const HdStringDataSourceHandle &engine,
         const HdStringDataSourceHandle &operation,
         const HdDoubleDataSourceHandle &accuracy,
+        const HdStringArrayDataSourceHandle &skippedOperations,
         const HdStringDataSourceHandle &sourceCrs,
         const HdVec3dDataSourceHandle &origin,
         const HdTokenDataSourceHandle &frame,
         const HdMatrixDataSourceHandle &modelToFrame,
+        const HdVec3fArrayDataSourceHandle &framePoints,
         const HdDoubleDataSourceHandle &linearizationError
     );
 
@@ -264,6 +287,9 @@ public:
         Builder &SetAccuracy(
             const HdDoubleDataSourceHandle &accuracy);
         USDGEOSPATIALIMAGING_API
+        Builder &SetSkippedOperations(
+            const HdStringArrayDataSourceHandle &skippedOperations);
+        USDGEOSPATIALIMAGING_API
         Builder &SetSourceCrs(
             const HdStringDataSourceHandle &sourceCrs);
         USDGEOSPATIALIMAGING_API
@@ -275,6 +301,9 @@ public:
         USDGEOSPATIALIMAGING_API
         Builder &SetModelToFrame(
             const HdMatrixDataSourceHandle &modelToFrame);
+        USDGEOSPATIALIMAGING_API
+        Builder &SetFramePoints(
+            const HdVec3fArrayDataSourceHandle &framePoints);
         USDGEOSPATIALIMAGING_API
         Builder &SetLinearizationError(
             const HdDoubleDataSourceHandle &linearizationError);
@@ -290,10 +319,12 @@ public:
         HdStringDataSourceHandle _engine;
         HdStringDataSourceHandle _operation;
         HdDoubleDataSourceHandle _accuracy;
+        HdStringArrayDataSourceHandle _skippedOperations;
         HdStringDataSourceHandle _sourceCrs;
         HdVec3dDataSourceHandle _origin;
         HdTokenDataSourceHandle _frame;
         HdMatrixDataSourceHandle _modelToFrame;
+        HdVec3fArrayDataSourceHandle _framePoints;
         HdDoubleDataSourceHandle _linearizationError;
 
     };

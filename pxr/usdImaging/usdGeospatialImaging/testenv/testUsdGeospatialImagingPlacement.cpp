@@ -189,6 +189,11 @@ _CheckOutput(const UsdStageRefPtr& stage, const std::string& name)
     // promotes it to 3D like the reference (pyproj to_3d) does.
     const _Chain chain =
         _MakeChain(stage, output.at("crs").GetString(), displayOrigin);
+    // The reference evaluates the scene at its geotest:time.
+    if (manifest.count("time")) {
+        chain.usdImaging.stageSceneIndex->SetTime(
+            UsdTimeCode(manifest.at("time").GetReal()));
+    }
     UsdGeospatialImagingMeshObserver observer(chain.placement);
     observer.Sync();
 
@@ -226,6 +231,16 @@ _CheckOutput(const UsdStageRefPtr& stage, const std::string& name)
         const double d = _MaxMatrixDiff(expected.at("matrix"),
                                         anchor.modelToFrame);
         check(d < 1e-6, TfStringPrintf("  matrix (max diff %.2g)", d));
+        // T3: NAD27 is placed with an equation-based operation; the grid
+        // based ones it could not use are reported.
+        if (path == "/World/SiteG") {
+            check(!anchor.skippedOperations.empty(),
+                  TfStringPrintf("  %zu skipped grid operations reported%s",
+                                 anchor.skippedOperations.size(),
+                                 anchor.skippedOperations.empty() ? "" :
+                                 (", e.g. " + anchor.skippedOperations[0])
+                                     .c_str()));
+        }
     }
 
     // Meshes: status, matrix, linearization error and buffers.

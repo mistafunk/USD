@@ -1,5 +1,8 @@
 #usda 1.0
 (
+    customLayerData = {
+        double "geotest:time" = 5
+    }
     defaultPrim = "World"
     metersPerUnit = 1
     upAxis = "Z"
@@ -33,6 +36,42 @@ def Xform "World"
 
     def "SiteE" (
         prepend references = @./siteE.usda@
+    )
+    {
+    }
+
+    def "SiteF" (
+        prepend references = @./siteF.usda@
+    )
+    {
+    }
+
+    def "SiteG" (
+        prepend references = @./siteG.usda@
+    )
+    {
+    }
+
+    def "SiteH" (
+        prepend references = @./siteH.usda@
+    )
+    {
+    }
+
+    def "SiteI" (
+        prepend references = @./siteI.usda@
+    )
+    {
+    }
+
+    def "SiteJ" (
+        prepend references = @./siteJ.usda@
+    )
+    {
+    }
+
+    def "SiteK" (
+        prepend references = @./siteK.usda@
     )
     {
     }

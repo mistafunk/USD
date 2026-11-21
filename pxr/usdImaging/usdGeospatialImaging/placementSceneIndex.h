@@ -52,6 +52,8 @@ TF_DECLARE_REF_PTRS(UsdGeospatialImagingPlacementSceneIndex);
 ///   the first anchor placed.
 /// - measureLinearization (bool): for meshes, compare modelToFrame with the
 ///   exact point map at every point (linearizationError).
+/// - exactPoints (bool): for meshes, also publish the exact point map of
+///   every point (framePoints), the plan's measurement mode.
 ///
 class UsdGeospatialImagingPlacementSceneIndex
     : public HdSingleInputFilteringSceneIndexBase
@@ -114,6 +116,7 @@ private:
     UsdGeospatialPlacementQuery _query;
     bool _applyToXform = false;
     bool _measureLinearization = false;
+    bool _exactPoints = false;
 
     mutable std::mutex _mutex;
     mutable std::unordered_map<SdfPath, _AnchorSharedPtr, SdfPath::Hash>

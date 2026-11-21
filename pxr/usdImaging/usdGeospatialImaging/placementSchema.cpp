@@ -74,6 +74,13 @@ UsdGeospatialImagingPlacementSchema::GetAccuracy() const
         UsdGeospatialImagingPlacementSchemaTokens->accuracy);
 }
 
+HdStringArrayDataSourceHandle
+UsdGeospatialImagingPlacementSchema::GetSkippedOperations() const
+{
+    return _GetTypedDataSource<HdStringArrayDataSource>(
+        UsdGeospatialImagingPlacementSchemaTokens->skippedOperations);
+}
+
 HdStringDataSourceHandle
 UsdGeospatialImagingPlacementSchema::GetSourceCrs() const
 {
@@ -102,6 +109,13 @@ UsdGeospatialImagingPlacementSchema::GetModelToFrame() const
         UsdGeospatialImagingPlacementSchemaTokens->modelToFrame);
 }
 
+HdVec3fArrayDataSourceHandle
+UsdGeospatialImagingPlacementSchema::GetFramePoints() const
+{
+    return _GetTypedDataSource<HdVec3fArrayDataSource>(
+        UsdGeospatialImagingPlacementSchemaTokens->framePoints);
+}
+
 HdDoubleDataSourceHandle
 UsdGeospatialImagingPlacementSchema::GetLinearizationError() const
 {
@@ -118,15 +132,17 @@ UsdGeospatialImagingPlacementSchema::BuildRetained(
         const HdStringDataSourceHandle &engine,
         const HdStringDataSourceHandle &operation,
         const HdDoubleDataSourceHandle &accuracy,
+        const HdStringArrayDataSourceHandle &skippedOperations,
         const HdStringDataSourceHandle &sourceCrs,
         const HdVec3dDataSourceHandle &origin,
         const HdTokenDataSourceHandle &frame,
         const HdMatrixDataSourceHandle &modelToFrame,
+        const HdVec3fArrayDataSourceHandle &framePoints,
         const HdDoubleDataSourceHandle &linearizationError
 )
 {
-    TfToken _names[11];
-    HdDataSourceBaseHandle _values[11];
+    TfToken _names[13];
+    HdDataSourceBaseHandle _values[13];
 
     size_t _count = 0;
 
@@ -160,6 +176,11 @@ UsdGeospatialImagingPlacementSchema::BuildRetained(
         _values[_count++] = accuracy;
     }
 
+    if (skippedOperations) {
+        _names[_count] = UsdGeospatialImagingPlacementSchemaTokens->skippedOperations;
+        _values[_count++] = skippedOperations;
+    }
+
     if (sourceCrs) {
         _names[_count] = UsdGeospatialImagingPlacementSchemaTokens->sourceCrs;
         _values[_count++] = sourceCrs;
@@ -178,6 +199,11 @@ UsdGeospatialImagingPlacementSchema::BuildRetained(
     if (modelToFrame) {
         _names[_count] = UsdGeospatialImagingPlacementSchemaTokens->modelToFrame;
         _values[_count++] = modelToFrame;
+    }
+
+    if (framePoints) {
+        _names[_count] = UsdGeospatialImagingPlacementSchemaTokens->framePoints;
+        _values[_count++] = framePoints;
     }
 
     if (linearizationError) {
@@ -236,6 +262,14 @@ UsdGeospatialImagingPlacementSchema::Builder::SetAccuracy(
 }
 
 UsdGeospatialImagingPlacementSchema::Builder &
+UsdGeospatialImagingPlacementSchema::Builder::SetSkippedOperations(
+    const HdStringArrayDataSourceHandle &skippedOperations)
+{
+    _skippedOperations = skippedOperations;
+    return *this;
+}
+
+UsdGeospatialImagingPlacementSchema::Builder &
 UsdGeospatialImagingPlacementSchema::Builder::SetSourceCrs(
     const HdStringDataSourceHandle &sourceCrs)
 {
@@ -268,6 +302,14 @@ UsdGeospatialImagingPlacementSchema::Builder::SetModelToFrame(
 }
 
 UsdGeospatialImagingPlacementSchema::Builder &
+UsdGeospatialImagingPlacementSchema::Builder::SetFramePoints(
+    const HdVec3fArrayDataSourceHandle &framePoints)
+{
+    _framePoints = framePoints;
+    return *this;
+}
+
+UsdGeospatialImagingPlacementSchema::Builder &
 UsdGeospatialImagingPlacementSchema::Builder::SetLinearizationError(
     const HdDoubleDataSourceHandle &linearizationError)
 {
@@ -285,10 +327,12 @@ UsdGeospatialImagingPlacementSchema::Builder::Build()
         _engine,
         _operation,
         _accuracy,
+        _skippedOperations,
         _sourceCrs,
         _origin,
         _frame,
         _modelToFrame,
+        _framePoints,
         _linearizationError
     );
 }
@@ -382,6 +426,16 @@ UsdGeospatialImagingPlacementSchema::GetAccuracyLocator()
 
 /* static */
 const HdDataSourceLocator &
+UsdGeospatialImagingPlacementSchema::GetSkippedOperationsLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            UsdGeospatialImagingPlacementSchemaTokens->skippedOperations);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
 UsdGeospatialImagingPlacementSchema::GetSourceCrsLocator()
 {
     static const HdDataSourceLocator locator =
@@ -417,6 +471,16 @@ UsdGeospatialImagingPlacementSchema::GetModelToFrameLocator()
     static const HdDataSourceLocator locator =
         GetDefaultLocator().Append(
             UsdGeospatialImagingPlacementSchemaTokens->modelToFrame);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+UsdGeospatialImagingPlacementSchema::GetFramePointsLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            UsdGeospatialImagingPlacementSchemaTokens->framePoints);
     return locator;
 }
 

@@ -51,6 +51,8 @@ public:
         std::string operation;
         /// Metres; empty if unknown.
         std::optional<double> accuracy;
+        /// More accurate operations skipped for missing data (grids).
+        std::vector<std::string> skippedOperations;
         std::string sourceCrs;
         GfVec3d position{0.0};
         GfVec3d orientation{0.0};
@@ -76,6 +78,10 @@ public:
         std::vector<float> points;
         std::vector<float> normals;
         std::vector<uint32_t> indices;
+        /// With exact points (placement scene index exactPoints): the same
+        /// triangles' corners mapped exactly into the anchor's frame,
+        /// relative to its origin; else empty.
+        std::vector<float> framePoints;
     };
 
     /// Observes \p sceneIndex and reads all prims it has.

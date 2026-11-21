@@ -61,6 +61,7 @@ _GetPrimvar(const HdContainerDataSourceHandle &primSource,
 // left-handed orientation, with one face normal per corner.
 void
 _Triangulate(const VtVec3fArray &points,
+             const VtVec3fArray &framePoints,
              const VtIntArray &counts,
              const VtIntArray &indices,
              bool leftHanded,
@@ -69,6 +70,8 @@ _Triangulate(const VtVec3fArray &points,
     mesh->points.clear();
     mesh->normals.clear();
     mesh->indices.clear();
+    mesh->framePoints.clear();
+    const bool exact = framePoints.size() == points.size();
 
     auto point = [&points](int i) {
         return (i >= 0 && size_t(i) < points.size())
@@ -87,20 +90,27 @@ _Triangulate(const VtVec3fArray &points,
             std::reverse(face.begin(), face.end());
         }
         for (int k = 1; k + 1 < n; ++k) {
+            const int ids[3] = { face[0], face[k], face[k + 1] };
             const GfVec3d corners[3] = {
-                point(face[0]), point(face[k]), point(face[k + 1]) };
+                point(ids[0]), point(ids[1]), point(ids[2]) };
             GfVec3d normal =
                 GfCross(corners[1] - corners[0], corners[2] - corners[0]);
             const double length = normal.GetLength();
             if (length > 0.0) {
                 normal /= length;
             }
-            for (const GfVec3d &c : corners) {
+            for (int c = 0; c < 3; ++c) {
                 mesh->indices.push_back(
                     static_cast<uint32_t>(mesh->points.size() / 3));
                 for (int j = 0; j < 3; ++j) {
-                    mesh->points.push_back(static_cast<float>(c[j]));
+                    mesh->points.push_back(static_cast<float>(corners[c][j]));
                     mesh->normals.push_back(static_cast<float>(normal[j]));
+                    if (exact) {
+                        const int id = ids[c];
+                        mesh->framePoints.push_back(
+                            id >= 0 && size_t(id) < framePoints.size()
+                                ? framePoints[id][j] : 0.0f);
+                    }
                 }
             }
         }
@@ -177,6 +187,9 @@ UsdGeospatialImagingMeshObserver::_Read(const SdfPath &path,
         anchor.engine = _Get(placement.GetEngine(), std::string());
         anchor.operation = _Get(placement.GetOperation(), std::string());
         anchor.accuracy = _Get<double>(placement.GetAccuracy());
+        const VtStringArray skipped =
+            _Get(placement.GetSkippedOperations(), VtStringArray());
+        anchor.skippedOperations.assign(skipped.begin(), skipped.end());
         anchor.sourceCrs = _Get(placement.GetSourceCrs(), std::string());
         anchor.position = _Get(inputs.GetPosition(), GfVec3d(0.0));
         anchor.orientation = _Get(inputs.GetOrientation(), GfVec3d(0.0));
@@ -226,6 +239,8 @@ UsdGeospatialImagingMeshObserver::_Read(const SdfPath &path,
     if (points.IsHolding<VtVec3fArray>() && topology) {
         _Triangulate(
             points.UncheckedGet<VtVec3fArray>(),
+            placement ? _Get(placement.GetFramePoints(), VtVec3fArray())
+                      : VtVec3fArray(),
             _Get(topology.GetFaceVertexCounts(), VtIntArray()),
             _Get(topology.GetFaceVertexIndices(), VtIntArray()),
             _Get(topology.GetOrientation(), TfToken()) ==

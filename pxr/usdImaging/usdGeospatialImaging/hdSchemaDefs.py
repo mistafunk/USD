@@ -96,6 +96,9 @@
             ('accuracy', T_DOUBLE,
              dict(DOC='''Accuracy of the operations in metres; absent if
                 unknown.''')),
+            ('skippedOperations', T_STRINGARRAY,
+             dict(DOC='''More accurate operations the engine skipped
+                because it lacks data they need (e.g. grid files).''')),
             ('sourceCrs', T_STRING,
              dict(DOC='''Name of the anchor's CRS.''')),
             ('origin', T_VEC3D,
@@ -110,6 +113,12 @@
                 local space (stage units) into the frame at origin, in USD's
                 row-vector convention: the prim's transform relative to the
                 anchor followed by UsdGeospatialPlacement::GetModelToFrame.''')),
+            ('framePoints', T_VEC3FARRAY,
+             dict(DOC='''
+                For meshes, when exact points are requested: the exact point
+                map of every mesh point into the frame at origin (frame units,
+                relative to origin), so a client can draw without the
+                modelToFrame shortcut.''')),
             ('linearizationError', T_DOUBLE,
              dict(DOC='''
                 For meshes, when measuring is enabled: the largest distance
