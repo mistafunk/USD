@@ -1998,12 +1998,14 @@ _WritePossiblyCompressedArray(
     }
 
     // Check to see if all the floats are exactly represented as integers.
+    // Compare in double against [-2^31, 2^31): both bounds are exact there,
+    // whereas INT32_MAX rounds up to 2^31 as a float, which would let the
+    // out-of-range conversion to int32_t below through.
     auto isIntegral = [](T fp) {
-        constexpr int32_t max = std::numeric_limits<int32_t>::max();
-        constexpr int32_t min = std::numeric_limits<int32_t>::lowest();
-        return min <= fp && fp <= max &&
-            static_cast<T>(static_cast<int32_t>(fp)) == fp;
-    };    
+        const double d = static_cast<double>(fp);
+        return -2147483648.0 <= d && d < 2147483648.0 &&
+            static_cast<T>(static_cast<int32_t>(d)) == fp;
+    };
     if (std::all_of(array.cdata(), array.cdata() + array.size(), isIntegral)) {
         // Encode as integers.
         auto result = ValueRepForArray<T>(w.Tell());
