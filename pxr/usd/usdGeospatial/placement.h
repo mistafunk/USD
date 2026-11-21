@@ -201,6 +201,9 @@ private:
     UsdGeospatialAreaOfInterest _area;
     std::string _sourceGeographic;
     std::string _output;
+    // The output's geographic 3D CRS when operations go through it (a
+    // projected output); empty otherwise.
+    std::string _outputGeographic;
     double _srcA = 0.0, _srcE2 = 0.0;
     double _outA = 0.0, _outE2 = 0.0;
     GfVec3d _originEcef;                  // source datum

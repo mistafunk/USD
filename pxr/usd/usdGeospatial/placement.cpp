@@ -266,8 +266,16 @@ UsdGeospatialPlacement::_ToOutput(const std::vector<GfVec3d>& ecef,
     for (const GfVec3d& p : ecef) {
         output->push_back(_FromEcef(_srcA, _srcE2, p));
     }
-    const UsdGeospatialOperationResult result =
-        _engineImpl->Transform(_sourceGeographic, _output, _area, output);
+    // Through the output's geographic 3D CRS when there is a projection step
+    // (see Resolve).
+    const std::string& target =
+        _outputGeographic.empty() ? _output : _outputGeographic;
+    UsdGeospatialOperationResult result =
+        _engineImpl->Transform(_sourceGeographic, target, _area, output);
+    if (result && !_outputGeographic.empty()) {
+        result = _engineImpl->Transform(_outputGeographic, _output, _area,
+                                        output);
+    }
     if (!result && error) {
         *error = result.error;
     }
@@ -437,8 +445,30 @@ UsdGeospatialPlacementQuery::Resolve(
     // many datum transformations are regional.
     const UsdGeospatialAreaOfInterest area =
         UsdGeospatialAreaOfInterest::AtPoint(geo[0][0], geo[0][1]);
-    const UsdGeospatialOperationResult toOutput =
-        _engine->CanTransform(source.geographic3D, _output, area);
+    // Into a projected output, go through its geographic 3D CRS: datum
+    // shift first, then the projection as a conversion. Direct operations
+    // into a projected CRS with an ellipsoidal height axis keep the source's
+    // height through the datum shift (PROJ wraps it in push/pop v_3), which
+    // loses the height change of e.g. a Helmert shift (2 m from WGS 72,
+    // 21 m from NAD27 at Redlands).
+    const bool viaGeographic = !_outputInfo.isGeographic &&
+        !_outputInfo.isGeocentric && !_outputInfo.geographic3D.empty() &&
+        _outputInfo.geographic3D != _output;
+    const std::string& datumTarget =
+        viaGeographic ? _outputInfo.geographic3D : _output;
+    UsdGeospatialOperationResult toOutput =
+        _engine->CanTransform(source.geographic3D, datumTarget, area);
+    if (toOutput && viaGeographic) {
+        const UsdGeospatialOperationResult toProjection =
+            _engine->CanTransform(datumTarget, _output, area);
+        toOutput.succeeded = toProjection.succeeded;
+        toOutput.error = toProjection.error;
+        toOutput.operation =
+            _JoinOperations(toOutput.operation, toProjection.operation);
+        toOutput.accuracy =
+            (toOutput.accuracy < 0.0 || toProjection.accuracy < 0.0)
+            ? -1.0 : toOutput.accuracy + toProjection.accuracy;
+    }
     if (!toOutput) {
         return fail(Status::Unsupported, TfStringPrintf(
             "<%s> no coordinate operation from '%s' to the output CRS '%s': "
@@ -457,6 +487,7 @@ UsdGeospatialPlacementQuery::Resolve(
     r._area = area;
     r._sourceGeographic = source.geographic3D;
     r._output = _output;
+    r._outputGeographic = viaGeographic ? datumTarget : std::string();
     r._srcA = source.semiMajorAxis;
     r._srcE2 = _EccentricitySquared(source.inverseFlattening);
 
