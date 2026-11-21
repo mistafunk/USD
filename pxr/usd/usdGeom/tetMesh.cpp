@@ -184,10 +184,15 @@ struct _Vec3iHash
 {
     size_t operator()(const GfVec3i& v) const
     {
-        return
-            static_cast<size_t>(v[0]) << 42 ^
-            static_cast<size_t>(v[1]) << 21 ^
-            static_cast<size_t>(v[2]);
+        // Computed in 64 bits: shifting a 32-bit size_t by 42 is undefined.
+        const uint64_t h =
+            static_cast<uint64_t>(v[0]) << 42 ^
+            static_cast<uint64_t>(v[1]) << 21 ^
+            static_cast<uint64_t>(v[2]);
+        if constexpr (sizeof(size_t) < sizeof(uint64_t)) {
+            return static_cast<size_t>(h ^ (h >> 32));
+        }
+        return static_cast<size_t>(h);
     }
 };
 
