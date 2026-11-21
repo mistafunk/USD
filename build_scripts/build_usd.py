@@ -1586,10 +1586,11 @@ def InstallOpenSubdiv(context, force, buildArgs):
         if context.targetWasm:
             compileFlags, _ = GetWasmCompilerFlags(context.buildTarget)
 
-            extraArgs.append('-DBUILD_SHARED_LIB=OFF')
+            extraArgs.append('-DBUILD_SHARED_LIBS=OFF')
             extraArgs.append('-DCMAKE_CXX_FLAGS="{}"'.format(compileFlags))
             extraArgs.append('-DCMAKE_C_FLAGS="{}"'.format(compileFlags))
             extraArgs.append('-DNO_METAL=ON')
+            extraArgs.append('-DNO_OPENGL=ON')
 
         # Enable GLSL shader source so it is available for Vulkan, etc
         # even when OpenGL is disabled.
@@ -1876,6 +1877,10 @@ def InstallUSD(context, force, buildArgs):
             
         if context.buildImaging:
             extraArgs.append('-DPXR_BUILD_IMAGING=ON')
+            if context.targetWasm:
+                # No GPU backend for wasm yet: build the GPU-free imaging
+                # libraries only (Hydra core, scene indices, usdImaging).
+                extraArgs.append('-DPXR_ENABLE_GL_SUPPORT=OFF')
             if context.enablePtex:
                 extraArgs.append('-DPXR_ENABLE_PTEX_SUPPORT=ON')
             else:
@@ -2533,9 +2538,13 @@ class InstallContext:
         self.buildPythonDocs = args.build_python_docs
 
         # - Imaging
+        # Wasm targets build imaging only when it is requested explicitly,
+        # and then only its GPU-free libraries (see InstallUSD).
+        wasmImagingRequested = ("--imaging" in sys.argv or
+                                "--usd-imaging" in sys.argv)
         self.buildImaging = (args.build_imaging == IMAGING or
                              args.build_imaging == USD_IMAGING
-                             and not self.targetWasm)
+                             and (not self.targetWasm or wasmImagingRequested))
         self.enablePtex = self.buildImaging and args.enable_ptex
         self.enableOpenVDB = (self.buildImaging
                               and args.enable_openvdb
@@ -2545,8 +2554,9 @@ class InstallContext:
                               and not embedded)
 
         # - USD Imaging
-        self.buildUsdImaging = (args.build_imaging == USD_IMAGING and 
-                                not self.targetWasm)
+        self.buildUsdImaging = (args.build_imaging == USD_IMAGING and
+                                (not self.targetWasm or
+                                 "--usd-imaging" in sys.argv))
 
         # - usdview
         self.buildUsdview = (self.buildUsdImaging and 
@@ -2700,9 +2710,6 @@ if context.targetWasm:
         sys.exit(1)
     if "--materialx" in sys.argv:
         PrintError("Cannot build materialx for wasm build targets")
-        sys.exit(1)
-    if "--usd-imaging" in sys.argv:
-        PrintError("Cannot build Usd Imaging for wasm build targets")
         sys.exit(1)
     if "--usdValidation" in sys.argv:
         PrintError("Cannot build Usd Validation for wasm build targets")
