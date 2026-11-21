@@ -1,0 +1,684 @@
+#!/usr/bin/env python3
+"""Local driver for the OpenUSD geospatial web prototype.
+
+All builds and tests run on this machine; there is no GitHub CI. The workspace
+root comes from USD_GEO_WS (default: the directory two levels above this clone
+when it sits at <workspace>/src/USD, else ~/usd-geo):
+
+    <workspace>/
+      src/USD/          this clone
+      emsdk/            emsdk, pinned below
+      venv/             Python for the native build (usdview, usdGenSchema)
+      venv-reference/   usd-core + pyproj for the offline reference
+      deps/<target>/    third-party deps (oneTBB, OpenSubdiv, SQLite, PROJ)
+      build/<preset>/   CMake build trees (shared with CLion)
+      install/<preset>/ installs; install/upstream-<target> is build_usd.py's
+      cache/            downloads, dep builds, ccache, emscripten cache, logs
+
+Usage:
+    python third_party/geospatial-web/tools/geo.py check
+    python third_party/geospatial-web/tools/geo.py bootstrap native|wasm32 [--steps ...]
+    python third_party/geospatial-web/tools/geo.py build native-debug|native-release|wasm32
+    python third_party/geospatial-web/tools/geo.py test <preset> [-- <ctest args>]
+    python third_party/geospatial-web/tools/geo.py reference [-- <args>]
+    python third_party/geospatial-web/tools/geo.py serve dev|docker
+"""
+
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import tarfile
+import time
+import urllib.request
+import zipfile
+from pathlib import Path
+
+# Pinned versions. Native and WASM use the same PROJ and SQLite sources.
+EMSDK_VERSION = "5.0.7"
+EMSDK_REPO = "https://github.com/emscripten-core/emsdk.git"
+PROJ = dict(
+    name="proj-9.9.0",
+    url="https://download.osgeo.org/proj/proj-9.9.0.tar.gz",
+    sha256="791a0610547eeabb17006cfd49cdbd2034f3240f47ed5e88a1031811f4e2bcf3")
+SQLITE = dict(
+    name="sqlite-amalgamation-3540100",
+    url="https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
+    sha256="0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9")
+CMAKE_MIN = (3, 27)
+
+TARGETS = ("native", "wasm32")
+PRESETS = {"native-debug": "native", "native-release": "native",
+           "wasm32": "wasm32"}
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+GEO_DIR = SCRIPT_DIR.parent
+REPO = next(p for p in SCRIPT_DIR.parents if (p / "pxr").is_dir())
+WEB_APP = GEO_DIR / "app"
+# Where the wasm32 install puts the servable app (set by module/ in C4).
+SITE_SUBDIR = Path("share") / "geospatial-web"
+
+
+def _default_workspace():
+    if REPO.parent.name == "src":
+        return REPO.parent.parent
+    return Path.home() / "usd-geo"
+
+
+WS = Path(os.environ.get("USD_GEO_WS") or _default_workspace())
+WS = WS.expanduser().resolve()
+CACHE = WS / "cache"
+LOGS = CACHE / "logs"
+DOWNLOADS = CACHE / "downloads"
+EMSDK = WS / "emsdk"
+VENV = WS / "venv"
+VENV_REFERENCE = WS / "venv-reference"
+
+
+def deps_dir(target):
+    return WS / "deps" / target
+
+
+def dep_build_dir(target):
+    return CACHE / "deps-build" / target
+
+
+def is_windows():
+    return platform.system() == "Windows"
+
+
+def venv_python(venv):
+    if is_windows():
+        return venv / "Scripts" / "python.exe"
+    return venv / "bin" / "python3"
+
+
+def exe(name):
+    return name + ".exe" if is_windows() else name
+
+
+# --------------------------------------------------------------------------
+# Output and processes
+
+class Log:
+    """Tees subprocess output to the console and cache/logs/<name>-<ts>.log."""
+
+    def __init__(self, name):
+        LOGS.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.path = LOGS / "{}-{}.log".format(name, stamp)
+        self.file = self.path.open("w", encoding="utf-8")
+        self.start = time.monotonic()
+        info("log: {}".format(self.path))
+
+    def write(self, text):
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        self.file.write(text)
+        self.file.flush()
+
+    def close(self, ok):
+        elapsed = int(time.monotonic() - self.start)
+        self.write("\n[geo] {} after {}m{:02d}s, log: {}\n".format(
+            "done" if ok else "FAILED", elapsed // 60, elapsed % 60,
+            self.path))
+        self.file.close()
+
+
+def info(msg):
+    print("[geo] " + msg, flush=True)
+
+
+def fail(msg):
+    print("[geo] error: " + msg, file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
+def run(cmd, log, cwd=None, env=None):
+    cmd = [str(c) for c in cmd]
+    log.write("\n[geo] $ {}\n".format(" ".join(cmd)))
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True,
+                            encoding="utf-8", errors="replace")
+    for line in proc.stdout:
+        log.write(line)
+    if proc.wait() != 0:
+        raise subprocess.CalledProcessError(proc.returncode, cmd)
+
+
+def logged(name, fn, *args):
+    log = Log(name)
+    try:
+        fn(log, *args)
+    except subprocess.CalledProcessError as e:
+        log.close(False)
+        fail("command exited with {}: {}".format(e.returncode,
+                                                 " ".join(e.cmd)))
+    except BaseException:
+        log.close(False)
+        raise
+    log.close(True)
+
+
+# --------------------------------------------------------------------------
+# Environments
+
+def base_env():
+    env = dict(os.environ)
+    env["USD_GEO_WS"] = str(WS)
+    env["CCACHE_DIR"] = str(CACHE / "ccache")
+    return env
+
+
+def emsdk_env():
+    emscripten = EMSDK / "upstream" / "emscripten"
+    if not emscripten_toolchain().exists():
+        fail("emsdk not installed at {}; run: geo.py bootstrap wasm32"
+             .format(EMSDK))
+    env = base_env()
+    paths = [emscripten, EMSDK]
+    paths += sorted((EMSDK / "node").glob("*/bin"))
+    env["PATH"] = os.pathsep.join([str(p) for p in paths] + [env["PATH"]])
+    env["EMSDK"] = str(EMSDK)
+    env["EM_CACHE"] = str(CACHE / "emscripten")
+    if not env.get("EMSDK_PYTHON"):
+        py = emscripten_python()
+        if not py:
+            fail("emscripten needs Python >= 3.10; install one (AlmaLinux: "
+                 "dnf install python3.12) or set EMSDK_PYTHON")
+        env["EMSDK_PYTHON"] = py
+    return env
+
+
+def emscripten_python():
+    """emcc needs Python >= 3.10; the emcc wrapper honours EMSDK_PYTHON.
+    emsdk bundles a Python on Windows and macOS but not on Linux."""
+    if sys.version_info >= (3, 10):
+        return sys.executable
+    for name in ("python3.13", "python3.12", "python3.11", "python3.10"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def native_env():
+    """Puts the venv first on PATH; build_usd.py looks for pyside6-uic."""
+    env = base_env()
+    env["VIRTUAL_ENV"] = str(VENV)
+    env["PATH"] = os.pathsep.join(
+        [str(venv_python(VENV).parent), env["PATH"]])
+    return env
+
+
+def target_env(target):
+    return emsdk_env() if target == "wasm32" else native_env()
+
+
+def emscripten_toolchain():
+    return (EMSDK / "upstream" / "emscripten" / "cmake" / "Modules" /
+            "Platform" / "Emscripten.cmake")
+
+
+# --------------------------------------------------------------------------
+# Downloads
+
+def fetch(pkg):
+    """Downloads and unpacks a pinned archive; returns the source directory."""
+    DOWNLOADS.mkdir(parents=True, exist_ok=True)
+    archive = DOWNLOADS / pkg["url"].rsplit("/", 1)[1]
+    if not archive.exists():
+        info("downloading {}".format(pkg["url"]))
+        tmp = archive.with_name(archive.name + ".part")
+        with urllib.request.urlopen(pkg["url"]) as r, tmp.open("wb") as f:
+            shutil.copyfileobj(r, f)
+        tmp.replace(archive)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if digest != pkg["sha256"]:
+        archive.unlink()
+        fail("checksum mismatch for {} (got {})".format(archive.name, digest))
+
+    src_root = CACHE / "src"
+    src = src_root / pkg["name"]
+    if not src.exists():
+        src_root.mkdir(parents=True, exist_ok=True)
+        if archive.suffix == ".zip":
+            with zipfile.ZipFile(archive) as z:
+                z.extractall(src_root)
+        else:
+            with tarfile.open(archive) as t:
+                if hasattr(tarfile, "data_filter"):
+                    t.extractall(src_root, filter="data")
+                else:
+                    t.extractall(src_root)
+    if not src.is_dir():
+        fail("{} did not unpack to {}".format(archive.name, src))
+    return src
+
+
+# --------------------------------------------------------------------------
+# CMake helpers for the deps geo.py builds itself (SQLite, PROJ)
+
+def cmake_cache_source(build):
+    """Source directory a CMake build tree was configured from, or None."""
+    cache = build / "CMakeCache.txt"
+    if not cache.exists():
+        return None
+    for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("CMAKE_HOME_DIRECTORY:"):
+            return Path(line.split("=", 1)[1])
+    return None
+
+
+def cmake_dep(log, target, name, src, args, jobs):
+    prefix = deps_dir(target)
+    build = dep_build_dir(target) / name
+    old_src = cmake_cache_source(build)
+    if old_src and old_src.resolve() != Path(src).resolve():
+        # The source moved (e.g. a directory was renamed); CMake refuses
+        # to reuse the tree, so start it fresh.
+        log.write("[geo] {} was configured from {}; removing it\n"
+                  .format(build, old_src))
+        shutil.rmtree(build)
+    cmd = ["cmake", "-S", src, "-B", build, "-G", "Ninja",
+           "-DCMAKE_BUILD_TYPE=Release",
+           "-DCMAKE_INSTALL_PREFIX={}".format(prefix),
+           "-DCMAKE_PREFIX_PATH={}".format(prefix),
+           "-DCMAKE_INSTALL_LIBDIR=lib"]
+    if target == "wasm32":
+        cmd += ["-DCMAKE_TOOLCHAIN_FILE={}".format(emscripten_toolchain()),
+                "-DCMAKE_FIND_ROOT_PATH={}".format(prefix),
+                # Same threading and exception model as USD's WASM build
+                # (cmake/defaults/ProjectDefaults.cmake); PROJ throws and
+                # catches internally.
+                "-DCMAKE_C_FLAGS=-pthread -fexceptions",
+                "-DCMAKE_CXX_FLAGS=-pthread -fexceptions",
+                "-DCMAKE_EXE_LINKER_FLAGS=-pthread -fexceptions"]
+    env = target_env(target)
+    run(cmd + args, log, env=env)
+    run(["cmake", "--build", build, "--target", "install", "-j", jobs],
+        log, env=env)
+
+
+def host_sqlite3():
+    """sqlite3 shell that runs on the build machine; PROJ needs it."""
+    ours = deps_dir("native") / "bin" / exe("sqlite3")
+    if ours.exists():
+        return ours
+    found = shutil.which("sqlite3")
+    if found:
+        return Path(found)
+    fail("no host sqlite3 found; run: geo.py bootstrap native --steps sqlite")
+
+
+# --------------------------------------------------------------------------
+# bootstrap
+
+def step_venv(log, target, args):
+    if not venv_python(VENV).exists():
+        run([sys.executable, "-m", "venv", VENV], log)
+    py = venv_python(VENV)
+    run([py, "-m", "pip", "install", "--upgrade", "pip"], log)
+    run([py, "-m", "pip", "install", "-r", SCRIPT_DIR / "requirements.txt"],
+        log)
+
+
+def step_emsdk(log, target, args):
+    if not (EMSDK / "emsdk.py").exists():
+        run(["git", "clone", EMSDK_REPO, EMSDK], log)
+    run(["git", "-C", EMSDK, "fetch", "--tags"], log)
+    run(["git", "-C", EMSDK, "checkout", "--detach", EMSDK_VERSION], log)
+    for action in ("install", "activate"):
+        run([sys.executable, EMSDK / "emsdk.py", action, EMSDK_VERSION], log,
+            cwd=EMSDK)
+
+
+def step_sqlite(log, target, args):
+    src = fetch(SQLITE)
+    cmake_dep(log, target, "sqlite3", SCRIPT_DIR / "cmake" / "sqlite3",
+              ["-DSQLITE_SOURCE_DIR={}".format(src)], args.jobs)
+
+
+def step_proj(log, target, args):
+    src = fetch(PROJ)
+    prefix = deps_dir(target)
+    lib = prefix / "lib" / ("sqlite3.lib" if is_windows() and
+                            target == "native" else "libsqlite3.a")
+    common = [
+        "-DSQLite3_INCLUDE_DIR={}".format(prefix / "include"),
+        "-DSQLite3_LIBRARY={}".format(lib),
+        "-DEXE_SQLITE3={}".format(host_sqlite3()),
+        "-DENABLE_TIFF=OFF",
+        "-DENABLE_CURL=OFF",
+        "-DBUILD_TESTING=OFF",
+    ]
+    if target == "native":
+        # Shared, so the usdGeospatialProj plugin can link it; apps
+        # (projinfo, cs2cs) are handy for checking results by hand.
+        extra = ["-DBUILD_SHARED_LIBS=ON", "-DBUILD_APPS=ON",
+                 "-DBUILD_PROJSYNC=OFF"]
+    else:
+        # Static, with proj.db embedded in the library (no file system
+        # lookup). C4 replaces it with a database trimmed to the demo CRSs.
+        extra = ["-DBUILD_SHARED_LIBS=OFF", "-DBUILD_APPS=OFF",
+                 "-DEMBED_RESOURCE_FILES=ON",
+                 "-DUSE_ONLY_EMBEDDED_RESOURCE_FILES=ON"]
+    cmake_dep(log, target, "proj", src, common + extra, args.jobs)
+
+
+def step_usd_deps(log, target, args):
+    """build_usd.py builds oneTBB and OpenSubdiv into deps/<target>.
+
+    build_usd.py has no deps-only mode, so it also builds and installs an
+    upstream USD into install/upstream-<target>, kept as a reference build.
+    """
+    build_root = dep_build_dir(target) / "build_usd"
+    cmd = [REPO / "build_scripts" / "build_usd.py",
+           WS / "install" / "upstream-{}".format(target),
+           "--inst", deps_dir(target),
+           "--src", build_root / "src",
+           "--build", build_root / "build",
+           "--generator", "Ninja", "--onetbb", "--no-materialx",
+           "--no-tests", "--no-examples", "--no-tutorials", "--no-docs",
+           "-j", args.jobs]
+    if target == "native":
+        py = venv_python(VENV)
+        if not py.exists():
+            fail("venv missing; run: geo.py bootstrap native --steps venv")
+        cmd = [py] + cmd + ["--python", "--usd-imaging", "--usdview"]
+    else:
+        cmd = [sys.executable] + cmd + ["--build-target", "wasm"]
+        if args.imaging:
+            # Builds OpenSubdiv for WASM and attempts pxr/imaging (C2).
+            cmd += ["--imaging"]
+    run(cmd, log, env=target_env(target))
+
+
+# Build trees under cache/deps-build/<target> that each step owns.
+STEP_BUILD_DIRS = {"sqlite": "sqlite3", "proj": "proj", "usd-deps": "build_usd"}
+
+BOOTSTRAP_STEPS = {
+    "native": [("venv", step_venv), ("sqlite", step_sqlite),
+               ("proj", step_proj), ("usd-deps", step_usd_deps)],
+    "wasm32": [("emsdk", step_emsdk), ("sqlite", step_sqlite),
+               ("proj", step_proj), ("usd-deps", step_usd_deps)],
+}
+
+
+def cmd_bootstrap(args):
+    steps = BOOTSTRAP_STEPS[args.target]
+    names = [n for n, _ in steps]
+    wanted = args.steps.split(",") if args.steps else names
+    unknown = set(wanted) - set(names)
+    if unknown:
+        fail("unknown steps {}; {} has: {}".format(
+            sorted(unknown), args.target, ", ".join(names)))
+    info("workspace {}".format(WS))
+
+    def body(log):
+        if args.clean:
+            for name in wanted:
+                build = dep_build_dir(args.target) / STEP_BUILD_DIRS.get(
+                    name, "")
+                if name in STEP_BUILD_DIRS and build.exists():
+                    log.write("[geo] --clean: removing {}\n".format(build))
+                    shutil.rmtree(build)
+        for name, fn in steps:
+            if name in wanted:
+                log.write("\n[geo] === bootstrap {}: {}\n".format(
+                    args.target, name))
+                fn(log, args.target, args)
+
+    logged("bootstrap-{}".format(args.target), body)
+
+
+# --------------------------------------------------------------------------
+# build / test
+
+def ensure_user_presets():
+    """CMake only reads presets from the source root, so a local
+    CMakeUserPresets.json includes ours. It is listed in .git/info/exclude."""
+    user = REPO / "CMakeUserPresets.json"
+    rel = (SCRIPT_DIR / "CMakePresets.json").relative_to(REPO).as_posix()
+    if user.exists():
+        data = json.loads(user.read_text(encoding="utf-8"))
+        if rel in data.get("include", []):
+            return
+        fail("{} exists without including {}; add it to 'include'"
+             .format(user, rel))
+    user.write_text(json.dumps({"version": 6, "include": [rel]}, indent=2)
+                    + "\n", encoding="utf-8")
+    exclude = REPO / ".git" / "info" / "exclude"
+    if exclude.parent.is_dir():
+        lines = exclude.read_text(encoding="utf-8").splitlines() \
+            if exclude.exists() else []
+        if "/CMakeUserPresets.json" not in lines:
+            with exclude.open("a", encoding="utf-8") as f:
+                f.write("/CMakeUserPresets.json\n")
+    info("wrote {}".format(user))
+
+
+def check_layout():
+    if REPO != WS / "src" / "USD":
+        fail("the CMake presets expect this clone at {}, but it is at {}"
+             .format(WS / "src" / "USD", REPO))
+
+
+def cmd_build(args):
+    check_layout()
+    ensure_user_presets()
+    target = PRESETS[args.preset]
+    if not deps_dir(target).is_dir():
+        fail("no deps for {}; run: geo.py bootstrap {}".format(target, target))
+    env = target_env(target)
+    build = WS / "build" / args.preset
+
+    def body(log):
+        if args.reconfigure or not (build / "CMakeCache.txt").exists():
+            run(["cmake", "--preset", args.preset], log, cwd=REPO, env=env)
+        cmd = ["cmake", "--build", "--preset", args.preset, "-j", args.jobs]
+        if args.target:
+            cmd += ["--target"] + args.target
+        run(cmd, log, cwd=REPO, env=env)
+
+    logged(args.preset, body)
+
+
+def cmd_test(args):
+    check_layout()
+    ensure_user_presets()
+    env = target_env(PRESETS[args.preset])
+    if not (WS / "build" / args.preset / "CTestTestfile.cmake").exists():
+        fail("nothing built for {}; run: geo.py build {}".format(
+            args.preset, args.preset))
+    extra = [a for a in args.ctest_args if a != "--"]
+    logged("test-" + args.preset, lambda log: run(
+        ["ctest", "--preset", args.preset, "-j", args.jobs] + extra,
+        log, cwd=REPO, env=env))
+
+
+# --------------------------------------------------------------------------
+# reference / serve
+
+def cmd_reference(args):
+    ref = GEO_DIR / "reference"
+    reqs = ref / "requirements.txt"
+    script = ref / "reference.py"
+    if not reqs.exists() or not script.exists():
+        fail("offline reference not set up yet (milestone W1): {}"
+             .format(ref))
+    extra = [a for a in args.ref_args if a != "--"]
+
+    def body(log):
+        py = venv_python(VENV_REFERENCE)
+        if not py.exists():
+            run([sys.executable, "-m", "venv", VENV_REFERENCE], log)
+        run([py, "-m", "pip", "install", "-r", reqs], log)
+        run([py, script] + extra, log, cwd=ref)
+
+    logged("reference", body)
+
+
+def container_tool():
+    for tool in ("podman", "docker"):
+        if shutil.which(tool):
+            return tool
+    fail("neither podman nor docker found")
+
+
+def cmd_serve(args):
+    if args.mode == "dev":
+        if not (WEB_APP / "package.json").exists():
+            fail("web app not set up yet (milestone W0): {}".format(WEB_APP))
+        npm = shutil.which("npm")
+        if not npm:
+            fail("npm not found; install Node.js LTS")
+        env = base_env()
+        if not (WEB_APP / "node_modules").exists():
+            subprocess.run([npm, "ci"], cwd=WEB_APP, env=env, check=True)
+        sys.exit(subprocess.call([npm, "run", "dev"], cwd=WEB_APP, env=env))
+
+    site = WS / "install" / "wasm32" / SITE_SUBDIR
+    if not site.is_dir():
+        fail("nothing installed at {}; run: geo.py build wasm32".format(site))
+    # SELinux (AlmaLinux) needs the bind mounts relabelled.
+    opts = "ro,z" if platform.system() == "Linux" else "ro"
+    cmd = [container_tool(), "run", "--rm", "-p", "{}:80".format(args.port),
+           "-v", "{}:/usr/share/nginx/html:{}".format(site, opts),
+           "-v", "{}:/etc/nginx/conf.d/default.conf:{}".format(
+               SCRIPT_DIR / "nginx.conf", opts),
+           "docker.io/library/nginx:stable"]
+    info("serving {} at http://localhost:{}".format(site, args.port))
+    sys.exit(subprocess.call(cmd))
+
+
+# --------------------------------------------------------------------------
+# check
+
+def tool_version(cmd):
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    text = (out.stdout or out.stderr).strip().splitlines()
+    return text[0] if text else ""
+
+
+def cmd_check(args):
+    ok = True
+
+    def report(label, value, good=True, hint="", optional=False):
+        nonlocal ok
+        ok = ok and (good or optional)
+        mark = "ok " if good else "!! "
+        print("  {}{:<22} {}{}".format(mark, label, value or "not found",
+                                      "  ({})".format(hint) if hint and
+                                      not good else ""))
+
+    print("workspace {}".format(WS))
+    report("clone location", REPO, REPO == WS / "src" / "USD",
+           "presets expect <workspace>/src/USD")
+    report("USD_GEO_WS", os.environ.get("USD_GEO_WS"),
+           bool(os.environ.get("USD_GEO_WS")), "unset; using default")
+    print("tools")
+    report("python", sys.version.split()[0], sys.version_info >= (3, 9))
+    cmake = tool_version(["cmake", "--version"])
+    cmake_ok = False
+    if cmake:
+        ver = tuple(int(x) for x in cmake.split()[-1].split(".")[:2])
+        cmake_ok = ver >= CMAKE_MIN
+    report("cmake", cmake, cmake_ok, ">= {}.{} required".format(*CMAKE_MIN))
+    report("ninja", tool_version(["ninja", "--version"]),
+           bool(shutil.which("ninja")))
+    if is_windows():
+        report("cl", shutil.which("cl"), bool(shutil.which("cl")),
+               "run from a VS 2022 developer prompt")
+    else:
+        cc = os.environ.get("CXX") or ("clang++" if platform.system() ==
+                                       "Darwin" else "g++")
+        report("c++ compiler", tool_version([cc, "--version"]),
+               bool(shutil.which(cc)))
+    report("ccache", tool_version(["ccache", "--version"]),
+           bool(shutil.which("ccache")), "optional, speeds up rebuilds",
+           optional=True)
+    report("git", tool_version(["git", "--version"]), bool(shutil.which("git")))
+    tool = shutil.which("podman") or shutil.which("docker")
+    report("podman/docker", tool, bool(tool), "needed for serve docker")
+    report("npm", tool_version(["npm", "--version"]), bool(shutil.which("npm")),
+           "needed for the web app")
+    print("workspace contents")
+    report("venv", VENV, venv_python(VENV).exists(),
+           "geo.py bootstrap native --steps venv")
+    report("emsdk " + EMSDK_VERSION, EMSDK,
+           (EMSDK / "upstream" / "emscripten").is_dir(),
+           "geo.py bootstrap wasm32 --steps emsdk")
+    for target in TARGETS:
+        d = deps_dir(target)
+        have = [n for n, marker in (("oneTBB", "include/tbb"),
+                                    ("OpenSubdiv", "include/opensubdiv"),
+                                    ("SQLite", "include/sqlite3.h"),
+                                    ("PROJ", "include/proj.h"))
+                if (d / marker).exists()]
+        report("deps/" + target, ", ".join(have) or None,
+               len(have) >= 3, "geo.py bootstrap " + target)
+    sys.exit(0 if ok else 1)
+
+
+# --------------------------------------------------------------------------
+
+def main():
+    jobs = str(os.cpu_count() or 4)
+    p = argparse.ArgumentParser(
+        description="Local driver for the geospatial web prototype.",
+        epilog="Workspace: {}".format(WS))
+    sub = p.add_subparsers(dest="command", required=True)
+
+    s = sub.add_parser("check", help="check tools and workspace layout")
+    s.set_defaults(fn=cmd_check)
+
+    s = sub.add_parser("bootstrap", help="build third-party deps for a target")
+    s.add_argument("target", choices=TARGETS)
+    s.add_argument("--steps", help="comma-separated subset of: " + "; ".join(
+        "{}: {}".format(t, ",".join(n for n, _ in BOOTSTRAP_STEPS[t]))
+        for t in TARGETS))
+    s.add_argument("--clean", action="store_true",
+                   help="delete the selected steps' build trees first "
+                        "(downloads, emsdk and the venv are kept)")
+    s.add_argument("--imaging", action="store_true",
+                   help="wasm32: pass --imaging to build_usd.py (C2)")
+    s.add_argument("-j", "--jobs", default=jobs)
+    s.set_defaults(fn=cmd_bootstrap)
+
+    s = sub.add_parser("build", help="configure, build and install a preset")
+    s.add_argument("preset", choices=PRESETS)
+    s.add_argument("--target", nargs="+", help="build these targets instead")
+    s.add_argument("--reconfigure", action="store_true")
+    s.add_argument("-j", "--jobs", default=jobs)
+    s.set_defaults(fn=cmd_build)
+
+    s = sub.add_parser("test", help="run ctest for a preset")
+    s.add_argument("preset", choices=PRESETS)
+    s.add_argument("-j", "--jobs", default=jobs)
+    s.add_argument("ctest_args", nargs=argparse.REMAINDER)
+    s.set_defaults(fn=cmd_test)
+
+    s = sub.add_parser("reference", help="run the offline Python reference")
+    s.add_argument("ref_args", nargs=argparse.REMAINDER)
+    s.set_defaults(fn=cmd_reference)
+
+    s = sub.add_parser("serve", help="serve the web app with COOP/COEP")
+    s.add_argument("mode", choices=("dev", "docker"))
+    s.add_argument("--port", default="8080")
+    s.set_defaults(fn=cmd_serve)
+
+    args = p.parse_args()
+    args.fn(args)
+
+
+if __name__ == "__main__":
+    main()
