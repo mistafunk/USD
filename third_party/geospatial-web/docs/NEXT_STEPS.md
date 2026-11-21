@@ -41,6 +41,15 @@ Playwright `w2 global|local` writes `app/reports/w2-<time>.{json,html}`. Both vi
 0 unexpected; worst passing error 0.1 mm (local Web Mercator view, matrix linearization). **W2 exit met.**
 Next: C0 and C2 (C++ track); the web track waits for C3/C4.
 
+**Update 2026-11-21, C0 (Claude Code):** `pxr/usd/usdGeospatial` with `GeospatialCRS` (`UsdGeospatialCRS`,
+`uniform token crs:wkt`) and `GeospatialCRSBindingAPI` (`UsdGeospatialCRSBindingAPI`, Xformable only,
+`double3 crs:position` without fallback, `double3 crs:orientation` = (0, 0, 0)), generated with `usdGenSchema` from
+`schema.usda`. Tests `testUsdGeospatialSchemas` (Python) and `testUsdGeospatialSchemasCpp` (C++, for WASM) load the
+proposal's CRS examples verbatim, the Eiffel Tower example and a UTM 11N site with a nested and a broken binding.
+`PXR_BUILD_GEOSPATIAL_PROJ` (default OFF, ON in our presets) finds PROJ 9.9.0. Native debug build and
+`geo.py test native-debug -- -R UsdGeospatial` pass. **C0 exit met.** Next: C1 (binding resolution, engine interface and
+registry, usdGeospatialProj) and C2 (WASM port).
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -98,3 +107,11 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
 - (W2) Playwright ran WebGL in software (SwiftShader) everywhere, which made the specs slow (2 min 49 s, W0 global
   55 s). The GPU is now the default: 30 s for all specs on an RTX 2080; `GEO_SOFTWARE_GL=1` keeps the software path.
   Playwright's Ubuntu 24.04 fallback build on AlmaLinux is not the issue: it uses the GPU as fast as system Chrome.
+- (C0) `usdGenSchema` derives file and accessor names from the class name and property names: use `fileName`
+  (`crs.h`, not `cRS.h`) and `apiName` (`GetPositionAttr`, not `GetCrsPositionAttr`) in `schema.usda`. Regenerate with
+  the upstream install: `PYTHONPATH=<ws>/install/upstream-native/lib/python3.9/site-packages <ws>/venv/bin/python3
+  <ws>/install/upstream-native/bin/usdGenSchema schema.usda .` (in `pxr/usd/usdGeospatial`). `api.h` must be listed
+  under `PUBLIC_HEADERS` in `CMakeLists.txt`.
+- (C0) The presets put the venv on PATH (bin and Scripts), so CLion and plain `cmake --preset` find `pyside6-uic`.
+- (C0) Hand-written files under `pxr/` use upstream's header ("Copyright 2026 Pixar"), assumed for upstreamable code;
+  change if Esri needs its own line.

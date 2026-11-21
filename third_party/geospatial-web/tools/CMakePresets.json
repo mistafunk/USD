@@ -20,7 +20,8 @@
         "PXR_BUILD_TESTS": "ON",
         "PXR_BUILD_EXAMPLES": "ON",
         "PXR_BUILD_TUTORIALS": "OFF",
-        "PXR_ENABLE_MATERIALX_SUPPORT": "OFF"
+        "PXR_ENABLE_MATERIALX_SUPPORT": "OFF",
+        "PXR_BUILD_GEOSPATIAL_PROJ": "ON"
       }
     },
     {
@@ -28,7 +29,8 @@
       "hidden": true,
       "inherits": "geo-base",
       "environment": {
-        "VIRTUAL_ENV": "${sourceDir}/../../venv"
+        "VIRTUAL_ENV": "${sourceDir}/../../venv",
+        "PATH": "${sourceDir}/../../venv/bin${pathListSep}${sourceDir}/../../venv/Scripts${pathListSep}$penv{PATH}"
       },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/../../deps/native",
