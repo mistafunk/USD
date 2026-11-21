@@ -241,6 +241,17 @@ UsdGeospatialProjEngine::DescribeCrs(const std::string& definition)
         return info;
     }
     info.geographic3D = wkt;
+
+    if (info.dimension == 2 &&
+        (type == PJ_TYPE_GEOGRAPHIC_2D_CRS || type == PJ_TYPE_PROJECTED_CRS)) {
+        _PjPtr promoted(proj_crs_promote_to_3D(_ctx, nullptr, crs.get()));
+        const char* promotedWkt = promoted
+            ? proj_as_wkt(_ctx, promoted.get(), PJ_WKT2_2019, nullptr)
+            : nullptr;
+        if (promotedWkt) {
+            info.promoted3D = promotedWkt;
+        }
+    }
     info.valid = true;
     return info;
 }

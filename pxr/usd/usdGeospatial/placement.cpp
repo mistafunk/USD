@@ -330,6 +330,12 @@ UsdGeospatialPlacementQuery::UsdGeospatialPlacementQuery(
         return;
     }
     _outputInfo = _engine->DescribeCrs(output);
+    if (_outputInfo.valid && _outputInfo.dimension == 2 &&
+        !_outputInfo.promoted3D.empty()) {
+        // The consumer asks for heights too: ellipsoidal ones.
+        _output = _outputInfo.promoted3D;
+        _outputInfo = _engine->DescribeCrs(_output);
+    }
     if (!_outputInfo.valid) {
         _error = "output CRS: " + _outputInfo.error;
     } else if (_outputInfo.dimension != 3) {

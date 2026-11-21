@@ -204,7 +204,9 @@ private:
 ///
 /// Resolves directly bound model anchors into one output CRS with one
 /// coordinate operation engine. The output CRS is chosen by the consumer
-/// (proposal requirement 16) and must be 3D.
+/// (proposal requirement 16) and must be 3D; a 2D geographic or projected
+/// output CRS is promoted to 3D with ellipsoidal heights when the engine
+/// supports it (UsdGeospatialCrsInfo::promoted3D).
 ///
 class UsdGeospatialPlacementQuery
 {
@@ -221,6 +223,9 @@ public:
     bool IsValid() const { return _error.empty(); }
     const std::string& GetError() const { return _error; }
     const UsdGeospatialCrsInfo& GetOutputInfo() const { return _outputInfo; }
+
+    /// The output CRS definition used: the one given, or its 3D promotion.
+    const std::string& GetOutput() const { return _output; }
 
     /// Resolves the directly bound model anchor \p anchor at \p time.
     USDGEOSPATIAL_API

@@ -85,6 +85,11 @@ struct UsdGeospatialCrsInfo
     /// The datum's 3D geographic CRS (longitude, latitude, ellipsoidal
     /// height), as a definition the engine accepts.
     std::string geographic3D;
+
+    /// For a 2D geographic or projected CRS: the same CRS with an
+    /// ellipsoidal height axis, as a definition the engine accepts. Empty
+    /// for 3D CRSs and if the engine cannot derive it.
+    std::string promoted3D;
 };
 
 /// \class UsdGeospatialCoordinateOperationEngine
