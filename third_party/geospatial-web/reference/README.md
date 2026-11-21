@@ -10,7 +10,8 @@ python ../tools/geo.py reference -- check      # scores control points with the 
 python ../tools/geo.py reference -- proj-expected  # C++ PROJ engine test fixtures + pyproj expectations
 ```
 
-`geo.py` creates `<workspace>/venv-reference` with Python >= 3.12 and the pins in `requirements.txt`
+`geo.py` creates `<workspace>/venv-reference` with the project venv's Python (3.12, `VENV_PYTHON` in `geo.py`;
+recreated automatically if it differs) and the pins in `requirements.txt`
 (usd-core 26.8, pyproj 3.8.0 with PROJ 9.8.1, numpy).
 
 The schemas are not registered in usd-core, so the reference reads them by name (`GeospatialCRSBindingAPI` in

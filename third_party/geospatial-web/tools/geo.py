@@ -52,6 +52,9 @@ SQLITE = dict(
     url="https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
     sha256="0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9")
 CMAKE_MIN = (3, 27)
+# Python of the project venv: the native build's Python bindings, usdview,
+# usdGenSchema, and (via PATH) emcc, which needs >= 3.10.
+VENV_PYTHON = (3, 12)
 
 TARGETS = ("native", "wasm32")
 PRESETS = {"native-debug": "native", "native-release": "native",
@@ -183,9 +186,13 @@ def emsdk_env():
              .format(EMSDK))
     env = base_env()
     paths = [emscripten, EMSDK]
-    paths += sorted((EMSDK / "node").glob("*/bin"))
+    node_bins = sorted((EMSDK / "node").glob("*/bin"))
+    paths += node_bins
     env["PATH"] = os.pathsep.join([str(p) for p in paths] + [env["PATH"]])
     env["EMSDK"] = str(EMSDK)
+    if node_bins:
+        # USD's test registration runs WASM tests with this node.
+        env["EMSDK_NODE"] = str(node_bins[-1] / exe("node"))
     env["EM_CACHE"] = str(CACHE / "emscripten")
     if not env.get("EMSDK_PYTHON"):
         py = find_python((3, 10))
@@ -321,9 +328,35 @@ def host_sqlite3():
 # --------------------------------------------------------------------------
 # bootstrap
 
+def python_exact(version):
+    """This interpreter if it is Python major.minor, else python3.N on PATH."""
+    if sys.version_info[:2] == version:
+        return sys.executable
+    return shutil.which("python{}.{}".format(*version))
+
+
+def venv_version(venv):
+    py = venv_python(venv)
+    if not py.exists():
+        return None
+    out = subprocess.run([str(py), "-c", "import sys; print(*sys.version_info[:2])"],
+                         capture_output=True, text=True)
+    return tuple(int(v) for v in out.stdout.split()) if out.returncode == 0 else None
+
+
 def step_venv(log, target, args):
-    if not venv_python(VENV).exists():
-        run([sys.executable, "-m", "venv", VENV], log)
+    want = "{}.{}".format(*VENV_PYTHON)
+    have = venv_version(VENV)
+    if have and have != VENV_PYTHON:
+        fail("{} uses Python {}.{}, the project needs {}; recreate it with: "
+             "geo.py bootstrap native --steps venv --clean".format(
+                 VENV, *have, want))
+    if not have:
+        base = python_exact(VENV_PYTHON)
+        if not base:
+            fail("Python {} not found (AlmaLinux: dnf install python{} "
+                 "python{}-devel)".format(want, want, want))
+        run([base, "-m", "venv", VENV], log)
     py = venv_python(VENV)
     run([py, "-m", "pip", "install", "--upgrade", "pip"], log)
     run([py, "-m", "pip", "install", "-r", SCRIPT_DIR / "requirements.txt"],
@@ -396,8 +429,13 @@ def step_usd_deps(log, target, args):
     else:
         cmd = [sys.executable] + cmd + ["--build-target", "wasm"]
         if args.imaging:
-            # Builds OpenSubdiv for WASM and attempts pxr/imaging (C2).
-            cmd += ["--imaging"]
+            # OpenSubdiv for WASM, and the GPU-free imaging libraries and
+            # usdImaging in the upstream reference build (C2).
+            cmd += ["--usd-imaging"]
+    # OpenSubdiv's CMake otherwise picks the newest python3.x on PATH; use
+    # the interpreter that runs build_usd.py.
+    cmd += ["--build-args",
+            "OpenSubdiv,-DPython_EXECUTABLE={}".format(cmd[0])]
     run(cmd, log, env=target_env(target))
 
 
@@ -423,6 +461,9 @@ def cmd_bootstrap(args):
     info("workspace {}".format(WS))
 
     def body(log):
+        if args.clean and "venv" in wanted and VENV.exists():
+            log.write("[geo] --clean: removing {}\n".format(VENV))
+            shutil.rmtree(VENV)
         if args.clean:
             for name in wanted:
                 build = dep_build_dir(args.target) / STEP_BUILD_DIRS.get(
@@ -481,8 +522,12 @@ def cmd_build(args):
     build = WS / "build" / args.preset
 
     def body(log):
-        if args.reconfigure or not (build / "CMakeCache.txt").exists():
-            run(["cmake", "--preset", args.preset], log, cwd=REPO, env=env)
+        if (args.reconfigure or args.fresh or
+                not (build / "CMakeCache.txt").exists()):
+            # --fresh drops the cache, e.g. after a preset removed a variable
+            # (a plain reconfigure keeps the old cached value).
+            run(["cmake", "--preset", args.preset] +
+                (["--fresh"] if args.fresh else []), log, cwd=REPO, env=env)
         cmd = ["cmake", "--build", "--preset", args.preset, "-j", args.jobs]
         if args.target:
             cmd += ["--target"] + args.target
@@ -569,13 +614,20 @@ def cmd_reference(args):
     extra = [a for a in args.ref_args if a != "--"]
 
     def body(log):
+        # Same Python as the project venv (usd-core and pyproj pins need
+        # >= 3.12). Cheap to rebuild, so a version mismatch recreates it.
         py = venv_python(VENV_REFERENCE)
-        if not py.exists():
-            # usd-core and pyproj pins need Python >= 3.12.
-            base = find_python((3, 12))
+        have = venv_version(VENV_REFERENCE)
+        if have and have != VENV_PYTHON:
+            log.write("[geo] {} uses Python {}.{}; recreating it with {}.{}\n"
+                      .format(VENV_REFERENCE, *have, *VENV_PYTHON))
+            shutil.rmtree(VENV_REFERENCE)
+            have = None
+        if not have:
+            base = python_exact(VENV_PYTHON)
             if not base:
-                fail("the reference needs Python >= 3.12 (AlmaLinux: "
-                     "dnf install python3.12)")
+                fail("Python {}.{} not found (AlmaLinux: dnf install "
+                     "python{}.{})".format(*VENV_PYTHON, *VENV_PYTHON))
             run([base, "-m", "venv", VENV_REFERENCE], log)
         run([py, "-m", "pip", "install", "-q", "-r", reqs], log)
         run([py, script] + extra, log, cwd=ref)
@@ -699,17 +751,22 @@ def main():
         "{}: {}".format(t, ",".join(n for n, _ in BOOTSTRAP_STEPS[t]))
         for t in TARGETS))
     s.add_argument("--clean", action="store_true",
-                   help="delete the selected steps' build trees first "
-                        "(downloads, emsdk and the venv are kept)")
+                   help="delete the selected steps' build trees first, and "
+                        "the venv if the venv step is selected (downloads "
+                        "and emsdk are kept)")
     s.add_argument("--imaging", action="store_true",
-                   help="wasm32: pass --imaging to build_usd.py (C2)")
+                   help="wasm32: pass --usd-imaging to build_usd.py "
+                        "(OpenSubdiv, GPU-free Hydra and usdImaging)")
     s.add_argument("-j", "--jobs", default=jobs)
     s.set_defaults(fn=cmd_bootstrap)
 
     s = sub.add_parser("build", help="configure, build and install a preset")
     s.add_argument("preset", choices=PRESETS)
     s.add_argument("--target", nargs="+", help="build these targets instead")
-    s.add_argument("--reconfigure", action="store_true")
+    s.add_argument("--reconfigure", action="store_true",
+                   help="run CMake's configure step again")
+    s.add_argument("--fresh", action="store_true",
+                   help="configure from scratch, discarding the CMake cache")
     s.add_argument("-j", "--jobs", default=jobs)
     s.set_defaults(fn=cmd_build)
 

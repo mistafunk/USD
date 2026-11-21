@@ -10,7 +10,8 @@
       "binaryDir": "${sourceDir}/../../build/${presetName}",
       "installDir": "${sourceDir}/../../install/${presetName}",
       "environment": {
-        "CCACHE_DIR": "${sourceDir}/../../cache/ccache"
+        "CCACHE_DIR": "${sourceDir}/../../cache/ccache",
+        "PATH": "${sourceDir}/../../venv/bin${pathListSep}${sourceDir}/../../venv/Scripts${pathListSep}$penv{PATH}"
       },
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -29,8 +30,7 @@
       "hidden": true,
       "inherits": "geo-base",
       "environment": {
-        "VIRTUAL_ENV": "${sourceDir}/../../venv",
-        "PATH": "${sourceDir}/../../venv/bin${pathListSep}${sourceDir}/../../venv/Scripts${pathListSep}$penv{PATH}"
+        "VIRTUAL_ENV": "${sourceDir}/../../venv"
       },
       "cacheVariables": {
         "CMAKE_PREFIX_PATH": "${sourceDir}/../../deps/native",
@@ -56,9 +56,10 @@
     {
       "name": "wasm32",
       "displayName": "WASM (wasm32, emsdk 5.0.7)",
-      "description": "Mirrors build_usd.py --build-target wasm. Imaging stays off until the C2 port.",
+      "description": "Mirrors build_usd.py --build-target wasm --usd-imaging: GPU-free Hydra and usdImaging, no GL.",
       "inherits": "geo-base",
       "toolchainFile": "${sourceDir}/../../emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "warnings": { "dev": false },
       "environment": {
         "EM_CACHE": "${sourceDir}/../../cache/emscripten"
       },
@@ -66,11 +67,6 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_PREFIX_PATH": "${sourceDir}/../../deps/wasm32",
         "CMAKE_FIND_ROOT_PATH": "${sourceDir}/../../deps/wasm32",
-        "TBB_INCLUDE_DIRS": "${sourceDir}/../../deps/wasm32/include",
-        "TBB_tbb_LIBRARY_RELEASE": "${sourceDir}/../../deps/wasm32/lib/libtbb.a",
-        "TBB_tbb_LIBRARY_DEBUG": "${sourceDir}/../../deps/wasm32/lib/libtbb_debug.a",
-        "OPENSUBDIV_INCLUDE_DIR": "${sourceDir}/../../deps/wasm32/include",
-        "OPENSUBDIV_OSDCPU_LIBRARY": "${sourceDir}/../../deps/wasm32/lib/libosdCPU.a",
         "BUILD_SHARED_LIBS": "OFF",
         "CMAKE_C_FLAGS": "-pthread --use-port=zlib",
         "CMAKE_CXX_FLAGS": "-pthread --use-port=zlib",
@@ -79,8 +75,9 @@
         "PXR_HEADLESS_TEST_MODE": "ON",
         "PXR_BUILD_USD_TOOLS": "OFF",
         "PXR_BUILD_USD_VALIDATION": "OFF",
-        "PXR_BUILD_IMAGING": "OFF",
-        "PXR_BUILD_USD_IMAGING": "OFF",
+        "PXR_BUILD_IMAGING": "ON",
+        "PXR_BUILD_USD_IMAGING": "ON",
+        "PXR_ENABLE_GL_SUPPORT": "OFF",
         "PXR_BUILD_USDVIEW": "OFF"
       }
     }
@@ -99,6 +96,17 @@
     },
     { "name": "native-debug", "inherits": "geo-test-base", "configurePreset": "native-debug" },
     { "name": "native-release", "inherits": "geo-test-base", "configurePreset": "native-release" },
-    { "name": "wasm32", "inherits": "geo-test-base", "configurePreset": "wasm32" }
+    {
+      "name": "wasm32",
+      "inherits": "geo-test-base",
+      "configurePreset": "wasm32",
+      "description": "Excludes tests whose baselines contain size_t hashes, which differ on 32-bit (docs/WASM_GAP.md).",
+      "filter": {
+        "exclude": {
+          "label": "flaky",
+          "name": "^testUsdImagingInstanceProxyTraversal_"
+        }
+      }
+    }
   ]
 }

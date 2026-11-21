@@ -69,6 +69,25 @@ addition upstream does not use); `hd/aov.cpp` and `hio/glslfxResourceLayout.h` (
    tests `pxr/base` and `pxr/usd` for wasm32, so most of these may not be needed.
 6. `usdImaging/testenv/testUsdImaging.cpp`: a test Autodesk adds; look at it when setting up T10.
 
+## Static plugin registration (fixed 2026-11-21)
+
+On emscripten `pxr_plugin` builds a plugin as a `STATIC` library, and `pxr_library` adds every `STATIC` library to
+`PXR_STATIC_LIBS`, which `_pxr_target_link_libraries` deliberately links without `--whole-archive`. Plugins rely on
+dynamic initialization (`TF_REGISTRY_FUNCTION`), so their registrations were dropped: the PROJ engine was declared by
+its embedded plugInfo.json but had no factory. Fix in `cmake/macros/Public.cmake`: `pxr_plugin` removes the plugin
+from `PXR_STATIC_LIBS` again, so it is whole-archived like other libraries. Programs must still link the plugins they
+use (only linked libraries have their plugInfo.json embedded). With both, the PROJ placement test passes under Node
+with the same results as native.
+
+## Known 32-bit differences (WASM test run, 2026-11-21)
+
+`testUsdImagingInstanceProxyTraversal_1` and `_2` fail on wasm32 only because generated prototype names embed a
+`size_t` hash (`HdDataSourceHash`, printed with `%zx` in `niInstanceAggregationSceneIndex.cpp`): `TfHash` state is
+`size_t`, so on 32-bit platforms the hash differs in value and length (`...usdUpAxis601aaa23` vs
+`...usdUpAxisc5a1cb23cb33294e`). The traversed scene is otherwise identical. Decision (Simon): document, don't fix;
+the `wasm32` test preset excludes these two tests by name, and the issue goes to upstream at I2. Consequence: any
+hash-suffixed instancing paths differ between native and browser builds; our app does not rely on them.
+
 ## Esri engine limits (for E1)
 
 `projectOperator` / `geographicTransformationUtils` in the Maps SDK do equation-based transforms only:

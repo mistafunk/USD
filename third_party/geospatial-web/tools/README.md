@@ -51,13 +51,17 @@ python third_party/geospatial-web/tools/geo.py test web              # Playwrigh
   Playwright's UI mode to pick, watch and step through tests; `--headed` shows the browser during a normal run;
   anything after `--` goes to Playwright (e.g. `-- -g w2`). The W2 report is `app/reports/latest.html`.
   Rendering uses the GPU; set `GEO_SOFTWARE_GL=1` for software WebGL (see `app/README.md`).
+- `build <preset> --reconfigure` reruns CMake's configure step; `--fresh` configures from scratch, which is
+  needed when a preset drops a variable (CMake keeps the old cached value otherwise).
 - Every command logs to `cache/logs/<name>-<timestamp>.log` (except interactive `test web --ui` and `serve`).
 
 ## Platform notes
 
-- **AlmaLinux 9:** emscripten 5.0.7 needs Python >= 3.10 and the system Python is 3.9. Install
-  `python3.12` (AppStream); `geo.py` finds it and sets `EMSDK_PYTHON`. For CLion's `wasm32` profile, export
-  `EMSDK_PYTHON=/usr/bin/python3.12` in the environment CLion starts from.
+- **Python:** the project venv uses Python 3.12 (`VENV_PYTHON` in `geo.py`; AlmaLinux: `dnf install python3.12
+  python3.12-devel`), whichever Python runs `geo.py`. A venv with another version is refused; recreate it with
+  `geo.py bootstrap native --steps venv --clean`. The presets put the venv first on PATH, so emscripten 5.0.7
+  (needs Python >= 3.10; AlmaLinux's system Python is 3.9) works when CLion configures `wasm32` too; `geo.py` also
+  sets `EMSDK_PYTHON`.
 - ccache is optional but worth it: `dnf install ccache` (EPEL). The presets put its cache in `cache/ccache`.
 - PROJ for WASM is built static with `-pthread -fexceptions`, the same thread and exception model as USD's WASM
   build, with `proj.db` embedded in `libproj.a` (about 9 MB until C4 trims it).

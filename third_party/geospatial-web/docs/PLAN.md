@@ -185,7 +185,7 @@ AlmaLinux 9 is the primary platform. It is also the Linux that Pixar tests v26.0
 | --- | --- | --- | --- |
 | Compiler | GCC 11 from the base repos (`dnf groupinstall "Development Tools"`) | Xcode 16 command line tools | Visual Studio 2022 |
 | CMake, Ninja | CMake 3.30 from pip or Kitware (the base repo's 3.26 is older than Pixar's tested version), Ninja from CRB/EPEL | Homebrew | Visual Studio's bundled CMake and Ninja, or pip |
-| Python | 3.9 system Python plus a venv | Homebrew Python plus a venv | python.org installer plus a venv |
+| Python | Python 3.12 (AppStream) venv; system Python 3.9 unused | Homebrew Python plus a venv | python.org installer plus a venv |
 | emsdk 5.0.7 | Native install, or the `emscripten/emsdk:5.0.7` image | Native install, or the image | The image (recommended), or WSL2 |
 | Containers | Podman (default on AlmaLinux; `podman` and `podman compose` take the same commands as Docker) or Docker CE | Docker Desktop | Docker Desktop with WSL2 |
 | usdview | Mesa GL and X11 development packages, PySide6 from pip | PySide6 from pip | PySide6 from pip |

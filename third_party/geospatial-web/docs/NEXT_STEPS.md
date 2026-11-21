@@ -63,6 +63,18 @@ All 5 `UsdGeospatial` ctests pass. **C1 met, with the grid question open** (see 
 wrappers for the new classes, UsdValidator registration of the validation checks, the anchor's own transform `A`,
 2D CRSs with the EGM2008 default height.
 
+**Update 2026-11-21, C2 (Claude Code):** GPU-free Hydra and usdImaging build for wasm32 with few changes:
+`build_usd.py` allows `--imaging`/`--usd-imaging` for wasm (GL off, OpenSubdiv `NO_OPENGL`, `BUILD_SHARED_LIBS` typo),
+`hgi` has no default backend on WASM, `testUsdImagingMaterialBinding` drops an unused `garch` link, `testHdTiny` is
+only built with `hdx`, plus missing `override` markers and the Emscripten test-runner message printed once. Clang on
+wasm32 also showed real upstream bugs, fixed separately (stack-frame return, 32-bit shift in the TetMesh face hash,
+64-bit printf formats, out-of-range float-to-int in crate float compression). WASM test run
+(`geo.py test wasm32 -- -R "testHd|testUsdImaging|UsdGeospatial"`): 34 of 37 passed; all hd and hdsi tests pass.
+`testUsdImagingInstanceProxyTraversal_1/_2` differ only in 32-bit hash suffixes (documented in `WASM_GAP.md`,
+excluded in the `wasm32` test preset); `testUsdGeospatialProjPlacement` failed because the static build did not link
+the PROJ engine plugin, and static plugins were not whole-archived so their registrations were dropped (both fixed, see
+`WASM_GAP.md`); it now passes under Node with the same results as native (0 mm vs pyproj), an early T9 data point.
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -122,8 +134,8 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
   Playwright's Ubuntu 24.04 fallback build on AlmaLinux is not the issue: it uses the GPU as fast as system Chrome.
 - (C0) `usdGenSchema` derives file and accessor names from the class name and property names: use `fileName`
   (`crs.h`, not `cRS.h`) and `apiName` (`GetPositionAttr`, not `GetCrsPositionAttr`) in `schema.usda`. Regenerate with
-  the upstream install: `PYTHONPATH=<ws>/install/upstream-native/lib/python3.9/site-packages <ws>/venv/bin/python3
-  <ws>/install/upstream-native/bin/usdGenSchema schema.usda .` (in `pxr/usd/usdGeospatial`). `api.h` must be listed
+  the project's native install (same Python as the venv): `PYTHONPATH=<ws>/install/native-debug/lib/python3.12/site-packages
+  <ws>/venv/bin/python3 <ws>/install/native-debug/bin/usdGenSchema schema.usda .` (in `pxr/usd/usdGeospatial`). `api.h` must be listed
   under `PUBLIC_HEADERS` in `CMakeLists.txt`.
 - (C0) The presets put the venv on PATH (bin and Scripts), so CLion and plain `cmake --preset` find `pyside6-uic`.
 - (C0) Hand-written files under `pxr/` use upstream's header ("Copyright 2026 Pixar"), assumed for upstreamable code;
@@ -142,3 +154,12 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
   reference now uses its base CRS (`source_geographic_3d`), as the C++ engine does.
 - (C1, C4) The engine registry relies on PlugRegistry types and loading plugins; for the static WASM build the PROJ
   engine must be registered at static-init time (PLAN, WASM section). Not tested yet.
+- (C2) The project venv moved from Python 3.9 to 3.12 (`VENV_PYTHON` in `geo.py`), so emcc finds a Python >= 3.10 on
+  PATH when CLion configures `wasm32`. The native build must be reconfigured (`geo.py build native-debug --fresh`): its
+  Python bindings are rebuilt for 3.12. `install/upstream-native` (the build_usd.py reference) still has Python 3.9
+  bindings; only rebuild it (`bootstrap native --steps usd-deps`) if its Python modules are needed.
+  `venv-reference` uses the same Python 3.12 (it was 3.13) and is recreated automatically on a mismatch; its
+  outputs (fixtures, recorded data, PROJ expectations) are identical after the switch.
+- (C2, C4) **Static builds must link plugins.** In the WASM build a plugin is a static library; only linked libraries
+  have their `plugInfo.json` embedded under `/usd`, so the engine registry only sees engines linked into the program.
+  The C4 browser module must link `usdGeospatialProj` (and any scene index plugins) explicitly.

@@ -48,7 +48,8 @@ Root from `USD_GEO_WS` (default: two levels above this clone, else `~/usd-geo`);
 emscripten cache, `logs/`). See `third_party/geospatial-web/tools/README.md`.
 Presets: `native-debug`, `native-release`, `wasm32`. Driver: `python third_party/geospatial-web/tools/geo.py
 check|bootstrap|build|test|reference|serve`; `test web [--ui]` runs the app's Playwright specs. Pins (emsdk, PROJ, SQLite) are at the top of `geo.py`.
-emscripten 5.0.7 needs Python >= 3.10 (`EMSDK_PYTHON`, set by `geo.py`); AlmaLinux's system Python is 3.9.
+The project venv (`<ws>/venv`) uses Python 3.12 (`VENV_PYTHON` in `geo.py`); the presets put it on PATH, so emcc
+(needs Python >= 3.10) also works when CLion configures. AlmaLinux's system Python is 3.9.
 
 Long builds (the WASM imaging build in particular) run in Simon's terminal so he can watch them.
 Prefer telling him the `geo.py` command over running a long build silently.
