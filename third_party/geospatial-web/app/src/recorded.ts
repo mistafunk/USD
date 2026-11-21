@@ -14,6 +14,7 @@ import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import { xyToLngLat } from "@arcgis/core/geometry/support/webMercatorUtils.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { toRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
+import { score, type ControlPoint, type TestCase } from "./harness";
 import { multiply, splitOrigin, translation } from "./mat4";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorStatus, CameraPreset, Scene } from "./scene";
@@ -29,6 +30,8 @@ interface RecordedAnchor {
   reason?: string;
   sourceCrs?: string;
   origin?: number[];
+  /** Anchor model frame (stage units) to the anchor's frame; Float64. */
+  matrix?: number[];
   operation?: string;
   accuracy?: number | null;
 }
@@ -54,6 +57,9 @@ export interface RecordedManifest {
   buffers: string;
   anchors: RecordedAnchor[];
   meshes: RecordedMesh[];
+  /** Test data (W2): control points and expected outcomes per anchor. */
+  controlPoints?: ControlPoint[];
+  testCases?: TestCase[];
 }
 
 const PRESETS: Record<string, CameraPreset> = {
@@ -90,7 +96,15 @@ export function placeRecorded(view: SceneView, manifest: RecordedManifest,
     }
   }
 
+  const frames = new Map<string, Float64Array>();
   const frameOf = (a: RecordedAnchor): Float64Array => {
+    const cached = frames.get(a.path);
+    if (cached) return cached;
+    const f = computeFrame(a);
+    frames.set(a.path, f);
+    return f;
+  };
+  const computeFrame = (a: RecordedAnchor): Float64Array => {
     const origin = a.origin!;
     if (manifest.output.frame === "crs") return translation(origin);
     const frame = geographicFrame(view, origin);
@@ -140,6 +154,19 @@ export function placeRecorded(view: SceneView, manifest: RecordedManifest,
     meshes,
     anchors: status,
     renderMatrices,
+    score: () => score({
+      view,
+      output: manifest.output.name,
+      engine: `${manifest.engine.name} ${manifest.engine.version}, PROJ ${manifest.engine.proj}`,
+      anchors: manifest.anchors,
+      controlPoints: manifest.controlPoints ?? [],
+      testCases: manifest.testCases ?? [],
+      anchorFrame: (path) => {
+        const a = anchors.get(path);
+        return a && a.status === "ok" ? frameOf(a) : null;
+      },
+      tolerance: 0.01,
+    }),
   };
 }
 

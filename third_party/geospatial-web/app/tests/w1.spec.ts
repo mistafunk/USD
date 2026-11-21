@@ -36,7 +36,7 @@ const renderPoint = (page: Page, mesh: string, p: number[]) =>
 const dist = (a: number[] | null, b: number[] | null) =>
   Math.hypot(a![0] - b![0], a![1] - b![1], a![2] - b![2]);
 
-// testdata/w1: building 40 x 20 x 12 m, mast on its (+x, +y) ground corner.
+// testdata/scene: building 40 x 20 x 12 m, mast on its (+x, +y) ground corner.
 const BUILDING = "/World/SiteA/Building";
 const MAST = "/World/SiteB/Mast";
 
@@ -59,9 +59,11 @@ for (const mode of ["global", "local"]) {
     const a = await app(page);
     expect(a.errors).toEqual([]);
     expect(a.crossOriginIsolated).toBe(true);
-    expect(a.anchors.map((x) => [x.path, x.status])).toEqual([
-      ["/World/SiteA", "ok"], ["/World/SiteB", "ok"]]);
-    expect(a.stats.meshes).toBe(3);
+    const status = Object.fromEntries(a.anchors.map((x) => [x.path, x.status]));
+    expect(status["/World/SiteA"]).toBe("ok");
+    expect(status["/World/SiteB"]).toBe("ok");
+    // Sites C-E belong to the W2 cases; D and E are not drawn.
+    expect(a.stats.meshes).toBe(4);
 
     // Render space: global is the SDK's 6378137 m sphere (east-west about
     // 0.1 % shorter than the ellipsoid at 34 deg N); local is the view SR

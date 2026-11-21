@@ -1,0 +1,27 @@
+#usda 1.0
+(
+    defaultPrim = "SiteE"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SiteE" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crs_library.usda@</CRS/Missing>
+)
+{
+    double3 crs:position = (481897.95, 3768437.85, 0)
+    custom string geotest:description = "T7: direct binding to a missing CRS prim"
+    custom token geotest:expect = "unsupported"
+
+    def Mesh "Box"
+    {
+        float3[] extent = [(-3, -3, 0), (3, 3, 3)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+        point3f[] points = [(-3, -3, 0), (3, -3, 0), (3, 3, 0), (-3, 3, 0), (-3, -3, 3), (3, -3, 3), (3, 3, 3), (-3, 3, 3)]
+        color3f[] primvars:displayColor = [(0.8, 0.3, 0.3)]
+        uniform token subdivisionScheme = "none"
+    }
+}
+

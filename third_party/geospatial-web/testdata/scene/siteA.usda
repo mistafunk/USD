@@ -1,0 +1,95 @@
+#usda 1.0
+(
+    defaultPrim = "SiteA"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SiteA" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crs_library.usda@</CRS/WGS84_UTM11N_3D>
+)
+{
+    double3 crs:orientation = (30, 0, 0)
+    double3 crs:position = (481957.95, 3768437.85, 0)
+    custom string geotest:description = "T1: UTM 11N (3D) building with a child transform, heading 30"
+    custom token geotest:expect = "pass"
+
+    def Mesh "Building"
+    {
+        float3[] extent = [(-20, -10, 0), (20, 10, 12)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+        point3f[] points = [(-20, -10, 0), (20, -10, 0), (20, 10, 0), (-20, 10, 0), (-20, -10, 12), (20, -10, 12), (20, 10, 12), (-20, 10, 12)]
+        color3f[] primvars:displayColor = [(0.85, 0.45, 0.15)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Xform "Wing"
+    {
+        double3 xformOp:translate = (30, 5, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Mesh "Box"
+        {
+            float3[] extent = [(-5, -5, 0), (5, 5, 6)]
+            int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+            int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+            point3f[] points = [(-5, -5, 0), (5, -5, 0), (5, 5, 0), (-5, 5, 0), (-5, -5, 6), (5, -5, 6), (5, 5, 6), (-5, 5, 6)]
+            color3f[] primvars:displayColor = [(0.9, 0.7, 0.3)]
+            uniform token subdivisionScheme = "none"
+        }
+    }
+
+    def Xform "ControlPoints"
+    {
+        def Xform "SW"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19574173693196, 34.056512059965364, 0.00003915652632713318)
+            double3 xformOp:translate = (-20, -10, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "SE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19536652404896, 34.056331755533044, 0.00003928225487470627)
+            double3 xformOp:translate = (20, -10, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "NE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19525820912393, 34.05648790373001, 0.00003915652632713318)
+            double3 xformOp:translate = (20, 10, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "NW"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19563342246562, 34.05666820848838, 0.00003928132355213165)
+            double3 xformOp:translate = (-20, 10, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "RoofNE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19525820957831, 34.056487903752824, 12.00003915745765)
+            double3 xformOp:translate = (20, 10, 12)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "WingFar"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19511750453044, 34.05642028914899, 0.00010378938168287277)
+            double3 xformOp:translate = (35, 10, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+}
+

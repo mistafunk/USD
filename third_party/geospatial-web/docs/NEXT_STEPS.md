@@ -25,13 +25,21 @@ the camera moves and naive mode jitters. Both `bootstrap native` and `bootstrap 
 Next: C0 (`usdGeospatial` schema library) and C2 (WASM port) in parallel.
 
 **Update 2026-11-21, W1 (Claude Code):** `reference/reference.py` (usd-core 26.8, pyproj 3.8.0 with PROJ 9.8.1, numpy;
-venv `<workspace>/venv-reference`, Python >= 3.12) writes the W1 fixtures (`testdata/w1/`: CRS library with
+venv `<workspace>/venv-reference`, Python >= 3.12) writes the W1 fixtures (`testdata/w1/`, now `testdata/scene/`: CRS library with
 `GeospatialCRS` prims, Site A building + wing in 3D UTM 11N with heading 30, Site B mast in EPSG:4979 on Site A's
 corner via PROJ's topocentric conversion) and exports recorded data per `docs/RECORDED_FORMAT.md` to
 `app/public/recorded/`. `reference -- check`: mast on corner and linearization error both below 1 um.
 The app draws the export by default (`?data=recorded`; W0 meshes under `?data=w0`). Playwright `w1 global|local`
 passes: both anchors ok, mast-to-corner distance in render space 1.3e-7 (global) and 5e-5 Web Mercator units (local).
 Exit criterion met pending Simon's visual check (`geo.py serve dev`, presets Overview / Street level / Corner).
+
+**Update 2026-11-21, W2 (Claude Code):** control points and test cases in the scene (`testdata/scene`, `geotest:`
+attributes; see `reference/README.md`): Sites A and B pass, C has a planted 5 cm error and must fail, D (2D CRS) and
+E (missing CRS prim) must be reported as unsupported. `reference -- check` scores them offline with the exact point map;
+the app's harness (`src/harness.ts`, Score button) scores them in the browser through `fromRenderCoordinates`, and
+Playwright `w2 global|local` writes `app/reports/w2-<time>.{json,html}`. Both views: 2 pass, 1 fail, 2 unsupported,
+0 unexpected; worst passing error 0.1 mm (local Web Mercator view, matrix linearization). **W2 exit met.**
+Next: C0 and C2 (C++ track); the web track waits for C3/C4.
 
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
@@ -84,3 +92,6 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
   reference should build pyproj against our PROJ.
 - (W1, C3) The anchor's own ordinary transform `A` (post-placement adjustment in the working chart) is still a candidate
   in the proposal; the reference reports it as unsupported. W1 fixtures author none.
+- (W2) Control points use test-only `geotest:` attributes, not proposal schema. Surveyed control points (5 cm tolerance)
+  still need a real survey; the current ones are synthetic (1 cm, client vs reference).
+- (W2) Playwright: the SDK cancels tile requests when the camera jumps; specs ignore `ERR_ABORTED` on tile URLs only.

@@ -16,6 +16,7 @@ import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import TileLayer from "@arcgis/core/layers/TileLayer.js";
 import SceneView from "@arcgis/core/views/SceneView.js";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
+import type { HarnessReport } from "./harness";
 import { transformPoint } from "./mat4";
 import { MeshPass, type PassStats } from "./meshPass";
 import { loadRecordedScene } from "./recorded";
@@ -46,6 +47,9 @@ interface AppState {
   goto?: (preset: string) => Promise<unknown>;
   /** Render-space position (Float64) of a mesh-local point. */
   renderPoint?: (mesh: string, p: number[]) => number[] | null;
+  /** W2 harness: control point scoring for the current view. */
+  score?: () => HarnessReport | null;
+  report: HarnessReport | null;
 }
 
 const state: AppState = {
@@ -59,6 +63,7 @@ const state: AppState = {
   stats: null,
   anchors: [],
   errors: [],
+  report: null,
 };
 (globalThis as unknown as { __app: AppState }).__app = state;
 addEventListener("error", (e) => state.errors.push(String(e.message)));
@@ -134,6 +139,7 @@ view.when(async () => {
     const m = scene?.renderMatrices.get(mesh);
     return m ? transformPoint(m, p) : null;
   };
+  state.score = () => (state.report = scene?.score?.() ?? null);
   state.ready = true;
 }).catch((err: unknown) => state.errors.push("scene: " + String(err)));
 
@@ -169,6 +175,20 @@ function buildPresetButtons(s: Scene) {
   }));
 }
 
+const scoreButton = document.getElementById("score") as HTMLButtonElement;
+scoreButton.addEventListener("click", () => state.score?.());
+
+function reportLines(r: HarnessReport | null): string[] {
+  if (!r) return [];
+  const s = r.summary;
+  return [
+    `score (tolerance ${r.tolerance} m): ${s.pass} pass, ${s.fail} fail, ` +
+      `${s.unsupported} unsupported, ${s.unexpected} unexpected`,
+    ...r.cases.map((c) => `${c.ok ? "  " : "! "}${c.result.padEnd(11)} ${c.anchor}` +
+      ` (expected ${c.expect}) ${c.detail}`),
+  ];
+}
+
 const statusEl = document.getElementById("status")!;
 setInterval(() => {
   const cam = view.camera;
@@ -179,6 +199,7 @@ setInterval(() => {
     `near ${pass.stats.near.toFixed(2)} m (${view.constraints.clipDistance.mode})` +
       `  camera z ${cam?.position.z?.toFixed(2) ?? "-"} m`,
     ...state.anchors.map((a) => `${a.status.padEnd(11)} ${a.path}\n            ${a.detail}`),
+    ...reportLines(state.report),
     state.errors.length ? `errors: ${state.errors.join("; ")}` : "",
   ].filter(Boolean).join("\n");
 }, 250);

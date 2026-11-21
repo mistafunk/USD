@@ -18,5 +18,23 @@ def Xform "World"
     )
     {
     }
+
+    def "SiteC" (
+        prepend references = @./siteC.usda@
+    )
+    {
+    }
+
+    def "SiteD" (
+        prepend references = @./siteD.usda@
+    )
+    {
+    }
+
+    def "SiteE" (
+        prepend references = @./siteE.usda@
+    )
+    {
+    }
 }
 

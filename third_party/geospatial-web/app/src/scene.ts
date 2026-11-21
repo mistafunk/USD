@@ -1,6 +1,7 @@
 // What main.ts draws: placed meshes, a geographic target for the camera
 // presets, and per-anchor status for the panel.
 
+import type { HarnessReport } from "./harness";
 import type { PlacedMesh } from "./meshPass";
 
 /** Camera offset from the scene target, in metres east/north/up. */
@@ -30,4 +31,6 @@ export interface Scene {
   anchors: AnchorStatus[];
   /** Full Float64 render matrix per mesh name (for numeric checks). */
   renderMatrices: Map<string, Float64Array>;
+  /** W2 harness: scores control points, when the data has them. */
+  score?: () => HarnessReport;
 }

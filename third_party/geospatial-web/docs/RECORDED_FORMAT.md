@@ -30,6 +30,7 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
     "path": "/World/SiteA", "status": "ok | unsupported | error", "reason": "(when not ok)",
     "sourceCrs": "WGS 84 / UTM zone 11N", "position": [e, n, h], "orientation": [heading, pitch, roll],
     "origin": [lon, lat, h],
+    "matrix": [16 numbers: anchor model frame (stage units) to the anchor's frame],
     "operation": "PROJ description of the operation used", "accuracy": 0.0
   } ],
   "meshes": [ {
@@ -40,7 +41,12 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
     "points":  { "byteOffset": 0,   "count": 36 },
     "normals": { "byteOffset": 432, "count": 36 },
     "indices": { "byteOffset": 864, "count": 36 }
-  } ]
+  } ],
+  "controlPoints": [ {
+    "path": "/World/SiteA/ControlPoints/NE", "anchor": "/World/SiteA", "local": [20, 10, 0],
+    "reference": { "crs": "EPSG:4979", "position": [lon, lat, h] }
+  } ],
+  "testCases": [ { "anchor": "/World/SiteA", "expect": "pass | fail | unsupported", "description": "..." } ]
 }
 ```
 
@@ -54,6 +60,12 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
   in the matrix frame's units (metres for `enu`). It is the T5 measurement.
 - **`engine`, `operation`, `accuracy`** name what produced the result (proposal requirement 28). `accuracy` is in
   metres, `null` when unknown.
+- **`anchors[].matrix`** is the same linearization for the anchor itself (`D` = identity); the W2 harness places
+  control points with it.
+- **`controlPoints`, `testCases`** are test data, read from the stage's `geotest:` attributes
+  (`geotest:referencePosition`, `geotest:referenceCrs` on control point prims under an anchor; `geotest:expect`,
+  `geotest:description` on the anchor). `local` is the control point in its anchor's model frame (stage units).
+  The C3 observer does not need to produce these; the harness can read them from the stage.
 - A mesh whose anchor is not `ok` is listed but not drawn; the anchor's `reason` says why. A mesh without any CRS
   binding is `unplaced`.
 
