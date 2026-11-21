@@ -1,0 +1,247 @@
+{
+ "engine": {
+  "name": "pyproj",
+  "version": "3.8.0",
+  "proj": "9.8.1"
+ },
+ "tolerance": 0.001,
+ "anchors": [
+  {
+   "stage": "placement.usda",
+   "path": "/World/Utm3d",
+   "status": "ok",
+   "origin4979": [
+    -117.19549999470657,
+    34.05650000008854,
+    12.5
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "points": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     20.0,
+     10.0,
+     0
+    ],
+    [
+     -20.0,
+     10.0,
+     0
+    ],
+    [
+     -20.0,
+     -10.0,
+     0
+    ],
+    [
+     20.0,
+     -10.0,
+     0
+    ],
+    [
+     20.0,
+     10.0,
+     12
+    ],
+    [
+     0,
+     0,
+     12
+    ]
+   ],
+   "points4978": [
+    [
+     -2417569.534294223,
+     -4704990.45708252,
+     3551647.532692366
+    ],
+    [
+     -2417550.0241626906,
+     -4705001.32551182,
+     3551646.4227319364
+    ],
+    [
+     -2417575.7168859625,
+     -4704975.5315489555,
+     3551662.992446802
+    ],
+    [
+     -2417589.0444257543,
+     -4704979.588653222,
+     3551648.6426527966
+    ],
+    [
+     -2417563.351702483,
+     -4705005.382616084,
+     3551632.0729379295
+    ],
+    [
+     -2417554.5678575835,
+     -4705010.168294129,
+     3551653.1428537928
+    ],
+    [
+     -2417574.077989116,
+     -4704999.29986483,
+     3551654.2528142217
+    ]
+   ]
+  },
+  {
+   "stage": "placement.usda",
+   "path": "/World/Ca5ftUS3d",
+   "status": "ok",
+   "origin4979": [
+    -117.19651201021419,
+    34.05650491434221,
+    0.0
+   ],
+   "operation": "Null geographic offset from NAD83 to North_American_1983_3D + Null geographic offset from North_American_1983_3D to NAD83 + Inverse of WGS_1984_(ITRF00)_To_NAD_1983 + Null geographic offset from WGS 84 (geog2D) to WGS 84 (geog3D) (with axis order normalized for visualization)",
+   "points": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     15.0,
+     15.0,
+     0
+    ],
+    [
+     -15.0,
+     15.0,
+     0
+    ],
+    [
+     -15.0,
+     -15.0,
+     0
+    ],
+    [
+     15.0,
+     -15.0,
+     0
+    ],
+    [
+     15.0,
+     15.0,
+     10
+    ],
+    [
+     0,
+     0,
+     10
+    ]
+   ],
+   "points4978": [
+    [
+     -2417647.7654786166,
+     -4704938.272147441,
+     3551640.984177771
+    ],
+    [
+     -2417642.4369832464,
+     -4704927.898928719,
+     3551658.7043237193
+    ],
+    [
+     -2417666.920694347,
+     -4704929.167607868,
+     3551641.414484245
+    ],
+    [
+     -2417653.0939739863,
+     -4704948.645366164,
+     3551623.264031825
+    ],
+    [
+     -2417628.610262885,
+     -4704947.376687014,
+     3551640.5538712996
+    ],
+    [
+     -2417645.922982799,
+     -4704935.492842681,
+     3551664.1979819117
+    ],
+    [
+     -2417651.2514781733,
+     -4704945.8660614025,
+     3551646.477835964
+    ]
+   ]
+  },
+  {
+   "stage": "placement.usda",
+   "path": "/World/Utm2d",
+   "status": "unsupported",
+   "reason": "2D CRS: height needs the EGM2008 default vertical reference, which needs a geoid grid this reference does not ship"
+  },
+  {
+   "stage": "placement.usda",
+   "path": "/World/Ca5Navd88",
+   "status": "unsupported",
+   "reason": "position cannot be converted to geographic 3D: no coordinate operation from 'NAD83 / California zone 5 (ftUS) + NAVD88 height (ftUS)' to 'NAD83'"
+  },
+  {
+   "stage": "eiffelTower.usda",
+   "path": "/EiffelTower",
+   "status": "ok",
+   "origin4979": [
+    2.294500000000001,
+    48.8584,
+    32.999999998137355
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "points": [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     62.5,
+     0,
+     62.5
+    ],
+    [
+     -62.5,
+     0,
+     -62.5
+    ],
+    [
+     0,
+     300,
+     0
+    ]
+   ],
+   "points4978": [
+    [
+     4200957.512426727,
+     168323.97139094307,
+     4780237.8941397155
+    ],
+    [
+     4201020.840897357,
+     168349.40378011213,
+     4780181.722987076
+    ],
+    [
+     4200894.183956098,
+     168298.53900177396,
+     4780294.065292354
+    ],
+    [
+     4201154.730839314,
+     168331.87353857007,
+     4780463.819910268
+    ]
+   ]
+  }
+ ]
+}

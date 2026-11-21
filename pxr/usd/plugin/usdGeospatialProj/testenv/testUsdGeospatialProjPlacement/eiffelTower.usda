@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    defaultPrim = "EiffelTower"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "EiffelTower" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crsLibrary.usda@</CRS/EiffelTower_LTP>
+)
+{
+    double3 crs:orientation = (30, 0, 0)
+    double3 crs:position = (0, 0, 0)
+}
+

@@ -1,0 +1,23 @@
+{
+    "Plugins": [
+        {
+            "Info": {
+                "Types": {
+                    "UsdGeospatialProjEngine": {
+                        "bases": [
+                            "UsdGeospatialCoordinateOperationEngine"
+                        ],
+                        "displayName": "PROJ coordinate operation engine",
+                        "engineName": "proj",
+                        "priority": 100
+                    }
+                }
+            },
+            "LibraryPath": "@PLUG_INFO_LIBRARY_PATH@",
+            "Name": "usdGeospatialProj",
+            "ResourcePath": "@PLUG_INFO_RESOURCE_PATH@",
+            "Root": "@PLUG_INFO_ROOT@",
+            "Type": "library"
+        }
+    ]
+}

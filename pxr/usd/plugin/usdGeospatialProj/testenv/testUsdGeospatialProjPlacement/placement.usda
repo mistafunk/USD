@@ -1,0 +1,44 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Xform "Utm3d" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = @./crsLibrary.usda@</CRS/WGS84_UTM11N_3D>
+    )
+    {
+        double3 crs:orientation = (30, 0, 0)
+        double3 crs:position = (481957.948, 3768437.852, 12.5)
+    }
+
+    def Xform "Ca5ftUS3d" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = @./crsLibrary.usda@</CRS/NAD83_CA5_ftUS_3D>
+    )
+    {
+        double3 crs:orientation = (-45, 2, 1)
+        double3 crs:position = (6805041.628, 1843916.355, 0)
+    }
+
+    def Xform "Utm2d" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = @./crsLibrary.usda@</CRS/WGS84_UTM11N>
+    )
+    {
+        double3 crs:position = (481957.948, 3768437.852, 0)
+    }
+
+    def Xform "Ca5Navd88" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = @./crsLibrary.usda@</CRS/CA5_NAVD88_ftUS>
+    )
+    {
+        double3 crs:position = (6805041.628, 1843916.355, 1200)
+    }
+}
+
