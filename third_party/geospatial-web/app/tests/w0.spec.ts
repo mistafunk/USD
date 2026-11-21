@@ -15,7 +15,7 @@ interface W0 {
 
 async function settle(page: Page) {
   await page.waitForFunction(() => {
-    const w0 = (globalThis as unknown as { __w0?: W0 }).__w0;
+    const w0 = (globalThis as unknown as { __app?: W0 }).__app;
     return w0?.ready && !w0.updating && w0.stats.frames > 0;
   }, null, { timeout: 90_000 });
   await page.waitForTimeout(500);
@@ -24,28 +24,33 @@ async function settle(page: Page) {
 for (const mode of ["global", "local"]) {
   for (const naive of [false, true]) {
     const suffix = naive ? "-naive" : "";
-    test(`${mode}${suffix}`, async ({ page }) => {
+    test(`w0 ${mode}${suffix}`, async ({ page }) => {
       const failed: string[] = [];
       const consoleErrors: string[] = [];
-      page.on("requestfailed", (r) => failed.push(`${r.url()} ${r.failure()?.errorText}`));
+      page.on("requestfailed", (r) => {
+        const why = r.failure()?.errorText ?? "";
+        // The SDK cancels pending tile requests when the camera jumps.
+        if (why === "net::ERR_ABORTED" && r.url().includes("/tile/")) return;
+        failed.push(`${r.url()} ${why}`);
+      });
       page.on("response", (r) => { if (r.status() >= 400) failed.push(`${r.url()} ${r.status()}`); });
       page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });
 
-      await page.goto(`/?view=${mode}${naive ? "&naive=1" : ""}`);
+      await page.goto(`/?view=${mode}&data=w0${naive ? "&naive=1" : ""}`);
       await settle(page);
 
-      const w0 = await page.evaluate(() => (globalThis as unknown as { __w0: W0 }).__w0);
+      const w0 = await page.evaluate(() => (globalThis as unknown as { __app: W0 }).__app);
       expect(w0.crossOriginIsolated).toBe(true);
       expect(w0.sharedArrayBuffer).toBe(true);
       expect(w0.stats.meshes).toBe(3);
 
       for (const preset of ["overview", "street", "close"]) {
-        await page.evaluate((p) => (globalThis as unknown as { __w0: W0 }).__w0.goto(p), preset);
+        await page.evaluate((p) => (globalThis as unknown as { __app: W0 }).__app.goto(p), preset);
         await settle(page);
         await page.screenshot({ path: `test-results/w0-${mode}${suffix}-${preset}.png` });
       }
 
-      const errors = await page.evaluate(() => (globalThis as unknown as { __w0: W0 }).__w0.errors);
+      const errors = await page.evaluate(() => (globalThis as unknown as { __app: W0 }).__app.errors);
       expect(errors).toEqual([]);
       expect(failed).toEqual([]);
       expect(consoleErrors).toEqual([]);

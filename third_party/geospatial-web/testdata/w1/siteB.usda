@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    defaultPrim = "SiteB"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SiteB" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crs_library.usda@</CRS/WGS84_Geographic3D>
+)
+{
+    double3 crs:position = (-117.19525820912393, 34.05648790373001, 0.00003915652632713318)
+
+    def Mesh "Mast"
+    {
+        float3[] extent = [(-0.5, -0.5, 0), (0.5, 0.5, 25)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+        point3f[] points = [(-0.5, -0.5, 0), (0.5, -0.5, 0), (0.5, 0.5, 0), (-0.5, 0.5, 0), (-0.5, -0.5, 25), (0.5, -0.5, 25), (0.5, 0.5, 25), (-0.5, 0.5, 25)]
+        color3f[] primvars:displayColor = [(0.2, 0.5, 0.9)]
+        uniform token subdivisionScheme = "none"
+    }
+}
+

@@ -1,0 +1,22 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def "SiteA" (
+        prepend references = @./siteA.usda@
+    )
+    {
+    }
+
+    def "SiteB" (
+        prepend references = @./siteB.usda@
+    )
+    {
+    }
+}
+

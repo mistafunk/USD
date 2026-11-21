@@ -24,6 +24,15 @@ the camera moves and naive mode jitters. Both `bootstrap native` and `bootstrap 
 (I2). New: D14 (`GeospatialCRS`). Autodesk diff sized in `WASM_GAP.md`; the GPU-free subset gains hdar and hio.
 Next: C0 (`usdGeospatial` schema library) and C2 (WASM port) in parallel.
 
+**Update 2026-11-21, W1 (Claude Code):** `reference/reference.py` (usd-core 26.8, pyproj 3.8.0 with PROJ 9.8.1, numpy;
+venv `<workspace>/venv-reference`, Python >= 3.12) writes the W1 fixtures (`testdata/w1/`: CRS library with
+`GeospatialCRS` prims, Site A building + wing in 3D UTM 11N with heading 30, Site B mast in EPSG:4979 on Site A's
+corner via PROJ's topocentric conversion) and exports recorded data per `docs/RECORDED_FORMAT.md` to
+`app/public/recorded/`. `reference -- check`: mast on corner and linearization error both below 1 um.
+The app draws the export by default (`?data=recorded`; W0 meshes under `?data=w0`). Playwright `w1 global|local`
+passes: both anchors ok, mast-to-corner distance in render space 1.3e-7 (global) and 5e-5 Web Mercator units (local).
+Exit criterion met pending Simon's visual check (`geo.py serve dev`, presets Overview / Street level / Corner).
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -64,3 +73,14 @@ Then C1 (resolution + engine registry + PROJ plugin), W1 (recorded data from the
 C3, C4, I1, I2. See PLAN.md for exit criteria and the test plan T1 to T11.
 
 Open questions to raise with Simon (or the proposal authors) are listed in PLAN.md.
+- (W1) **`renderCoordinateTransformAt` is metric on the SDK sphere.** Its frame has unit-length axes, but the SDK places
+  lon/lat content on a 6378137 m sphere, 0.1 % (east-west) to 0.3 % (north-south, latitude dependent) off the WGS84
+  ellipsoid. Meshes drawn in that frame drift from lon/lat-placed content: 2.4 cm over 22 m in W1, about 1 m at the
+  edge of a 1 km model. The app uses the derivative of the SDK's own mapping (`toRenderCoordinates`) instead.
+- (W1) The SDK reports Web Mercator as wkid 102100 (latestWkid 3857); compare both.
+- (W1) EPSG:3857 is not exactly conformal on the ellipsoid: at 34 deg N the local scale is 1.2072 along one model
+  axis and 1.2099 along the other, with a 0.11 deg angle change. The reference keeps this, so local views are true.
+- (W1, T9) pyproj 3.8.0 bundles PROJ 9.8.1; the native and WASM builds use PROJ 9.9.0. Decide before I1 whether the
+  reference should build pyproj against our PROJ.
+- (W1, C3) The anchor's own ordinary transform `A` (post-placement adjustment in the working chart) is still a candidate
+  in the proposal; the reference reports it as unsupported. W1 fixtures author none.

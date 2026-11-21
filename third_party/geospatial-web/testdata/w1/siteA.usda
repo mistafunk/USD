@@ -1,0 +1,42 @@
+#usda 1.0
+(
+    defaultPrim = "SiteA"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SiteA" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crs_library.usda@</CRS/WGS84_UTM11N_3D>
+)
+{
+    double3 crs:orientation = (30, 0, 0)
+    double3 crs:position = (481957.95, 3768437.85, 0)
+
+    def Mesh "Building"
+    {
+        float3[] extent = [(-20, -10, 0), (20, 10, 12)]
+        int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+        int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+        point3f[] points = [(-20, -10, 0), (20, -10, 0), (20, 10, 0), (-20, 10, 0), (-20, -10, 12), (20, -10, 12), (20, 10, 12), (-20, 10, 12)]
+        color3f[] primvars:displayColor = [(0.85, 0.45, 0.15)]
+        uniform token subdivisionScheme = "none"
+    }
+
+    def Xform "Wing"
+    {
+        double3 xformOp:translate = (30, 5, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Mesh "Box"
+        {
+            float3[] extent = [(-5, -5, 0), (5, 5, 6)]
+            int[] faceVertexCounts = [4, 4, 4, 4, 4, 4]
+            int[] faceVertexIndices = [0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7]
+            point3f[] points = [(-5, -5, 0), (5, -5, 0), (5, 5, 0), (-5, 5, 0), (-5, -5, 6), (5, -5, 6), (5, 5, 6), (-5, 5, 6)]
+            color3f[] primvars:displayColor = [(0.9, 0.7, 0.3)]
+            uniform token subdivisionScheme = "none"
+        }
+    }
+}
+

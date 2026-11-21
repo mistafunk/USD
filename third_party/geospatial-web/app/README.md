@@ -1,7 +1,8 @@
 # app
 
-Maps SDK web app: a `RenderNode` with a minimal WebGL2 mesh pass. W0 draws hard-coded meshes; from W1 on it draws
-recorded buffers, and from I1 the live WASM module's output.
+Maps SDK web app: a `RenderNode` with a minimal WebGL2 mesh pass. It draws recorded placement data from the offline
+reference (W1, `public/recorded/`, format in `../docs/RECORDED_FORMAT.md`) or the W0 hard-coded meshes; from I1 on, the
+live WASM module's output.
 
 ```
 npm ci
@@ -15,12 +16,16 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | File | Purpose |
 |---|---|
 | `src/meshPass.ts` | WebGL2 pass in a `RenderNode`. Per mesh: float32-exact render origin + Float64 matrix; modelView = `viewMatrix` x translate(origin) x matrix in Float64, cast to float32 once |
-| `src/main.ts` | SceneView (`?view=global` or `local`), test meshes, camera presets, status panel, `window.__w0` test hooks |
-| `src/shapes.ts`, `src/mat4.ts` | Test geometry in local ENU metres; Float64 matrix helpers |
+| `src/main.ts` | SceneView (`?view=global` or `local`), content (`?data=recorded` or `w0`), camera presets, status panel, `window.__app` test hooks |
+| `src/recorded.ts` | Loads and places recorded data (D13); global frame from the SDK's own geographic-to-render mapping |
+| `src/w0Scene.ts`, `src/shapes.ts` | W0 test meshes in Zurich |
+| `src/scene.ts`, `src/mat4.ts` | Shared scene type; Float64 matrix helpers |
+| `public/recorded/` | Reference export (generated: `python ../tools/geo.py reference -- export`) |
 | `vite.config.ts` | COOP/COEP headers; serves the SDK assets from our origin at `/arcgis-assets` |
 | `tests/w0.spec.ts` | W0 checks and screenshots (`test-results/w0-<view>[-naive]-<preset>.png`) |
+| `tests/w1.spec.ts` | W1 checks: anchors ok, mast on the building corner in render space; screenshots `w1-<view>-<preset>.png` |
 
-URL options: `?view=global|local`, `&naive=1` bakes absolute render coordinates into float32 vertices (what a
+URL options: `?view=global|local`, `&data=recorded|w0`, and for W0 `&naive=1`, which bakes absolute render coordinates into float32 vertices (what a
 float32-only pipeline does) to show the jitter the origin split avoids.
 
 Notes:

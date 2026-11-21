@@ -1,0 +1,4 @@
+# Offline reference (plan option D). Python >= 3.12; geo.py creates <workspace>/venv-reference.
+usd-core==26.8
+pyproj==3.8.0
+numpy==2.5.5

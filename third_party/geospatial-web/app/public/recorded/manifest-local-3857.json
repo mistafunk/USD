@@ -1,0 +1,190 @@
+{
+ "format": "geospatial-web-recorded",
+ "version": 1,
+ "stage": "scene.usda",
+ "output": {
+  "name": "local-3857",
+  "crs": "EPSG:3857",
+  "wkt": "PROJCRS[\"WGS 84 / Pseudo-Mercator\",BASEGEOGCRS[\"WGS 84\",ENSEMBLE[\"World Geodetic System 1984 ensemble\",MEMBER[\"World Geodetic System 1984 (Transit)\"],MEMBER[\"World Geodetic System 1984 (G730)\"],MEMBER[\"World Geodetic System 1984 (G873)\"],MEMBER[\"World Geodetic System 1984 (G1150)\"],MEMBER[\"World Geodetic System 1984 (G1674)\"],MEMBER[\"World Geodetic System 1984 (G1762)\"],MEMBER[\"World Geodetic System 1984 (G2139)\"],MEMBER[\"World Geodetic System 1984 (G2296)\"],ELLIPSOID[\"WGS 84\",6378137,298.257223563,LENGTHUNIT[\"metre\",1]],ENSEMBLEACCURACY[2.0]],PRIMEM[\"Greenwich\",0,ANGLEUNIT[\"degree\",0.0174532925199433]],ID[\"EPSG\",4326]],CONVERSION[\"Popular Visualisation Pseudo-Mercator\",METHOD[\"Popular Visualisation Pseudo Mercator\",ID[\"EPSG\",1024]],PARAMETER[\"Latitude of natural origin\",0,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8801]],PARAMETER[\"Longitude of natural origin\",0,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8802]],PARAMETER[\"False easting\",0,LENGTHUNIT[\"metre\",1],ID[\"EPSG\",8806]],PARAMETER[\"False northing\",0,LENGTHUNIT[\"metre\",1],ID[\"EPSG\",8807]]],CS[Cartesian,2],AXIS[\"easting (X)\",east,ORDER[1],LENGTHUNIT[\"metre\",1]],AXIS[\"northing (Y)\",north,ORDER[2],LENGTHUNIT[\"metre\",1]],USAGE[SCOPE[\"Web mapping and visualisation.\"],AREA[\"World between 85.06\u00b0S and 85.06\u00b0N.\"],BBOX[-85.06,-180,85.06,180]],ID[\"EPSG\",3857]]",
+  "frame": "crs"
+ },
+ "engine": {
+  "name": "pyproj",
+  "version": "3.8.0",
+  "proj": "9.8.1"
+ },
+ "stageMetersPerUnit": 1.0,
+ "stageUpAxis": "Z",
+ "buffers": "buffers.bin",
+ "anchors": [
+  {
+   "path": "/World/SiteA",
+   "status": "ok",
+   "sourceCrs": "WGS 84 / UTM zone 11N",
+   "position": [
+    481957.95,
+    3768437.85,
+    0.0
+   ],
+   "orientation": [
+    30.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -13046143.38025676,
+    4036391.118725221,
+    -9.313225746154785e-10
+   ],
+   "operation": "Null geographic offset from WGS 84 (geog3D) to WGS 84 (geog2D) + unnamed (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  },
+  {
+   "path": "/World/SiteB",
+   "status": "ok",
+   "sourceCrs": "WGS 84",
+   "position": [
+    -117.19525820912393,
+    34.05648790373001,
+    3.915652632713318e-05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -13046116.46722589,
+    4036389.495817053,
+    3.915652632713318e-05
+   ],
+   "operation": "Null geographic offset from WGS 84 (geog3D) to WGS 84 (geog2D) + unnamed (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  }
+ ],
+ "meshes": [
+  {
+   "path": "/World/SiteA/Building",
+   "anchor": "/World/SiteA",
+   "status": "ok",
+   "color": [
+    0.8500000238418579,
+    0.44999998807907104,
+    0.15000000596046448
+   ],
+   "points": {
+    "byteOffset": 0,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 432,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 864,
+    "count": 36
+   },
+   "matrix": [
+    1.0442133145406842,
+    -0.6056656949222088,
+    -4.656612873077393e-10,
+    0.0,
+    0.6028768392279744,
+    1.0490437559783459,
+    0.0,
+    0.0,
+    0.0,
+    -6.984919309616089e-10,
+    1.0000000004656613,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 8.862377177719851e-05
+  },
+  {
+   "path": "/World/SiteA/Wing/Box",
+   "anchor": "/World/SiteA",
+   "status": "ok",
+   "color": [
+    0.8999999761581421,
+    0.699999988079071,
+    0.30000001192092896
+   ],
+   "points": {
+    "byteOffset": 1008,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 1440,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 1872,
+    "count": 36
+   },
+   "matrix": [
+    1.0442133145406842,
+    -0.6056656949222088,
+    -4.656612873077393e-10,
+    0.0,
+    0.6028768392279744,
+    1.0490437559783459,
+    0.0,
+    0.0,
+    0.0,
+    -6.984919309616089e-10,
+    1.0000000004656613,
+    0.0,
+    34.3407836323604,
+    -12.924752067774534,
+    -1.3969838619232178e-08,
+    1.0
+   ],
+   "linearizationError": 0.00014614434096686562
+  },
+  {
+   "path": "/World/SiteB/Mast",
+   "anchor": "/World/SiteB",
+   "status": "ok",
+   "color": [
+    0.20000000298023224,
+    0.5,
+    0.8999999761581421
+   ],
+   "points": {
+    "byteOffset": 2016,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 2448,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 2880,
+    "count": 36
+   },
+   "matrix": [
+    1.2057535042986274,
+    6.984919309616089e-10,
+    -4.656612873077393e-10,
+    0.0,
+    0.0,
+    1.2113312198780477,
+    -4.656612873077393e-10,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 3.3756791083255073e-06
+  }
+ ]
+}

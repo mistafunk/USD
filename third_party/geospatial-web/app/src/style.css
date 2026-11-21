@@ -2,7 +2,7 @@
 
 html, body, #viewDiv { margin: 0; padding: 0; width: 100%; height: 100%; }
 #panel {
-  position: absolute; top: 12px; right: 12px; max-width: 360px;
+  position: absolute; top: 12px; right: 12px; max-width: 520px;
   background: rgba(255, 255, 255, 0.92); padding: 8px 10px; border-radius: 4px;
   font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }

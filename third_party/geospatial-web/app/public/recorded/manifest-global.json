@@ -1,0 +1,190 @@
+{
+ "format": "geospatial-web-recorded",
+ "version": 1,
+ "stage": "scene.usda",
+ "output": {
+  "name": "global",
+  "crs": "EPSG:4979",
+  "wkt": "GEOGCRS[\"WGS 84\",ENSEMBLE[\"World Geodetic System 1984 ensemble\",MEMBER[\"World Geodetic System 1984 (Transit)\"],MEMBER[\"World Geodetic System 1984 (G730)\"],MEMBER[\"World Geodetic System 1984 (G873)\"],MEMBER[\"World Geodetic System 1984 (G1150)\"],MEMBER[\"World Geodetic System 1984 (G1674)\"],MEMBER[\"World Geodetic System 1984 (G1762)\"],MEMBER[\"World Geodetic System 1984 (G2139)\"],MEMBER[\"World Geodetic System 1984 (G2296)\"],ELLIPSOID[\"WGS 84\",6378137,298.257223563,LENGTHUNIT[\"metre\",1]],ENSEMBLEACCURACY[2.0]],PRIMEM[\"Greenwich\",0,ANGLEUNIT[\"degree\",0.0174532925199433]],CS[ellipsoidal,3],AXIS[\"geodetic latitude (Lat)\",north,ORDER[1],ANGLEUNIT[\"degree\",0.0174532925199433]],AXIS[\"geodetic longitude (Lon)\",east,ORDER[2],ANGLEUNIT[\"degree\",0.0174532925199433]],AXIS[\"ellipsoidal height (h)\",up,ORDER[3],LENGTHUNIT[\"metre\",1]],USAGE[SCOPE[\"Geodesy. Navigation and positioning using GPS satellite system.\"],AREA[\"World.\"],BBOX[-90,-180,90,180]],ID[\"EPSG\",4979]]",
+  "frame": "enu"
+ },
+ "engine": {
+  "name": "pyproj",
+  "version": "3.8.0",
+  "proj": "9.8.1"
+ },
+ "stageMetersPerUnit": 1.0,
+ "stageUpAxis": "Z",
+ "buffers": "buffers.bin",
+ "anchors": [
+  {
+   "path": "/World/SiteA",
+   "status": "ok",
+   "sourceCrs": "WGS 84 / UTM zone 11N",
+   "position": [
+    481957.95,
+    3768437.85,
+    0.0
+   ],
+   "orientation": [
+    30.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -117.19549997299366,
+    34.05649998208545,
+    -9.313225746154785e-10
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  },
+  {
+   "path": "/World/SiteB",
+   "status": "ok",
+   "sourceCrs": "WGS 84",
+   "position": [
+    -117.19525820912393,
+    34.05648790373001,
+    3.915652632713318e-05
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -117.19525820912393,
+    34.056487903730016,
+    3.915652632713318e-05
+   ],
+   "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
+   "accuracy": 0.0
+  }
+ ],
+ "meshes": [
+  {
+   "path": "/World/SiteA/Building",
+   "anchor": "/World/SiteA",
+   "status": "ok",
+   "color": [
+    0.8500000238418579,
+    0.44999998807907104,
+    0.15000000596046448
+   ],
+   "points": {
+    "byteOffset": 0,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 432,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 864,
+    "count": 36
+   },
+   "matrix": [
+    0.8660254027215425,
+    -0.5000000002166795,
+    -6.552446779606313e-10,
+    0.0,
+    0.5000000001565781,
+    0.8660254040213691,
+    -2.9072846907673977e-10,
+    0.0,
+    8.342374013814435e-11,
+    -4.5444031870900403e-10,
+    1.0000000002173355,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 2.7016382975191134e-08
+  },
+  {
+   "path": "/World/SiteA/Wing/Box",
+   "anchor": "/World/SiteA",
+   "status": "ok",
+   "color": [
+    0.8999999761581421,
+    0.699999988079071,
+    0.30000001192092896
+   ],
+   "points": {
+    "byteOffset": 1008,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 1440,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 1872,
+    "count": 36
+   },
+   "matrix": [
+    0.8660254027215425,
+    -0.5000000002166795,
+    -6.552446779606313e-10,
+    0.0,
+    0.5000000001565781,
+    0.8660254040213691,
+    -2.9072846907673977e-10,
+    0.0,
+    8.342374013814435e-11,
+    -4.5444031870900403e-10,
+    1.0000000002173355,
+    0.0,
+    28.480762082429166,
+    -10.669872986393539,
+    -2.111098268420264e-08,
+    1.0
+   ],
+   "linearizationError": 4.556466622346781e-08
+  },
+  {
+   "path": "/World/SiteB/Mast",
+   "anchor": "/World/SiteB",
+   "status": "ok",
+   "color": [
+    0.20000000298023224,
+    0.5,
+    0.8999999761581421
+   ],
+   "points": {
+    "byteOffset": 2016,
+    "count": 36
+   },
+   "normals": {
+    "byteOffset": 2448,
+    "count": 36
+   },
+   "indices": {
+    "byteOffset": 2880,
+    "count": 36
+   },
+   "matrix": [
+    0.9999999991195552,
+    4.0980856557328287e-10,
+    -1.905143766283016e-10,
+    0.0,
+    1.559982698573492e-11,
+    1.0000000000560296,
+    -2.2606588823137486e-10,
+    0.0,
+    -2.521619579809453e-10,
+    1.1213546757815607e-10,
+    0.9999999998443296,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 8.991151802628517e-09
+  }
+ ]
+}

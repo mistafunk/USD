@@ -187,7 +187,7 @@ def emsdk_env():
     env["EMSDK"] = str(EMSDK)
     env["EM_CACHE"] = str(CACHE / "emscripten")
     if not env.get("EMSDK_PYTHON"):
-        py = emscripten_python()
+        py = find_python((3, 10))
         if not py:
             fail("emscripten needs Python >= 3.10; install one (AlmaLinux: "
                  "dnf install python3.12) or set EMSDK_PYTHON")
@@ -195,13 +195,14 @@ def emsdk_env():
     return env
 
 
-def emscripten_python():
-    """emcc needs Python >= 3.10; the emcc wrapper honours EMSDK_PYTHON.
-    emsdk bundles a Python on Windows and macOS but not on Linux."""
-    if sys.version_info >= (3, 10):
+def find_python(minimum):
+    """A Python >= minimum: this one, else python3.N on PATH (newest first).
+    emcc needs >= 3.10 (honours EMSDK_PYTHON; emsdk bundles a Python on
+    Windows and macOS but not on Linux); the reference needs >= 3.12."""
+    if sys.version_info >= minimum:
         return sys.executable
-    for name in ("python3.13", "python3.12", "python3.11", "python3.10"):
-        found = shutil.which(name)
+    for minor in range(14, minimum[1] - 1, -1):
+        found = shutil.which("python3.{}".format(minor))
         if found:
             return found
     return None
@@ -517,8 +518,13 @@ def cmd_reference(args):
     def body(log):
         py = venv_python(VENV_REFERENCE)
         if not py.exists():
-            run([sys.executable, "-m", "venv", VENV_REFERENCE], log)
-        run([py, "-m", "pip", "install", "-r", reqs], log)
+            # usd-core and pyproj pins need Python >= 3.12.
+            base = find_python((3, 12))
+            if not base:
+                fail("the reference needs Python >= 3.12 (AlmaLinux: "
+                     "dnf install python3.12)")
+            run([base, "-m", "venv", VENV_REFERENCE], log)
+        run([py, "-m", "pip", "install", "-q", "-r", reqs], log)
         run([py, script] + extra, log, cwd=ref)
 
     logged("reference", body)

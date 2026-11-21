@@ -10,6 +10,7 @@ Everything else in this repository is upstream OpenUSD. Read these first:
 - `third_party/geospatial-web/docs/NEXT_STEPS.md`: where to start.
 - `third_party/geospatial-web/docs/WASM_GAP.md`: what upstream v26.08 does and does not build for WASM, and the Autodesk reference.
 - `third_party/geospatial-web/docs/PROPOSAL_NOTES.md`: the parts of the geospatial proposal we implement.
+- `third_party/geospatial-web/docs/RECORDED_FORMAT.md`: placement data the C3 observer must produce (W1 contract).
 
 ## Hard rules
 

@@ -61,6 +61,7 @@ export default defineConfig({
       "@arcgis/core/config.js",
       "@arcgis/core/core/reactiveUtils.js",
       "@arcgis/core/geometry/SpatialReference.js",
+      "@arcgis/core/geometry/support/webMercatorUtils.js",
       "@arcgis/core/layers/TileLayer.js",
       "@arcgis/core/views/3d/webgl.js",
       "@arcgis/core/views/3d/webgl/ManagedFBO.js",

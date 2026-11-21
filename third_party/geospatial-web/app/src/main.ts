@@ -1,9 +1,11 @@
-// W0 spike: a RenderNode draws hard-coded meshes at float32-exact render
-// origins, in a global or local SceneView, on a cross-origin isolated page.
+// Geospatial web app: a RenderNode draws placed meshes in a global or local
+// SceneView on a cross-origin isolated page.
 //
 //   ?view=global|local   viewing mode (default global)
-//   &naive=1             bake absolute render coordinates into float32
-//                        vertices instead (shows the jitter we avoid)
+//   &data=recorded|w0    recorded reference export (W1, default) or the W0
+//                        hard-coded meshes
+//   &naive=1             W0 only: bake absolute render coordinates into
+//                        float32 vertices (shows the jitter we avoid)
 
 import esriConfig from "@arcgis/core/config.js";
 import Basemap from "@arcgis/core/Basemap.js";
@@ -14,48 +16,51 @@ import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import TileLayer from "@arcgis/core/layers/TileLayer.js";
 import SceneView from "@arcgis/core/views/SceneView.js";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
-import { renderCoordinateTransformAt } from "@arcgis/core/views/3d/webgl.js";
-import { identity } from "./mat4";
-import { MeshPass, type PassStats, type PlacedMesh } from "./meshPass";
-import { box, type LocalMesh } from "./shapes";
+import { transformPoint } from "./mat4";
+import { MeshPass, type PassStats } from "./meshPass";
+import { loadRecordedScene } from "./recorded";
+import type { CameraPreset, Scene } from "./scene";
+import { w0Scene } from "./w0Scene";
 
 // Self-hosted SDK assets (see vite.config.ts); the CDN worker is blocked by COEP.
 esriConfig.assetsPath = __ARCGIS_ASSETS__;
 
 const params = new URLSearchParams(location.search);
 const viewingMode = params.get("view") === "local" ? "local" : "global";
-const naive = params.get("naive") === "1";
-
-// Zurich main station square; height 0 (no elevation layer in W0).
-const ANCHOR = { lon: 8.5402, lat: 47.3779, h: 0 };
+const data = params.get("data") === "w0" ? "w0" : "recorded";
+const naive = data === "w0" && params.get("naive") === "1";
 const M_PER_DEG_LAT = 111320;
-const M_PER_DEG_LON = M_PER_DEG_LAT * Math.cos((ANCHOR.lat * Math.PI) / 180);
 
-interface W0State {
+/** Test and debugging hooks, read by the Playwright specs. */
+interface AppState {
   ready: boolean;
   updating: boolean;
-  goto?: (preset: string) => Promise<unknown>;
   viewingMode: string;
-  naive: boolean;
+  data: string;
+  scene: string;
   crossOriginIsolated: boolean;
   sharedArrayBuffer: boolean;
   stats: PassStats | null;
-  origins: Record<string, number[]>;
+  anchors: Scene["anchors"];
   errors: string[];
+  goto?: (preset: string) => Promise<unknown>;
+  /** Render-space position (Float64) of a mesh-local point. */
+  renderPoint?: (mesh: string, p: number[]) => number[] | null;
 }
 
-const state: W0State = {
+const state: AppState = {
   ready: false,
   updating: true,
   viewingMode,
-  naive,
+  data,
+  scene: "",
   crossOriginIsolated: globalThis.crossOriginIsolated === true,
   sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
   stats: null,
-  origins: {},
+  anchors: [],
   errors: [],
 };
-(globalThis as unknown as { __w0: W0State }).__w0 = state;
+(globalThis as unknown as { __app: AppState }).__app = state;
 addEventListener("error", (e) => state.errors.push(String(e.message)));
 addEventListener("unhandledrejection", (e) => state.errors.push(String(e.reason)));
 
@@ -68,94 +73,47 @@ const basemap = new Basemap({
 
 const view = new SceneView({
   container: "viewDiv",
-  // No terrain in W0; let the camera go down to street level (the default
+  // No terrain yet; let the camera go down to street level (the default
   // stay-above constraint keeps it several metres up).
   map: new Map({ basemap, ground: new Ground({ navigationConstraint: { type: "none" } }) }),
   viewingMode,
   spatialReference: viewingMode === "local" ? SpatialReference.WebMercator : undefined,
-  camera: cameraFor("overview"),
 });
+
+let scene: Scene | null = null;
+
+function cameraFor(s: Scene, p: CameraPreset): Camera {
+  const [lon, lat, h] = s.target;
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180);
+  return new Camera({
+    position: {
+      longitude: lon + p.east / mPerDegLon,
+      latitude: lat + p.north / M_PER_DEG_LAT,
+      z: h + p.up,
+      spatialReference: SpatialReference.WGS84,
+    },
+    heading: p.heading,
+    tilt: p.tilt,
+  });
+}
 
 /**
  * Moves the camera. The SDK picks near/far clip distances from the scene it
  * knows about, which excludes RenderNode geometry, so close to our meshes it
- * clips them. Use a fixed 10 cm near plane for the street-level presets.
+ * clips them; close-up presets use a fixed 10 cm near plane.
  */
-function goto(preset: string, animate: boolean): Promise<unknown> {
+function goto(name: string, animate: boolean): Promise<unknown> {
+  if (!scene) return Promise.resolve();
+  const preset = scene.presets[name];
+  if (!preset) return Promise.reject(new Error("unknown preset " + name));
   const clip = view.constraints.clipDistance;
-  if (preset === "overview") {
-    clip.mode = "auto";
-  } else {
+  if (preset.near) {
     clip.near = 0.1;
     clip.far = 50_000;
+  } else {
+    clip.mode = "auto";
   }
-  return view.goTo(cameraFor(preset), { animate });
-}
-
-/** Camera at an offset (metres east, north, up) from the anchor. */
-function cameraFor(preset: string): Camera {
-  const at = (east: number, north: number, up: number, heading: number, tilt: number) =>
-    new Camera({
-      position: {
-        longitude: ANCHOR.lon + east / M_PER_DEG_LON,
-        latitude: ANCHOR.lat + north / M_PER_DEG_LAT,
-        z: ANCHOR.h + up,
-        spatialReference: SpatialReference.WGS84,
-      },
-      heading,
-      tilt,
-    });
-  switch (preset) {
-    case "street": return at(0, -40, 2, 0, 88);
-    // 1 m south of the 5 cm pole, looking north at it; the 10 m box's
-    // south-west edge is in the background, 4.5 m further.
-    case "close": return at(-3, -6.5, 1.5, 0, 90);
-    default: return at(0, -500, 350, 0, 55);
-  }
-}
-
-/**
- * Places a mesh given in local ENU metres at a geographic anchor. The render
- * frame comes from the SDK in Float64; its translation is split into a
- * float32-exact origin plus a small Float64 remainder kept in the matrix.
- */
-function place(name: string, local: LocalMesh, east: number, north: number,
-               color: [number, number, number]): PlacedMesh {
-  const anchor = [
-    ANCHOR.lon + east / M_PER_DEG_LON,
-    ANCHOR.lat + north / M_PER_DEG_LAT,
-    ANCHOR.h,
-  ];
-  const frame = renderCoordinateTransformAt(view, anchor, SpatialReference.WGS84,
-                                            new Float64Array(16));
-  if (!frame) throw new Error("renderCoordinateTransformAt failed for " + name);
-
-  if (naive) {
-    // What a float32-only pipeline does: absolute render coordinates in the
-    // vertex buffer. Large values (ECEF ~6.4e6 m) lose centimetres to metres.
-    const positions = new Float32Array(local.positions.length);
-    const normals = new Float32Array(local.normals.length);
-    for (let i = 0; i < local.positions.length; i += 3) {
-      for (let r = 0; r < 3; r++) {
-        positions[i + r] = frame[r] * local.positions[i] + frame[4 + r] * local.positions[i + 1] +
-          frame[8 + r] * local.positions[i + 2] + frame[12 + r];
-        normals[i + r] = frame[r] * local.normals[i] + frame[4 + r] * local.normals[i + 1] +
-          frame[8 + r] * local.normals[i + 2];
-      }
-    }
-    state.origins[name] = [0, 0, 0];
-    return { name, origin: new Float32Array(3), matrix: identity(), positions, normals,
-             indices: local.indices, color };
-  }
-
-  const origin = Float32Array.from([frame[12], frame[13], frame[14]]);
-  const matrix = Float64Array.from(frame);
-  matrix[12] -= origin[0];
-  matrix[13] -= origin[1];
-  matrix[14] -= origin[2];
-  state.origins[name] = Array.from(origin);
-  return { name, origin, matrix, positions: local.positions, normals: local.normals,
-           indices: local.indices, color };
+  return view.goTo(cameraFor(scene, preset), { animate });
 }
 
 watch(() => view.updating, (updating) => { state.updating = updating; },
@@ -164,47 +122,63 @@ watch(() => view.updating, (updating) => { state.updating = updating; },
 const pass = new MeshPass(view);
 state.stats = pass.stats;
 
-view.when(() => {
-  pass.setMeshes([
-    place("box10m", box(10, 10, 10), 0, 0, [0.9, 0.45, 0.1]),
-    place("box1m", box(1, 1, 1), 8, -3, [0.15, 0.55, 0.9]),
-    // A 5 cm pole: wobbles visibly if precision is lost.
-    place("pole5cm", box(0.05, 0.05, 4), -3, -5.5, [0.95, 0.95, 0.2]),
-  ]);
+view.when(async () => {
+  scene = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, "recorded");
+  state.scene = scene.name;
+  state.anchors = scene.anchors;
+  pass.setMeshes(scene.meshes);
+  buildPresetButtons(scene);
+  await goto("overview", false);
   state.goto = (preset) => goto(preset, false);
+  state.renderPoint = (mesh, p) => {
+    const m = scene?.renderMatrices.get(mesh);
+    return m ? transformPoint(m, p) : null;
+  };
   state.ready = true;
-}, (err: unknown) => state.errors.push("view: " + String(err)));
+}).catch((err: unknown) => state.errors.push("scene: " + String(err)));
 
 // --- panel ---------------------------------------------------------------
 
-document.querySelectorAll<HTMLAnchorElement>("a[data-view]").forEach((a) => {
-  const p = new URLSearchParams(location.search);
-  p.set("view", a.dataset.view!);
-  a.href = "?" + p.toString();
-  a.classList.toggle("active", a.dataset.view === viewingMode);
-});
+function setLinks() {
+  document.querySelectorAll<HTMLAnchorElement>("a[data-view], a[data-data]").forEach((a) => {
+    const p = new URLSearchParams(location.search);
+    if (a.dataset.view) p.set("view", a.dataset.view);
+    if (a.dataset.data) p.set("data", a.dataset.data);
+    a.href = "?" + p.toString();
+    a.classList.toggle("active", a.dataset.view === viewingMode || a.dataset.data === data);
+  });
+}
+setLinks();
+
 const naiveBox = document.getElementById("naive") as HTMLInputElement;
 naiveBox.checked = naive;
+naiveBox.disabled = data !== "w0";
 naiveBox.addEventListener("change", () => {
   const p = new URLSearchParams(location.search);
   if (naiveBox.checked) p.set("naive", "1"); else p.delete("naive");
   location.search = p.toString();
 });
-document.querySelectorAll<HTMLButtonElement>("button[data-goto]").forEach((b) =>
-  b.addEventListener("click", () => goto(b.dataset.goto!, true)));
+
+function buildPresetButtons(s: Scene) {
+  const row = document.getElementById("presets")!;
+  row.replaceChildren(...Object.entries(s.presets).map(([name, p]) => {
+    const b = document.createElement("button");
+    b.textContent = p.label;
+    b.addEventListener("click", () => goto(name, true));
+    return b;
+  }));
+}
 
 const statusEl = document.getElementById("status")!;
 setInterval(() => {
   const cam = view.camera;
   statusEl.textContent = [
-    `viewingMode       ${viewingMode}${naive ? " (naive float32)" : ""}`,
-    `crossOriginIsolated ${state.crossOriginIsolated}`,
-    `SharedArrayBuffer ${state.sharedArrayBuffer}`,
-    `near ${pass.stats.near.toFixed(2)} m  clip ${view.constraints.clipDistance.mode}`,
+    `${viewingMode}: ${state.scene || "loading"}`,
+    `crossOriginIsolated ${state.crossOriginIsolated}  SAB ${state.sharedArrayBuffer}`,
     `frames ${pass.stats.frames}  meshes ${pass.stats.meshes}  tris ${pass.stats.triangles}`,
-    `camera z ${cam?.position.z?.toFixed(2) ?? "-"} m`,
-    `origin box10m ${(state.origins.box10m ?? []).map((v) => v.toFixed(1)).join(", ")}`,
+    `near ${pass.stats.near.toFixed(2)} m (${view.constraints.clipDistance.mode})` +
+      `  camera z ${cam?.position.z?.toFixed(2) ?? "-"} m`,
+    ...state.anchors.map((a) => `${a.status.padEnd(11)} ${a.path}\n            ${a.detail}`),
     state.errors.length ? `errors: ${state.errors.join("; ")}` : "",
   ].filter(Boolean).join("\n");
 }, 250);
-
