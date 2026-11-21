@@ -6,6 +6,10 @@ import { expect, test, type Page } from "@playwright/test";
 import type { HarnessReport } from "../src/harness";
 import { writeReport } from "./report";
 
+// Recorded data directory: the reference export, or the C++ observer's
+// (GEO_RECORDED_SRC=recorded-cpp after geo.py record).
+const src = process.env.GEO_RECORDED_SRC ?? "recorded";
+
 test.describe.configure({ mode: "serial" });
 
 interface App {
@@ -27,7 +31,7 @@ async function settle(page: Page) {
 
 for (const mode of ["global", "local"]) {
   test(`w2 ${mode}`, async ({ page }) => {
-    await page.goto(`/?view=${mode}&data=recorded`);
+    await page.goto(`/?view=${mode}&data=recorded&src=${src}`);
     await settle(page);
     const report = await page.evaluate(() =>
       (globalThis as unknown as { __app: App }).__app.score());

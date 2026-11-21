@@ -29,6 +29,11 @@ esriConfig.assetsPath = __ARCGIS_ASSETS__;
 const params = new URLSearchParams(location.search);
 const viewingMode = params.get("view") === "local" ? "local" : "global";
 const data = params.get("data") === "w0" ? "w0" : "recorded";
+// Directory of recorded data under public/: the offline reference's export
+// (recorded) or the C++ observer's (recorded-cpp, geo.py record).
+const recordedDir = /^[a-z0-9-]+$/.test(params.get("src") ?? "")
+  ? params.get("src")!
+  : "recorded";
 const naive = data === "w0" && params.get("naive") === "1";
 const M_PER_DEG_LAT = 111320;
 
@@ -140,7 +145,7 @@ const pass = new MeshPass(view);
 state.stats = pass.stats;
 
 view.when(async () => {
-  scene = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, "recorded");
+  scene = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, recordedDir);
   state.scene = scene.name;
   state.anchors = scene.anchors;
   pass.setMeshes(scene.meshes);

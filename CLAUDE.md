@@ -35,10 +35,11 @@ Everything else in this repository is upstream OpenUSD. Read these first:
 
 | Path | Contents |
 |---|---|
-| `pxr/usd/usdGeospatial` | Schemas, binding resolution, placement F(x), engine interface + registry, geospatial scene index, observer |
+| `pxr/usd/usdGeospatial` | Schemas, binding resolution, placement F(x), engine interface + registry |
+| `pxr/usdImaging/usdGeospatialImaging` | usdImaging adapter for the binding API, placement scene index (+ scene index plugin for usdview), mesh observer (D16) |
 | `pxr/usd/plugin/usdGeospatialProj` | PROJ engine plugin (option `PXR_BUILD_GEOSPATIAL_PROJ`) |
 | `build_scripts/`, `cmake/`, `pxr/imaging/*`, `pxr/usdImaging/usdImaging` | WASM port of the GPU-free Hydra subset |
-| `third_party/geospatial-web` | Everything of ours that never goes upstream: `docs/`, `tools/` (`geo.py`, `CMakePresets.json`, `nginx.conf`, compose file), `module/` (embind + final WASM link), `app/` (Maps SDK app, RenderNode, worker, Playwright harness), `testdata/`, `reference/` |
+| `third_party/geospatial-web` | Everything of ours that never goes upstream: `docs/`, `tools/` (`geo.py`, `CMakePresets.json`, `nginx.conf`, compose file), `module/` (`geospatialRecord` dump tool; embind + final WASM link in C4; option `PXR_BUILD_GEOSPATIAL_WEB`), `app/` (Maps SDK app, RenderNode, worker, Playwright harness), `testdata/`, `reference/` |
 
 ## Local workspace
 

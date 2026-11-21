@@ -75,6 +75,32 @@ excluded in the `wasm32` test preset); `testUsdGeospatialProjPlacement` failed b
 the PROJ engine plugin, and static plugins were not whole-archived so their registrations were dropped (both fixed, see
 `WASM_GAP.md`); it now passes under Node with the same results as native (0 mm vs pyproj), an early T9 data point.
 
+**Update 2026-11-21, C3 (Claude Code):** new library `pxr/usdImaging/usdGeospatialImaging` (D16):
+- `GeospatialCRSBindingAPI` adapter: `geospatialBinding` (anchor path; flattened to descendants through the scene
+  index plugin's flattened data source provider) and `geospatialAnchor` (the anchor's placement inputs at the current
+  time, read with C1's `UsdGeospatialComputePlacementInputs`, so Hydra and the stage query agree by construction).
+- `UsdGeospatialImagingPlacementSceneIndex`: places each anchor once (cached, invalidated by edits, time changes and
+  transform changes), adds `geospatialPlacement` (status, reason, engine, operation, accuracy, source CRS, origin,
+  frame, `modelToFrame`, optional `linearizationError`) to every bound prim, hides prims that cannot be placed, and
+  with `applyToXform` rewrites transforms into a shared metric display frame (ENU at a display origin, or output CRS
+  units), mapped back to the stage's units and up axis.
+- Scene index plugin: `USDGEOSPATIALIMAGING_OUTPUT_CRS` (and `_DISPLAY_ORIGIN`) turns the placement on in any
+  usdImaging client, e.g. usdview; off by default.
+- `UsdGeospatialImagingMeshObserver`: flat-shaded triangles, colour, matrix and status per mesh, placement per anchor.
+- `usdGeospatial` changes: value-based `Resolve(UsdGeospatialPlacementInputs)`, `GetSourceCrs()`,
+  `UsdGeospatialComputeEnuToEcef`, and 2D output CRSs promoted to 3D (`UsdGeospatialCrsInfo::promoted3D`, PROJ
+  `proj_crs_promote_to_3D`), as pyproj's `to_3d()` does in the reference.
+- `third_party/geospatial-web/module/geospatialRecord` (`PXR_BUILD_GEOSPATIAL_WEB`, root `CMakeLists.txt` hook):
+  writes the observer's view in the recorded format; `geo.py record`, app `?src=recorded-cpp`.
+
+Tests: `testUsdGeospatialImagingPlacement` reproduces the reference export of the W1/W2 scene in both outputs (every
+status, origin and matrix, buffers, linearization errors) and checks that Site B's mast (EPSG:4979) stands on Site A's
+building corner (UTM 11N) in the display frame (2.6e-8 m global), that a heading edit and a time-sampled heading
+(slerp) re-place the scene like the stage query; `testUsdGeospatialImagingPlugin` checks what usdview sees (native
+only). All 7 `UsdGeospatial` ctests pass natively. `geo.py record` + `reference -- compare`: 0.000 mm against pyproj;
+Playwright W1/W2 on the C++ dump (`GEO_RECORDED_SRC=recorded-cpp`) pass with the same scores as the reference.
+**C3 exit met natively:** Simon confirmed the placed scene in usdview (`USDGEOSPATIALIMAGING_OUTPUT_CRS=EPSG:4979`). WASM build of the new library not run yet.
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -163,3 +189,21 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
 - (C2, C4) **Static builds must link plugins.** In the WASM build a plugin is a static library; only linked libraries
   have their `plugInfo.json` embedded under `/usd`, so the engine registry only sees engines linked into the program.
   The C4 browser module must link `usdGeospatialProj` (and any scene index plugins) explicitly.
+- (C3) **usdImaging plugin scene indices run after flattening.** They see world transforms and flattened data
+  sources (provided by `FlattenedDataSourceProviders`), not local transforms; the anchor's own transform check reads
+  the stage instead (`hasOwnTransform`).
+- (C3) **Flag time variability on every `Get`.** A data source container can outlive the edit that makes an attribute
+  time-varying (the flattening scene index keeps the input container), so flags set only in a constructor are missed;
+  upstream's attribute data sources are created per `Get`, which is why they work.
+- (C3, C4) **Env settings are read when a library loads.** `TF_DEFINE_ENV_SETTING` registers a registry function that
+  reads the setting once Tf's env settings are first used, before `main` for linked libraries, so a program cannot set
+  `USDGEOSPATIALIMAGING_*` for itself. The browser module must append the placement scene index itself (output CRS
+  from the app at runtime), not rely on the plugin's env settings. WASM processes do not see the test runner's
+  environment either, so `testUsdGeospatialImagingPlugin` is native only.
+- (C3, C4) The local view's output (`EPSG:3857`, 2D) is promoted to 3D with ellipsoidal heights; the SDK's local
+  scenes treat z as elevation. Check at I1 whether that needs a vertical CRS choice.
+- (C3) Native instancing under an anchor is not handled (instances get separate prototypes through
+  `InstanceDataSourceNames`, but anchor paths into prototypes are untested).
+- (C3) usdview's bounding box, "Local to World Xform" and the Vis column come from UsdGeom on the stage, not from
+  Hydra, so they show the unplaced scene (identity transforms, Sites D and E visible) while the viewport is placed.
+  Expected with a scene index that only changes Hydra data.

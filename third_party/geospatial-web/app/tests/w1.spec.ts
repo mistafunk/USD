@@ -4,6 +4,10 @@
 // Screenshots go to test-results/w1-<view>-<preset>.png.
 import { expect, test, type Page } from "@playwright/test";
 
+// Recorded data directory: the reference export, or the C++ observer's
+// (GEO_RECORDED_SRC=recorded-cpp after geo.py record).
+const src = process.env.GEO_RECORDED_SRC ?? "recorded";
+
 interface App {
   ready: boolean;
   updating: boolean;
@@ -53,7 +57,7 @@ for (const mode of ["global", "local"]) {
     page.on("response", (r) => { if (r.status() >= 400) failed.push(`${r.url()} ${r.status()}`); });
     page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });
 
-    await page.goto(`/?view=${mode}&data=recorded`);
+    await page.goto(`/?view=${mode}&data=recorded&src=${src}`);
     await settle(page);
 
     const a = await app(page);

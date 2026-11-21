@@ -53,7 +53,8 @@ export interface RecordedManifest {
   version: number;
   stage: string;
   output: { name: string; crs: string; frame: "enu" | "crs" };
-  engine: { name: string; version: string; proj: string };
+  /** The reference names pyproj and its PROJ; the C++ observer only the engine. */
+  engine: { name: string; version?: string; proj?: string };
   buffers: string;
   anchors: RecordedAnchor[];
   meshes: RecordedMesh[];
@@ -147,8 +148,7 @@ export function placeRecorded(view: SceneView, manifest: RecordedManifest,
   const ref = ok.find((a) => a.path.endsWith("/SiteB")) ?? ok[0];
   if (!ref) throw new Error("no placeable anchor in the recorded data");
   return {
-    name: `recorded ${manifest.output.name} (${manifest.engine.name} ` +
-          `${manifest.engine.version}, PROJ ${manifest.engine.proj})`,
+    name: `recorded ${manifest.output.name} (${engineLabel(manifest)})`,
     target: toLonLatH(manifest, ref.origin!),
     presets: PRESETS,
     meshes,
@@ -157,7 +157,7 @@ export function placeRecorded(view: SceneView, manifest: RecordedManifest,
     score: () => score({
       view,
       output: manifest.output.name,
-      engine: `${manifest.engine.name} ${manifest.engine.version}, PROJ ${manifest.engine.proj}`,
+      engine: engineLabel(manifest),
       anchors: manifest.anchors,
       controlPoints: manifest.controlPoints ?? [],
       testCases: manifest.testCases ?? [],
@@ -212,6 +212,12 @@ function toLonLatH(manifest: RecordedManifest, origin: number[]): [number, numbe
   if (manifest.output.frame === "enu") return [origin[0], origin[1], origin[2]];
   const [lon, lat] = xyToLngLat(origin[0], origin[1]);
   return [lon, lat, origin[2]];
+}
+
+function engineLabel(manifest: RecordedManifest): string {
+  const { name, version, proj } = manifest.engine;
+  return [version ? `${name} ${version}` : name, proj && `PROJ ${proj}`]
+    .filter(Boolean).join(", ");
 }
 
 async function fetchJson<T>(url: string): Promise<T> {

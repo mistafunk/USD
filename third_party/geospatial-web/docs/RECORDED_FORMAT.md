@@ -8,7 +8,9 @@ draws either without changes. One directory holds `buffers.bin` and one manifest
 | `manifest-global.json` | EPSG:4979 | `enu`: metres east/north/up on the output ellipsoid at the anchor | global SceneView (D13) |
 | `manifest-local-3857.json` | EPSG:3857 (3D) | `crs`: output CRS units (x, y, ellipsoidal height) relative to the anchor | local Web Mercator SceneView |
 
-The reference writes them to `app/public/recorded/` with `python tools/geo.py reference -- export`.
+The reference writes them to `app/public/recorded/` with `python tools/geo.py reference -- export`; the C3 observer
+(`module/geospatialRecord`) writes the same layout to `app/public/recorded-cpp/` with `python tools/geo.py record`
+(app: `?src=recorded-cpp`). `reference -- compare` checks one against the other.
 
 ## buffers.bin
 
@@ -23,7 +25,7 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
   "format": "geospatial-web-recorded", "version": 1,
   "stage": "scene.usda",
   "output": { "name": "global", "crs": "EPSG:4979", "wkt": "...", "frame": "enu" },
-  "engine": { "name": "pyproj", "version": "3.8.0", "proj": "9.8.1" },
+  "engine": { "name": "pyproj", "version": "3.8.0", "proj": "9.8.1" },  // C++: { "name": "proj" }
   "stageMetersPerUnit": 1.0, "stageUpAxis": "Z",
   "buffers": "buffers.bin",
   "anchors": [ {
@@ -50,6 +52,7 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
 }
 ```
 
+- **`output.wkt`** is the CRS placement used: a projected output is promoted to 3D (ellipsoidal height axis).
 - **`anchors[].origin`** is the anchor in the output CRS: lon, lat (degrees) and ellipsoidal height for EPSG:4979;
   x, y, height for a projected output.
 - **`meshes[].matrix`** maps a mesh-local point (stage units) into the anchor's frame: the linearization at the anchor

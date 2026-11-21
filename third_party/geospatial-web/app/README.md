@@ -27,7 +27,8 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | `tests/w1.spec.ts` | W1 checks: anchors ok, mast on the building corner in render space; screenshots `w1-<view>-<preset>.png` |
 | `tests/w2.spec.ts`, `tests/report.ts` | W2: runs the harness in both views, expects every case's outcome; writes `reports/w2-<time>.{json,html}` and `reports/latest.*` (git-ignored) |
 
-URL options: `?view=global|local`, `&data=recorded|w0`, and for W0 `&naive=1`, which bakes absolute render coordinates into float32 vertices (what a
+URL options: `?view=global|local`, `&data=recorded|w0`, `&src=recorded|recorded-cpp` (recorded data from the reference
+export or from the C++ observer, `geo.py record`), and for W0 `&naive=1`, which bakes absolute render coordinates into float32 vertices (what a
 float32-only pipeline does) to show the jitter the origin split avoids.
 
 Notes:

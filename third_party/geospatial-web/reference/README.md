@@ -8,6 +8,8 @@ python ../tools/geo.py reference -- fixtures   # writes ../testdata/scene/*.usda
 python ../tools/geo.py reference -- export     # writes ../app/public/recorded/ (format: ../docs/RECORDED_FORMAT.md)
 python ../tools/geo.py reference -- check      # scores control points with the exact point map; export checks
 python ../tools/geo.py reference -- proj-expected  # C++ PROJ engine test fixtures + pyproj expectations
+python ../tools/geo.py reference -- imaging-expected  # scene + export for the C++ placement scene index test
+python ../tools/geo.py reference -- compare    # ../app/public/recorded-cpp (geo.py record) vs the export
 ```
 
 `geo.py` creates `<workspace>/venv-reference` with the project venv's Python (3.12, `VENV_PYTHON` in `geo.py`;
@@ -36,3 +38,9 @@ Control point reference coordinates come from PROJ's topocentric conversion, not
 `expected.json`), which `testUsdGeospatialProjPlacement` compares against within 1 mm. Operations are chosen as the C++
 engine chooses them (`best_transformer`: first listed operation, no ballpark, operations needing missing grids
 discarded), otherwise PROJ may rank a different operation first.
+
+`imaging-expected` copies the test scene and its export (manifests, `buffers.bin`) to
+`pxr/usdImaging/usdGeospatialImaging/testenv/testUsdGeospatialImagingPlacement/`, which
+`testUsdGeospatialImagingPlacement` reproduces through usdImaging, the placement scene index and the observer.
+`compare` checks a recorded directory (default: the C++ observer's) against the export: statuses, anchor origins
+within 1 mm, matrices within 1e-6, identical buffers. Operation names are not compared (pyproj bundles another PROJ).

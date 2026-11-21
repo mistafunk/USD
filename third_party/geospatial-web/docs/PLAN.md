@@ -92,8 +92,8 @@ We implement the proposal's initial scope as a `usdGeospatial` library on the ge
 | Placement evaluation | F(x): position to geographic 3D, ellipsoid-normal ENU basis, heading/pitch/roll, `metersPerUnit` and `upAxis` mapping, then the anchor's ordinary xformOps; time-sampled position and slerped orientation | Source placement evaluation and transform order |
 | Engine interface | One abstract `CoordinateOperationEngine`: transform points between two WKT CRSs; return the operation used, accuracy (or unknown) and any failure reason | Principle 7; requirements 21 and 28 |
 | Engine backends | usdGeospatialProj plugin first (native and WASM); usdGeospatialEsriPE plugin later as an alternative. See Transformation engine plugins below | Initial scope: the engine chooses operations |
-| Geospatial scene index | `HdSingleInputFilteringSceneIndex` after `UsdImagingStageSceneIndex`: resolves each anchor into the requested output CRS in double precision, emits an anchor plus an anchor-relative matrix (D13), and attaches error data sources for failures | Queries, scene charts and instances; Tamrat's suggestion |
-| Scene index observer | `HdSceneIndexObserver` that keeps mesh buffers, matrices and status per prim and reports dirty ranges; replaces a render delegate | No render delegate needed |
+| Geospatial scene index | In `usdGeospatialImaging` (D16). `HdSingleInputFilteringSceneIndex` after `UsdImagingStageSceneIndex` (as a usdImaging scene index plugin, after flattening): resolves each anchor into the requested output CRS in double precision, emits an anchor plus an anchor-relative matrix (D13), and attaches error data sources for failures | Queries, scene charts and instances; Tamrat's suggestion |
+| Scene index observer | In `usdGeospatialImaging` (D16). `HdSceneIndexObserver` that keeps mesh buffers, matrices and status per prim and reports dirty ranges; replaces a render delegate | No render delegate needed |
 | JS API (embind) | Open stage, set output CRS, register engine callbacks, read buffers as typed-array views, read the status report | Not in the proposal; prototype only |
 | Query API | Resolve a prim or point into an output CRS, returning coordinates, operation and accuracy | Runtime coordinate transformation |
 
@@ -128,10 +128,11 @@ Everything lives in the OpenUSD fork on the geospatial-web branch. Upstreamable 
 
 | Path in [mistafunk/USD](https://github.com/mistafunk/USD/tree/geospatial-web) | Holds | Upstream later? |
 | --- | --- | --- |
-| `pxr/usd/usdGeospatial` | Schemas, binding resolution, placement, engine interface and registry, geospatial scene index, observer | Yes, once the proposal is accepted |
+| `pxr/usd/usdGeospatial` | Schemas, binding resolution, placement, engine interface and registry | Yes, once the proposal is accepted |
+| `pxr/usdImaging/usdGeospatialImaging` | usdImaging adapter, geospatial placement scene index, observer (D16) | Yes, with usdGeospatial |
 | `pxr/usd/plugin/usdGeospatialProj` | PROJ engine plugin, behind a `PXR_BUILD_GEOSPATIAL_PROJ` option (later `usdGeospatialEsriPE` next to it) | Possibly |
 | `build_scripts/`, `cmake/`, `pxr/imaging/*`, `pxr/usdImaging/usdImaging` | WASM port of Hydra and usdImaging | Yes, as separate PRs |
-| `third_party/geospatial-web/module` | embind module and final link (like upstream's `wasmFetchResolver` sample), built from the root `CMakeLists.txt` behind an option, like `third_party/renderman` | No |
+| `third_party/geospatial-web/module` | `geospatialRecord` (C3: the observer's output in the recorded format), embind module and final link (like upstream's `wasmFetchResolver` sample), built from the root `CMakeLists.txt` behind an option, like `third_party/renderman` | No |
 | `third_party/geospatial-web/app` | The Maps SDK app, RenderNode, worker wrapper, `package.json`, Playwright harness | No |
 | `third_party/geospatial-web/testdata` and `/reference` | Test stages, control points, offline Python reference (option D) | No |
 | `third_party/geospatial-web/tools` | Local bootstrap, build, test and serve scripts, CMake presets, nginx config and Docker files. No GitHub workflows. | No |

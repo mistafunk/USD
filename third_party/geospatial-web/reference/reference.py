@@ -10,6 +10,10 @@ layout the C3 scene index observer will produce (docs/RECORDED_FORMAT.md).
                                      point map) and check the export
     reference.py proj-expected       fixtures and pyproj expectations for
                                      the C++ PROJ engine tests
+    reference.py imaging-expected    the scene and its export for the C++
+                                     placement scene index test
+    reference.py compare DIR         compare recorded data from the C++
+                                     observer (geo.py record) with the export
 
 Placement (proposal, "Geospatial model attitude and stage axes" and
 "Evaluation"), for a point x in the anchor's model frame, in stage units:
@@ -26,6 +30,7 @@ transform A (a post-placement adjustment) is not supported here yet.
 import argparse
 import json
 import math
+import shutil
 import struct
 import sys
 from pathlib import Path
@@ -45,6 +50,8 @@ C0_LIBRARY = (REPO / "pxr" / "usd" / "usdGeospatial" / "testenv" /
               "testUsdGeospatialSchemas" / "crsLibrary.usda")
 PROJ_TEST_DIR = (REPO / "pxr" / "usd" / "plugin" / "usdGeospatialProj" /
                  "testenv" / "testUsdGeospatialProjPlacement")
+IMAGING_TEST_DIR = (REPO / "pxr" / "usdImaging" / "usdGeospatialImaging" /
+                    "testenv" / "testUsdGeospatialImagingPlacement")
 
 # Property and schema names, pinned to the proposal at 4120379f (D3, D14).
 API_BINDING = "GeospatialCRSBindingAPI"
@@ -190,6 +197,13 @@ def source_geographic_3d(crs):
     return CRS(geo).to_3d()
 
 
+def output_3d(out_crs):
+    """The output CRS as placement uses it: projected outputs get an
+    ellipsoidal height axis."""
+    crs = CRS(out_crs)
+    return crs if crs.is_geographic else crs.to_3d()
+
+
 def best_transformer(src, dst):
     """The first usable operation PROJ lists for src -> dst, with ballpark
     operations disabled and operations needing missing grids discarded while
@@ -263,9 +277,7 @@ class Placement:
 
         # Source geographic 3D -> output CRS (no ballpark operations: a
         # transform without a real operation is unsupported, not guessed).
-        self.out_crs = CRS(out_crs)
-        if not self.out_crs.is_geographic:
-            self.out_crs = self.out_crs.to_3d()
+        self.out_crs = output_3d(out_crs)
         self.frame = frame
         try:
             self.to_out = best_transformer(self.src_geo, self.out_crs)
@@ -476,7 +488,8 @@ def export(stage_path, out_dir):
             "version": 1,
             "stage": stage_path.name,
             "output": {"name": out_name, "crs": out_crs,
-                       "wkt": CRS(out_crs).to_wkt("WKT2_2019"), "frame": frame},
+                       "wkt": output_3d(out_crs).to_wkt("WKT2_2019"),
+                       "frame": frame},
             "engine": {"name": "pyproj", "version": pyproj.__version__,
                        "proj": pyproj.proj_version_str},
             "stageMetersPerUnit": mpu,
@@ -806,6 +819,16 @@ def proj_expected():
         json.dumps(expected, indent=1) + "\n", encoding="utf-8")
     print("wrote {}".format(PROJ_TEST_DIR))
 
+def imaging_expected():
+    """Writes testUsdGeospatialImagingPlacement: a copy of the W1/W2 scene
+    and this reference's export of it (manifests and buffers), which the
+    C++ placement scene index and observer must reproduce."""
+    IMAGING_TEST_DIR.mkdir(parents=True, exist_ok=True)
+    for f in sorted(SCENE_DIR.glob("*.usda")):
+        shutil.copyfile(f, IMAGING_TEST_DIR / f.name)
+    export(IMAGING_TEST_DIR / "scene.usda", IMAGING_TEST_DIR)
+    print("wrote {}".format(IMAGING_TEST_DIR))
+
 # ---------------------------------------------------------------------------
 # check
 
@@ -877,10 +900,71 @@ def check(stage_path, out_dir, tolerance):
     return ok
 
 
-def report(label, value, tolerance):
+def _read_view(blob, view, fmt):
+    n = view["count"] * (1 if fmt == "I" else 3)
+    return np.array(struct.unpack_from("<{}{}".format(n, fmt), blob,
+                                       view["byteOffset"]))
+
+
+def compare(other_dir, ref_dir, tolerance):
+    """Compares recorded data (e.g. the C++ observer's) with this
+    reference's export: statuses, anchor origins (metres), matrices and
+    buffers. Operation names are not compared: pyproj bundles another PROJ
+    version than our builds."""
+    ok = True
+    ref_blob = (ref_dir / "buffers.bin").read_bytes()
+    other_blob = (other_dir / "buffers.bin").read_bytes()
+    for out_name in OUTPUTS:
+        ref = json.loads((ref_dir / "manifest-{}.json".format(out_name)).read_text())
+        got = json.loads((other_dir / "manifest-{}.json".format(out_name)).read_text())
+        print("{} ({} vs {}):".format(out_name, got["engine"]["name"],
+                                      ref["engine"]["name"]))
+        enu = ref["output"]["frame"] == "enu"
+        ell = Ellipsoid.of(CRS("EPSG:4979")) if enu else None
+        got_anchors = {a["path"]: a for a in got["anchors"]}
+        for a in ref["anchors"]:
+            g = got_anchors.get(a["path"])
+            if g is None or g["status"] != a["status"]:
+                print("  BAD  {} status {} (reference {})".format(
+                    a["path"], g and g["status"], a["status"]))
+                ok = False
+                continue
+            if a["status"] != "ok":
+                print("  ok   {} {}".format(a["path"], a["status"]))
+                continue
+            if enu:
+                d = np.linalg.norm(ell.to_ecef(*g["origin"]) - ell.to_ecef(*a["origin"]))
+            else:
+                d = float(np.linalg.norm(np.subtract(g["origin"], a["origin"])))
+            m = float(np.max(np.abs(np.subtract(g["matrix"], a["matrix"]))))
+            ok &= report("{} origin".format(a["path"]), d, tolerance)
+            ok &= report("{} matrix (max element diff)".format(a["path"]), m, 1e-6, "")
+        got_meshes = {r["path"]: r for r in got["meshes"]}
+        for r in ref["meshes"]:
+            g = got_meshes.get(r["path"])
+            if g is None or g["status"] != r["status"]:
+                print("  BAD  {} status {} (reference {})".format(
+                    r["path"], g and g["status"], r["status"]))
+                ok = False
+                continue
+            same = all(np.allclose(_read_view(other_blob, g[k], f),
+                                   _read_view(ref_blob, r[k], f), atol=1e-6)
+                       for k, f in (("points", "f"), ("normals", "f"), ("indices", "I")))
+            if not same:
+                print("  BAD  {} buffers differ".format(r["path"]))
+                ok = False
+            if r["status"] == "ok":
+                m = float(np.max(np.abs(np.subtract(g["matrix"], r["matrix"]))))
+                ok &= report("{} matrix (max element diff)".format(r["path"]), m, 1e-6, "")
+            else:
+                print("  ok   {} {}".format(r["path"], r["status"]))
+    return ok
+
+
+def report(label, value, tolerance, unit="m"):
     good = value <= tolerance
-    print("  {} {:<50} {:.6f} m (tolerance {} m)".format(
-        "ok " if good else "FAIL", label, value, tolerance))
+    print("  {} {:<50} {:.6f} {} (tolerance {} {})".format(
+        "ok " if good else "FAIL", label, value, unit, tolerance, unit))
     return good
 
 
@@ -889,6 +973,11 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("fixtures")
     sub.add_parser("proj-expected")
+    sub.add_parser("imaging-expected")
+    s = sub.add_parser("compare")
+    s.add_argument("dir", nargs="?", default=str(RECORDED_DIR.parent / "recorded-cpp"))
+    s.add_argument("--ref", default=str(RECORDED_DIR))
+    s.add_argument("--tolerance", type=float, default=0.001)
     s = sub.add_parser("export")
     s.add_argument("stage", nargs="?", default=str(SCENE_DIR / "scene.usda"))
     s.add_argument("--out", default=str(RECORDED_DIR))
@@ -901,6 +990,10 @@ def main():
         fixtures()
     elif args.cmd == "proj-expected":
         proj_expected()
+    elif args.cmd == "imaging-expected":
+        imaging_expected()
+    elif args.cmd == "compare":
+        sys.exit(0 if compare(Path(args.dir), Path(args.ref), args.tolerance) else 1)
     elif args.cmd == "export":
         export(Path(args.stage).resolve(), Path(args.out))
     else:

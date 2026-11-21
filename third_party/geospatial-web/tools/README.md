@@ -4,7 +4,7 @@ Local tooling for the geospatial web prototype. No GitHub workflows: everything 
 
 | File | Purpose |
 |---|---|
-| `geo.py` | Driver: `check`, `bootstrap`, `build`, `test`, `reference`, `serve` |
+| `geo.py` | Driver: `check`, `bootstrap`, `build`, `test`, `reference`, `record`, `serve` |
 | `CMakePresets.json` | Presets `native-debug`, `native-release`, `wasm32` |
 | `cmake/sqlite3/` | CMake build of the SQLite amalgamation (PROJ dependency) |
 | `requirements.txt` | Pinned Python packages for the native build's venv |
@@ -65,6 +65,13 @@ python third_party/geospatial-web/tools/geo.py test web              # Playwrigh
 - ccache is optional but worth it: `dnf install ccache` (EPEL). The presets put its cache in `cache/ccache`.
 - PROJ for WASM is built static with `-pthread -fexceptions`, the same thread and exception model as USD's WASM
   build, with `proj.db` embedded in `libproj.a` (about 9 MB until C4 trims it).
+
+## Recorded data from C++
+
+`geo.py record [native-debug]` runs `install/<preset>/bin/geospatialRecord` (from `module/`, option
+`PXR_BUILD_GEOSPATIAL_WEB`) on `testdata/scene/scene.usda` and writes `app/public/recorded-cpp/` (git-ignored):
+the placement scene index and observer's output in the recorded format. Draw it with `?src=recorded-cpp`, score it
+with `GEO_RECORDED_SRC=recorded-cpp geo.py test web -- w1 w2`, compare it with `geo.py reference -- compare`.
 
 ## Serving
 

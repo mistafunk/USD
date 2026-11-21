@@ -3,3 +3,5 @@ dist/
 test-results/
 playwright-report/
 reports/
+# C++ observer dumps (geo.py record); the reference export in public/recorded is tracked.
+public/recorded-cpp/

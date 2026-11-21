@@ -22,6 +22,7 @@ Usage:
     python third_party/geospatial-web/tools/geo.py test <preset> [-- <ctest args>]
     python third_party/geospatial-web/tools/geo.py test web [--ui | --headed] [-- <playwright args>]
     python third_party/geospatial-web/tools/geo.py reference [-- <args>]
+    python third_party/geospatial-web/tools/geo.py record [native-debug|native-release] [-- <args>]
     python third_party/geospatial-web/tools/geo.py serve dev|docker
 """
 
@@ -635,6 +636,21 @@ def cmd_reference(args):
     logged("reference", body)
 
 
+def cmd_record(args):
+    """The C++ placement of the test scene, through the scene index observer,
+    in the recorded format: app/public/recorded-cpp (?src=recorded-cpp)."""
+    tool = WS / "install" / args.preset / "bin" / exe("geospatialRecord")
+    if not tool.exists():
+        fail("{} not built; run: geo.py build {}".format(tool, args.preset))
+    extra = [a for a in args.record_args if a != "--"]
+    if not extra:
+        extra = [GEO_DIR / "testdata" / "scene" / "scene.usda",
+                 WEB_APP / "public" / "recorded-cpp"]
+    env = target_env(PRESETS[args.preset])
+    logged("record-" + args.preset,
+           lambda log: run([tool] + extra, log, cwd=REPO, env=env))
+
+
 def container_tool():
     for tool in ("podman", "docker"):
         if shutil.which(tool):
@@ -785,6 +801,14 @@ def main():
     s = sub.add_parser("reference", help="run the offline Python reference")
     s.add_argument("ref_args", nargs=argparse.REMAINDER)
     s.set_defaults(fn=cmd_reference)
+
+    s = sub.add_parser("record", help="write the C++ placement of the test "
+                                      "scene for the web app")
+    s.add_argument("preset", nargs="?", default="native-debug",
+                   choices=[p for p, t in PRESETS.items() if t == "native"])
+    s.add_argument("record_args", nargs=argparse.REMAINDER,
+                   help="after --: <stage> <outDir> [name=CRS ...]")
+    s.set_defaults(fn=cmd_record)
 
     s = sub.add_parser("serve", help="serve the web app with COOP/COEP")
     s.add_argument("mode", choices=("dev", "docker"))
