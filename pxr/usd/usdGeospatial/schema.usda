@@ -1,0 +1,98 @@
+#usda 1.0
+(
+    """This file describes the schemas for geospatial coordinate reference
+    systems (CRS): the definition of a CRS as a prim, and its binding to
+    model content with an absolute position and physical attitude.
+
+    Follows the geospatial CRS proposal
+    (https://github.com/Tamrat-B/OpenUSD-proposals/pull/1, commit 4120379f),
+    which is still under review; names may change."""
+    subLayers = [
+        @usd/schema.usda@
+    ]
+)
+
+over "GLOBAL" (
+    customData = {
+        string libraryName = "usdGeospatial"
+        string libraryPath = "pxr/usd/usdGeospatial"
+    }
+) {
+}
+
+class GeospatialCRS "GeospatialCRS" (
+    inherits = </Typed>
+    doc = """Defines a coordinate reference system as a prim, by a complete
+    OGC WKT2 (ISO 19162:2019) string.
+
+    A CRS definition can live in the stage or in a shared library layer.
+    Model content uses it through GeospatialCRSBindingAPI: the bound prim
+    composes in a GeospatialCRS prim with an ordinary USD reference (or any
+    other composition arc), so the bound prim's composed crs:wkt is its CRS.
+    Prims below a bound prim inherit its CRS until the next direct binding.
+
+    Resolution, placement and coordinate operations are not part of this
+    schema; see the geospatial CRS proposal."""
+    customData = {
+        string className = "CRS"
+        string fileName = "crs"
+    }
+)
+{
+    uniform token crs:wkt (
+        customData = {
+            string apiName = "wkt"
+        }
+        doc = """The CRS definition as an OGC WKT2 (ISO 19162:2019) string.
+        A token, so that definitions compare cheaply. The WKT axes, units and
+        height reference describe the CRS independently of the stage's
+        upAxis and metersPerUnit."""
+    )
+}
+
+class "GeospatialCRSBindingAPI" (
+    inherits = </APISchemaBase>
+    doc = """Binds model content to a geospatial CRS and places it.
+
+    Applied to a UsdGeomXformable prim that composes in a GeospatialCRS prim
+    (usually with a reference), the API makes that prim a directly bound
+    model anchor: crs:position locates the anchor's model origin in the
+    bound CRS and crs:orientation gives the model's physical attitude
+    against the local ellipsoid-normal east/north/up frame at that position.
+    The anchor's own ordinary transform is a post-placement adjustment;
+    descendants keep their ordinary model-local meaning and inherit the
+    binding.
+
+    A directly bound prim without a valid composed crs:wkt, or without a
+    finite crs:position, is an error. Resolution never falls back to an
+    ancestor's CRS."""
+    customData = {
+        string className = "CRSBindingAPI"
+        string fileName = "crsBindingAPI"
+        token[] apiSchemaCanOnlyApplyTo = ["Xformable"]
+    }
+)
+{
+    double3 crs:position (
+        customData = {
+            string apiName = "position"
+        }
+        doc = """Absolute position of the model placement origin, in the
+        bound CRS's units and height reference: easting, northing, up for a
+        projected CRS; longitude, latitude, height for a geographic 3D CRS;
+        X, Y, Z for a geocentric CRS. The tuple order is independent of the
+        WKT axis order and of the stage upAxis. There is no fallback: a
+        missing position is an error."""
+    )
+    double3 crs:orientation = (0, 0, 0) (
+        customData = {
+            string apiName = "orientation"
+        }
+        doc = """Heading, pitch and roll in degrees, in that order: the
+        model's physical attitude against the ellipsoid-normal east/north/up
+        frame of the source datum at crs:position. Model forward is +north;
+        heading is clockwise from true north, pitch raises forward, roll
+        follows the right-hand rule about forward. In Core row-vector form
+        the rotation is R_N(roll) * R_E(pitch) * R_U(-heading)."""
+    )
+}

@@ -1,0 +1,38 @@
+#usda 1.0
+(
+    doc = """A model bound to the proposal's WGS 84 / UTM zone 11N example CRS,
+    plus a nested direct binding (a second anchor) and an anchor whose CRS
+    reference is missing (an error for resolution, still loadable)."""
+    defaultPrim = "Site"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "Site" (
+    prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+    prepend references = @./crsLibrary.usda@</CRS/WGS84_UTM11N>
+)
+{
+    double3 crs:position = (481957.95, 3768437.85, 0)
+
+    def Xform "Building"
+    {
+    }
+
+    def Xform "Survey" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = @./crsLibrary.usda@</CRS/CA5_NAVD88_ftUS>
+    )
+    {
+        double3 crs:position = (6265000.0, 1840000.0, 1200.0)
+        double3 crs:orientation = (90, 0, 0)
+    }
+
+    def Xform "Broken" (
+        prepend apiSchemas = ["GeospatialCRSBindingAPI"]
+        prepend references = @./crsLibrary.usda@</CRS/DoesNotExist>
+    )
+    {
+        double3 crs:position = (0, 0, 0)
+    }
+}

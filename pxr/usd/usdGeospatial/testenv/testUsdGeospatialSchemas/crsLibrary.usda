@@ -1,0 +1,126 @@
+#usda 1.0
+(
+    doc = """CRS definitions from the geospatial CRS proposal (commit 4120379f):
+    the USDA example and Appendix A WKT, verbatim. The proposal's USDA uses the
+    type name CoordinateReferenceSystem; this library uses GeospatialCRS."""
+    defaultPrim = "CRS"
+)
+
+def Scope "CRS"
+{
+    def GeospatialCRS "WGS84_UTM11N" (
+        doc = "WGS 84 / UTM zone 11N (EPSG:32611)"
+    )
+    {
+        uniform token crs:wkt = """PROJCRS["WGS 84 / UTM zone 11N",
+        BASEGEOGCRS["WGS 84",
+            DATUM["World Geodetic System 1984",
+                ELLIPSOID["WGS 84",6378137,298.257223563,
+                    LENGTHUNIT["metre",1.0]]],
+            PRIMEMERIDIAN["Greenwich",0,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            ID["EPSG",4326]],
+        CONVERSION["UTM zone 11N",
+            METHOD["Transverse Mercator",
+                ID["EPSG",9807]],
+            PARAMETER["Latitude of natural origin",0,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8801]],
+            PARAMETER["Longitude of natural origin",-117,
+                ANGLEUNIT["degree",0.0174532925199433],
+                ID["EPSG",8802]],
+            PARAMETER["Scale factor at natural origin",0.9996,
+                SCALEUNIT["unity",1.0],
+                ID["EPSG",8805]],
+            PARAMETER["False easting",500000,
+                LENGTHUNIT["metre",1.0],
+                ID["EPSG",8806]],
+            PARAMETER["False northing",0,
+                LENGTHUNIT["metre",1.0],
+                ID["EPSG",8807]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,ORDER[1],
+                LENGTHUNIT["metre",1.0]],
+            AXIS["(N)",north,ORDER[2],
+                LENGTHUNIT["metre",1.0]],
+        ID["EPSG",32611]]"""
+    }
+
+    def GeospatialCRS "EiffelTower_LTP" (
+        doc = "WGS 84 east/north/up local tangent plane at the Eiffel Tower"
+    )
+    {
+        uniform token crs:wkt = """GEODCRS["Local Tangent Plane at Eiffel Tower",
+    BASEGEOGCRS["WGS 84",
+        DATUM["World Geodetic System 1984",
+            ELLIPSOID["WGS 84", 6378137, 298.257223563, LENGTHUNIT["metre", 1]],
+            ID["EPSG", 6326]],
+        ID["EPSG", 4979]],
+    DERIVINGCONVERSION["Topocentric at Eiffel Tower",
+        METHOD["Geographic/topocentric conversions", ID["EPSG", 9837]],
+        PARAMETER["Latitude of topocentric origin", 48.8584,
+            ANGLEUNIT["degree", 0.0174532925199433], ID["EPSG", 8834]],
+        PARAMETER["Longitude of topocentric origin", 2.2945,
+            ANGLEUNIT["degree", 0.0174532925199433], ID["EPSG", 8835]],
+        PARAMETER["Ellipsoidal height of topocentric origin", 33.0,
+            LENGTHUNIT["metre", 1.0], ID["EPSG", 8836]]],
+    CS[Cartesian, 3],
+    AXIS["east (E)", east], AXIS["north (N)", north], AXIS["up (U)", up],
+    LENGTHUNIT["metre", 1]]"""
+    }
+
+    def GeospatialCRS "CA5_NAVD88_ftUS" (
+        doc = "NAD83 / California zone 5 (ftUS) + NAVD88 height (ftUS)"
+    )
+    {
+        uniform token crs:wkt = """COMPOUNDCRS["NAD83 / California zone 5 (ftUS) + NAVD88 height (ftUS)",
+    PROJCRS["NAD83 / California zone 5 (ftUS)",
+        BASEGEOGCRS["NAD83",
+            DATUM["North American Datum 1983",
+                ELLIPSOID["GRS 1980",6378137,298.257222101,
+                    LENGTHUNIT["metre",1.0]]],
+            ID["EPSG",4269]],
+        CONVERSION["SPCS83 California zone 5 (US Survey feet)",
+            METHOD["Lambert Conic Conformal (2SP)",
+                ID["EPSG",9802]],
+            PARAMETER["Latitude of false origin",33.5,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            PARAMETER["Longitude of false origin",-118,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            PARAMETER["Latitude of 1st standard parallel",35.4666666666667,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            PARAMETER["Latitude of 2nd standard parallel",34.0333333333333,
+                ANGLEUNIT["degree",0.0174532925199433]],
+            PARAMETER["Easting at false origin",6561666.667,
+                LENGTHUNIT["US survey foot",0.304800609601219]],
+            PARAMETER["Northing at false origin",1640416.667,
+                LENGTHUNIT["US survey foot",0.304800609601219]]],
+        CS[Cartesian,2],
+            AXIS["(E)",east,LENGTHUNIT["US survey foot",0.304800609601219]],
+            AXIS["(N)",north,LENGTHUNIT["US survey foot",0.304800609601219]],
+        ID["EPSG",2229]],
+    VERTCRS["NAVD88 height (ftUS)",
+        VDATUM["North American Vertical Datum 1988"],
+        CS[vertical,1],
+            AXIS["gravity-related height (H)",up,
+                LENGTHUNIT["US survey foot",0.304800609601219]],
+        ID["EPSG",6360]]]"""
+    }
+
+    def GeospatialCRS "ITRF2020" (
+        doc = "ITRF2020 geocentric (EPSG:9988)"
+    )
+    {
+        uniform token crs:wkt = """GEODCRS["ITRF2020",
+        DYNAMIC[FRAMEEPOCH[2015]],
+        DATUM["International Terrestrial Reference Frame 2020",
+            ELLIPSOID["GRS 1980",6378137,298.257222101,LENGTHUNIT["metre",1]],
+            ID["EPSG",1322]],
+        PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],
+        CS[Cartesian,3],
+            AXIS["(X)",geocentricX,ORDER[1],LENGTHUNIT["metre",1]],
+            AXIS["(Y)",geocentricY,ORDER[2],LENGTHUNIT["metre",1]],
+            AXIS["(Z)",geocentricZ,ORDER[3],LENGTHUNIT["metre",1]],
+        ID["EPSG",9988]]"""
+    }
+}

@@ -6,6 +6,7 @@ set(DIRS
     pcp
     usd
     usdGeom
+    usdGeospatial
     usdVol
     usdMedia
     usdShade
