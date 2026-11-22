@@ -12,7 +12,7 @@ import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import { xyToLngLat } from "@arcgis/core/geometry/support/webMercatorUtils.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { toRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
-import { score, type ControlPoint, type TestCase } from "./checks/harness";
+import type { ControlPoint, HarnessInput, TestCase } from "./checks/harness";
 import { identity, multiply, normalMatrix3, splitOrigin, translation } from "./mat4";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorStatus, CameraPreset, Scene } from "./scene";
@@ -162,7 +162,8 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
         .map((m) => [m.path, m.anchor!])),
       testCases: input.testCases,
     },
-    score: () => score({
+    // The W2 harness's input; main.ts scores it (checks/harness.ts).
+    scoring: {
       view,
       output: input.output.name,
       engine: input.engine,
@@ -180,7 +181,7 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
       } : {}),
       live: input.live,
       tolerance: 0.01,
-    }),
+    },
   };
 }
 

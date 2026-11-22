@@ -32,7 +32,7 @@ import TileLayer from "@arcgis/core/layers/TileLayer.js";
 import SceneView from "@arcgis/core/views/SceneView.js";
 import { watch, whenOnce } from "@arcgis/core/core/reactiveUtils.js";
 import { fromRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
-import type { HarnessReport } from "./checks/harness";
+import { score, type HarnessReport } from "./checks/harness";
 import { transformPoint } from "./mat4";
 import { MeshPass, type PassStats, type ScreenError } from "./meshPass";
 import { DEFAULT_PORTAL, heightModelOf, loadLiveScene, type HeightModel, type LiveData } from "./live";
@@ -383,7 +383,7 @@ async function loadContent(): Promise<void> {
     return out;
   };
   state.score = () => {
-    const r = scene?.score?.() ?? null;
+    const r = scene?.scoring ? score(scene.scoring) : null;
     if (r) r.renderer = state.renderer;
     state.report = r;
     renderPanel();

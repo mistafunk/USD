@@ -1,7 +1,7 @@
 // What main.ts draws: placed meshes, a geographic target for the camera
 // presets, and per-anchor status for the panel.
 
-import type { HarnessReport, TestCase } from "./checks/harness";
+import type { HarnessInput, TestCase } from "./checks/harness";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorPlacement } from "./render";
 
@@ -42,8 +42,9 @@ export interface Scene {
   anchors: AnchorStatus[];
   /** Full Float64 render matrix per mesh name (for numeric checks). */
   renderMatrices: Map<string, Float64Array>;
-  /** W2 harness: scores control points, when the data has them. */
-  score?: () => HarnessReport;
+  /** W2 harness input (control points, test cases, anchor frames), when the
+   *  data has them; main.ts scores it. */
+  scoring?: HarnessInput;
   /** Placed data (recorded and live scenes; not the W0 spike). */
   details?: SceneDetails;
 }
