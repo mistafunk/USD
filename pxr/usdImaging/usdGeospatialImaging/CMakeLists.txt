@@ -52,6 +52,12 @@ if (TARGET usdGeospatialProj)
             testenv/testUsdGeospatialImagingPlacement.cpp
     )
 
+    # PROJ's data files under Node (see usdGeospatialProj).
+    if (EMSCRIPTEN)
+        target_link_options(testUsdGeospatialImagingPlacement PRIVATE
+            "SHELL:--pre-js '${USDGEOSPATIALPROJ_TEST_PRE_JS}'")
+    endif()
+
     pxr_register_test(testUsdGeospatialImagingPlacement
         COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeospatialImagingPlacement"
         TESTENV testenv/testUsdGeospatialImagingPlacement

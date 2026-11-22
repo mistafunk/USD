@@ -22,6 +22,24 @@ if (NOT BUILD_SHARED_LIBS)
     set(testPluginLibraries usdGeospatialProj)
 endif()
 
+# A WebAssembly PROJ has no data files of its own: tests running under Node
+# mount PROJ's installed data directory (proj.db, grids) with NODEFS and
+# point PROJ_DATA at it. Other tests using this plugin link the same file.
+if (EMSCRIPTEN)
+    get_filename_component(projDataDir "${PROJ_DIR}/../../../share/proj"
+                           ABSOLUTE)
+    set(USDGEOSPATIALPROJ_TEST_PRE_JS
+        "${CMAKE_CURRENT_BINARY_DIR}/projData.pre.js" CACHE INTERNAL "")
+    file(WRITE "${USDGEOSPATIALPROJ_TEST_PRE_JS}"
+"Module.preRun = Module.preRun || [];
+Module.preRun.push(function() {
+    FS.mkdir('/proj');
+    FS.mount(FS.filesystems.NODEFS, { root: '${projDataDir}' }, '/proj');
+    ENV.PROJ_DATA = '/proj';
+});
+")
+endif()
+
 pxr_build_test(testUsdGeospatialProjPlacement
     LIBRARIES
         tf
@@ -32,6 +50,11 @@ pxr_build_test(testUsdGeospatialProjPlacement
     CPPFILES
         testenv/testUsdGeospatialProjPlacement.cpp
 )
+
+if (EMSCRIPTEN)
+    target_link_options(testUsdGeospatialProjPlacement PRIVATE
+        "SHELL:--pre-js '${USDGEOSPATIALPROJ_TEST_PRE_JS}'")
+endif()
 
 pxr_register_test(testUsdGeospatialProjPlacement
     COMMAND "${CMAKE_INSTALL_PREFIX}/tests/testUsdGeospatialProjPlacement"
