@@ -1,7 +1,8 @@
 // What main.ts draws: placed meshes, a geographic target for the camera
 // presets, and per-anchor status for the panel.
 
-import type { HarnessInput, TestCase } from "./checks/harness";
+import type SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
+import type SceneView from "@arcgis/core/views/SceneView.js";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorPlacement } from "./render";
 
@@ -47,4 +48,94 @@ export interface Scene {
   scoring?: HarnessInput;
   /** Placed data (recorded and live scenes; not the W0 spike). */
   details?: SceneDetails;
+}
+
+// --- W2 harness data (control points, test cases, scores); checks/harness.ts
+// scores them, the rest of the app only carries them. ---
+
+export type Outcome = "pass" | "fail" | "unsupported";
+
+export interface ControlPoint {
+  path: string;
+  anchor: string | null;
+  local: number[] | null;
+  reference: { crs: string; position: number[] };
+}
+
+export interface TestCase {
+  anchor: string;
+  expect: Outcome;
+  description: string;
+  /** Outcome in a local view with matrix placement, where it differs (T5). */
+  expectLocal?: Outcome;
+  /** Outcome placed live in the browser, where it differs (grids, D23). */
+  expectBrowser?: Outcome;
+}
+
+export interface HarnessAnchor {
+  path: string;
+  status: string;
+  reason?: string;
+  matrix?: number[];
+  engine?: string;
+  operation?: string;
+  accuracy?: number | null;
+  skippedOperations?: string[];
+}
+
+export interface PointResult {
+  name: string;
+  error: number | null;
+  horizontal: number | null;
+  vertical: number | null;
+  note?: string;
+}
+
+export interface CaseResult {
+  anchor: string;
+  description: string;
+  expect: Outcome;
+  result: Outcome;
+  ok: boolean;
+  detail: string;
+  points: PointResult[];
+  /** What placed it (T2, T3, T11): engine, operation, accuracy (m, null if
+   *  unknown) and more accurate operations skipped for missing grids. */
+  engine?: string;
+  operation?: string;
+  accuracy?: number | null;
+  skippedOperations?: string[];
+}
+
+export interface HarnessReport {
+  view: string;
+  output: string;
+  engine: string;
+  /** "matrix": control points placed with the anchor matrix, as drawn by
+   *  default; "exact": with the exact point map (measurement mode, T5). */
+  mode: "matrix" | "exact";
+  /** WebGL renderer the scores were taken with (set by the app). */
+  renderer?: string;
+  tolerance: number;
+  time: string;
+  cases: CaseResult[];
+  summary: Record<Outcome | "unexpected", number>;
+}
+
+export interface HarnessInput {
+  view: SceneView;
+  output: string;
+  engine: string;
+  anchors: HarnessAnchor[];
+  controlPoints: ControlPoint[];
+  testCases: TestCase[];
+  /** Render frame of an anchor, as used for drawing. */
+  anchorFrame(path: string): Float64Array | null;
+  /** Exact mode: a control point's exact position in the output CRS, and
+   *  that CRS's spatial reference in the view. */
+  exactPoint?: (controlPoint: string) => number[] | null;
+  outputSpatialReference?: SpatialReference;
+  /** Placed live in the browser (expectBrowser applies). */
+  live?: boolean;
+  tolerance: number;
 }

@@ -3,8 +3,7 @@
 // buffers, placed like live data (render.ts).
 
 import type SceneView from "@arcgis/core/views/SceneView.js";
-import type { ControlPoint, TestCase } from "./harness";
-import type { Scene } from "../scene";
+import type { ControlPoint, Scene, TestCase } from "../scene";
 import { placeScene, type AnchorPlacement } from "../render";
 
 interface BufferView {

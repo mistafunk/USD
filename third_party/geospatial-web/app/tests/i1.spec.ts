@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import type { HarnessReport } from "../src/checks/harness";
+import type { HarnessReport } from "../src/scene";
 import type { LiveData } from "../src/live";
 import type { ScreenError } from "../src/meshPass";
 import { writeReport, type ExtraCheck } from "./report";
