@@ -133,19 +133,16 @@
     <!-- About (D27): opened by the header's i button, the title, or #about in the URL. -->
     <dialog class="about" id="about" aria-labelledby="aboutHeading">
       <div class="about-head">
-        <h2 id="aboutHeading">About this demonstrator</h2>
+        <h2 id="aboutHeading">Tech Demo: Geospatial CRS in OpenUSD using 3D Object Feature Layers</h2>
         <button class="iconbtn" id="aboutClose" type="button" title="Close (Esc)">×</button>
       </div>
       <div class="about-body">
-        <p class="lead">This demonstrator tries out the proposed <a href="https://github.com/Tamrat-B/OpenUSD-proposals/pull/1" target="_blank" rel="noopener">geospatial coordinate reference system support for OpenUSD</a> with Esri products: ArcGIS 3D object layers and the ArcGIS Maps SDK for JavaScript. This page runs OpenUSD compiled to WebAssembly. It reads geo-referenced models whose prims carry a
-      coordinate reference system through the proposed <span class="mono">GeospatialCRSBindingAPI</span>, resolves each
-      anchor's CRS, transforms it with a coordinate operation engine plugin (also in WebAssembly) into the view's output CRS in a Hydra scene index, and
-      draws the result with a small WebGL2 pass inside the ArcGIS Maps SDK SceneView.</p>
+        <p class="lead">This demonstrator tries out the proposed <a href="https://github.com/Tamrat-B/OpenUSD-proposals/pull/1" target="_blank" rel="noopener">geospatial coordinate reference system support for OpenUSD</a> with Esri products: ArcGIS 3D object layers and the ArcGIS Maps SDK for JavaScript.</p>
+        <p class="todo">TODO: describe use cases and objectives other than validating the proposal</p>
+        <h3 class="about-sub">Software Architecture</h3>
         <figure class="diagram"><div id="aboutDiagram"></div>
-          <figcaption>Highlighted: what the geospatial CRS proposal adds to OpenUSD, the binding schema and its Hydra placement. Dashed boxes are inputs fetched over the network.</figcaption>
         </figure>
         <h3 class="about-sub">Relationship between 3D Object Feature Layer and USD Geospatial Schema</h3>
-        <p class="about-note">The app writes a wrapper layer that references the layer's models as served and places them with the geospatial CRS schemas. Highlighted: the proposal's attributes; dashed: only for layers with a projected CRS.</p>
         <figure class="mapping" id="aboutMapping"></figure>
       </div>
     </dialog>

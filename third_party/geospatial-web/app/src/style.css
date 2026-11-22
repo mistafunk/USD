@@ -283,7 +283,7 @@ figure.diagram { margin: 8px 0 4px; border: 1px solid var(--line); border-radius
 figure.diagram svg { width: 100%; height: auto; display: block; }
 figure.diagram figcaption { font-size: var(--fs-small); color: var(--muted); margin-top: 6px; }
 .about-sub { margin: 18px 0 2px; font-size: 13.5px; }
-.about-note { margin: 0 0 6px; font-size: var(--fs-small); color: var(--muted); }
+.about-body .todo { margin: 6px 0 0; padding: 4px 8px; border-left: 3px solid var(--warn); background: var(--warn-bg); color: var(--warn); font-size: var(--fs-small); }
 figure.mapping { margin: 6px 0 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 8px; }
 figure.mapping svg { width: 100%; height: auto; display: block; }
 :root { --about-width: 880px; }
