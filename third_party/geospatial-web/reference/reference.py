@@ -1165,6 +1165,39 @@ def write_glb(path, size):
     return digest
 
 
+def write_usdz(path, size):
+    """The write_glb box as usdz, in the same convention (Y-up, metres; x
+    east, y up, z south): what a 3D object layer serving USD would return."""
+    import hashlib
+    import tempfile
+    from pxr import UsdUtils
+    sx, sy, sz = size[0] / 2, size[1], size[2] / 2
+    pos = [(-sx, 0, -sz), (sx, 0, -sz), (sx, 0, sz), (-sx, 0, sz),
+           (-sx, sy, -sz), (sx, sy, -sz), (sx, sy, sz), (-sx, sy, sz)]
+    tris = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1,
+            1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0]
+    with tempfile.TemporaryDirectory() as tmp:
+        usda = Path(tmp) / "box.usda"
+        stage = Usd.Stage.CreateNew(str(usda))
+        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
+        UsdGeom.SetStageMetersPerUnit(stage, 1.0)
+        root = UsdGeom.Xform.Define(stage, "/Box")
+        stage.SetDefaultPrim(root.GetPrim())
+        mesh = UsdGeom.Mesh.Define(stage, "/Box/Mesh")
+        mesh.CreatePointsAttr([Gf.Vec3f(*q) for q in pos])
+        mesh.CreateFaceVertexCountsAttr([3] * (len(tris) // 3))
+        mesh.CreateFaceVertexIndicesAttr(tris)
+        stage.GetRootLayer().Save()
+        usdz = Path(tmp) / "box.usdz"
+        if not UsdUtils.CreateNewUsdzPackage(Sdf.AssetPath(str(usda)), str(usdz)):
+            raise SystemExit("could not write " + str(usdz))
+        data = usdz.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    (path / "assets").mkdir(parents=True, exist_ok=True)
+    (path / "assets" / (digest + ".usdz")).write_bytes(data)
+    return digest
+
+
 ARCGIS_ROLES = {
     "globalID": "GlobalID",
     "originX": "ESRI3DO_OX", "originY": "ESRI3DO_OY", "originZ": "ESRI3DO_OZ",
@@ -1189,6 +1222,9 @@ def arcgis_mock():
         "zurich-ellipsoidal": ({"wkid": 4326, "latestWkid": 4326}, zurich),
         "zurich-egm96": ({"wkid": 4326, "latestWkid": 4326, "vcsWkid": 5773,
                           "latestVcsWkid": 5773}, zurich),
+        # Serves USD (usdz) next to glb, as layers are expected to: the app
+        # prefers USD (objectLayer.ts modelFormat).
+        "zurich-usd": ({"wkid": 4326, "latestWkid": 4326}, zurich),
         # 2 x scale east, 1.5 x up, turned 90 degrees counter-clockwise, then
         # moved 10 m east, 5 m north, 2 m up. The fields are in the model's
         # glTF frame (x east, y up, z south), as the Maps SDK reads them
@@ -1208,7 +1244,8 @@ def arcgis_mock():
                  "geometryType": "esriGeometryMultiPatch", "hasZ": True,
                  "spatialReference": sr,
                  "infoFor3D": {"transformFieldRoles": ARCGIS_ROLES,
-                               "queryFormats": ["3D_shapebuffer", "3D_glb"]}}
+                               "queryFormats": ["3D_shapebuffer", "3D_glb"] +
+                                               (["3D_usdz"] if name == "zurich-usd" else [])}}
         out = {"features": [], "assetMaps": []}
         for oid, origin, size, t, s, axis, deg in features:
             gid = "00000000-0000-4000-8000-{:012d}".format(oid)
@@ -1225,6 +1262,12 @@ def arcgis_mock():
                 "parentGlobalId": gid, "assetName": "box_{}.glb".format(oid),
                 "assetHash": digest, "assetType": "3D_glb", "conversionStatus": "COMPLETED",
                 "assetURL": "assets/{}.glb".format(digest)})
+            if name == "zurich-usd":
+                usdz = write_usdz(d, size)
+                out["assetMaps"].append({
+                    "parentGlobalId": gid, "assetName": "box_{}.usdz".format(oid),
+                    "assetHash": usdz, "assetType": "3D_usdz", "conversionStatus": "COMPLETED",
+                    "assetURL": "assets/{}.usdz".format(usdz)})
         (d / "layer.json").write_text(json.dumps(layer, indent=1) + "\n")
         (d / "query3D.json").write_text(json.dumps(out, indent=1) + "\n")
         print("wrote {}".format(d))

@@ -112,6 +112,10 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
 - `query3D` returns asset maps only with `returnGeometry=true`.
 - Layers without the `Query` capability (e.g. Urban model layers, `ChangeTracking` only) reject `query3D`; the app
   says so before querying.
+- Layers serve models as glb only today (`queryFormats`: `3D_shapebuffer`, `3D_glb`); USD is an upload
+  format they convert, and asking query3D for `3D_usd*` returns no models. USD query formats are expected:
+  the app then prefers them (`objectLayer.ts` `modelFormat`: usdz, usdc, usd, usda, else glb), read natively by
+  OpenUSD and assumed Y-up in metres like the glb conversions; mock `zurich-usd` covers it.
 - Models are glb (USD is an upload format, not a query format); CityEngine exports are Y-up, metres, x east, y up,
   z south, centred on the origin. Asset downloads on ArcGIS Online send `access-control-allow-origin: *`.
 - **Transform fields are in the model's glTF frame** (x east, y up, z south), not ENU: the Maps SDK converts

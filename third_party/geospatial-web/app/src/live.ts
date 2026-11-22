@@ -98,7 +98,7 @@ export async function loadLiveScene(
     log(`CRS ${definition}${promote3D ? " promoted to 3D (z taken as ellipsoidal)" : ""}`);
     const wrapper = buildWrapper(data, crs.wkt);
     wrapper.skipped.forEach((s) => status.add("warn", s));
-    if (!wrapper.models.length) throw new Error("no feature has a glb model");
+    if (!wrapper.models.length) throw new Error(`no feature has a ${data.format} model`);
     status.step(`downloading ${wrapper.models.length} model(s)`);
     wrapper.models.forEach((m) => log(`model ${m.path} from ${m.url}`));
     await timed("models", () => usd.fetchFiles(
@@ -106,7 +106,7 @@ export async function loadLiveScene(
     const d = status.downloads();
     log(`downloaded ${formatBytes(d.loaded)}`);
     await usd.writeText("/arcgis/layer.usda", wrapper.usda);
-    status.step("opening the wrapper layer (reads the glb models)");
+    status.step(`opening the wrapper layer (reads the ${data.format.slice(3)} models)`);
     await timed("load", () => usd.open("/arcgis/layer.usda"));
     objectLayer = { crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
                     skipped: wrapper.skipped };

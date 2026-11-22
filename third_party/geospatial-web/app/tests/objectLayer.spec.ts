@@ -111,6 +111,22 @@ test("object layer zurich-egm96 global without geoid correction", async ({ page 
   await expect(page.locator("#geoid")).not.toBeChecked();
 });
 
+test("object layer zurich-usd global", async ({ page }) => {
+  // A layer that serves USD (usdz) next to glb, as layers are expected to:
+  // the app references the usdz models, read natively by OpenUSD.
+  const { app, live } = await open(page, "global", "zurich-usd");
+  expect(live.objectLayer!.wrapper).toMatch(/references = @\.\/assets\/[0-9a-f]+\.usdz@/);
+  expect(live.objectLayer!.wrapper).not.toContain(".glb@");
+  expect(live.anchors.map((a) => a.status)).toEqual(["ok", "ok"]);
+  expect(app.stats.meshes).toBe(2);
+  expect(live.meshes.map((m) => m.triangles)).toEqual([12, 12]);
+  live.anchors.forEach((a, i) => {
+    expect(Math.abs(a.origin[0] - ZURICH[i][0])).toBeLessThan(1e-9);
+    expect(Math.abs(a.origin[1] - ZURICH[i][1])).toBeLessThan(1e-9);
+  });
+  await expect(page.locator("#log")).toContainText("models as 3D_usdz");
+});
+
 test("object layer transform global", async ({ page }) => {
   const { live } = await open(page, "global", "transform");
   expect(live.anchors.map((a) => a.status)).toEqual(["ok"]);

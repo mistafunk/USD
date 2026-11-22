@@ -1,8 +1,9 @@
 // Finds the public 3D object feature layers of an ArcGIS organization that
 // the app can load: items of type Feature Service with the 3DObject type
-// keyword, whose layers have infoFor3D, allow Query and return a glb model
-// from query3D. Anonymous, so only public items.
-import { fetchJson, MODEL_FORMAT, type Log, type ObjectLayerJson } from "./objectLayer";
+// keyword, whose layers have infoFor3D, allow Query and return a model in
+// their preferred format from query3D (USD when offered, else glb:
+// objectLayer.ts modelFormat). Anonymous, so only public items.
+import { fetchJson, modelFormat, type Log, type ObjectLayerJson } from "./objectLayer";
 
 export interface FoundLayer {
   url: string;
@@ -74,9 +75,10 @@ async function checkService(title: string, service: string, log: Log): Promise<F
     }
     const q = await fetchJson<{ assetMaps?: { assetType: string }[] }>(
       `${url}/query3D?where=1%3D1&outFields=*&returnGeometry=true&resultRecordCount=1` +
-      `&formatOf3DObjects=${MODEL_FORMAT}&f=json`, quiet);
-    if (!(q.assetMaps ?? []).some((a) => a.assetType === MODEL_FORMAT)) {
-      log(`${title} (layer ${l.id}): no ${MODEL_FORMAT} model`);
+      `&formatOf3DObjects=${modelFormat(layer.infoFor3D.queryFormats)}&f=json`, quiet);
+    const format = modelFormat(layer.infoFor3D.queryFormats);
+    if (!(q.assetMaps ?? []).some((a) => a.assetType === format)) {
+      log(`${title} (layer ${l.id}): no ${format} model`);
       continue;
     }
     const n = await fetchJson<{ count?: number }>(`${url}/query?where=1%3D1&returnCountOnly=true&f=json`, quiet);

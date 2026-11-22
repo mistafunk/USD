@@ -29,7 +29,11 @@ export interface ObjectLayerJson {
   /** Service capabilities, e.g. "Create,Delete,Query,Update". */
   capabilities?: string;
   spatialReference: SpatialReferenceJson;
-  infoFor3D: { transformFieldRoles: Record<string, string> };
+  infoFor3D: {
+    transformFieldRoles: Record<string, string>;
+    /** Formats query3D can return, e.g. ["3D_shapebuffer", "3D_glb"]. */
+    queryFormats?: string[];
+  };
 }
 
 export interface AssetMapJson {
@@ -46,10 +50,28 @@ export interface ObjectLayerData {
   layer: ObjectLayerJson;
   features: { attributes: Record<string, unknown> }[];
   assetMaps: AssetMapJson[];
+  /** The model format queried and referenced (modelFormat). */
+  format: string;
 }
 
-/** The 3D format the wrapper references (glTF binary). */
-export const MODEL_FORMAT = "3D_glb";
+/**
+ * Model formats the app loads, preferred first: USD, which OpenUSD reads
+ * natively, then glTF binary through the glTF plugin. Layers serve only
+ * 3D_glb today (USD is an upload format they convert); query formats with
+ * USD are expected, and then used. USD models are assumed to follow the glb
+ * conversions' convention (Y-up, metres); no correction is applied.
+ */
+export const MODEL_FORMATS = ["3D_usdz", "3D_usdc", "3D_usd", "3D_usda", "3D_glb"];
+
+/** File extension per model format. */
+const EXTENSION: Record<string, string> = {
+  "3D_usdz": "usdz", "3D_usdc": "usdc", "3D_usd": "usd", "3D_usda": "usda", "3D_glb": "glb",
+};
+
+/** The preferred model format a layer can return (its query formats), else 3D_glb. */
+export function modelFormat(queryFormats: string[] | undefined): string {
+  return MODEL_FORMATS.find((f) => queryFormats?.includes(f)) ?? "3D_glb";
+}
 
 export type Log = (text: string) => void;
 
@@ -121,17 +143,19 @@ export async function fetchObjectLayer(url: string, log: Log = () => {}): Promis
                     "models and transforms cannot be read; the owner can enable Query or " +
                     "publish a view layer with Query");
   }
+  const format = modelFormat(layer.infoFor3D.queryFormats);
+  log(`models as ${format} (query formats: ${(layer.infoFor3D.queryFormats ?? []).join(", ") || "not listed"})`);
   // query3D lists the models (assetMaps) only with returnGeometry=true
   // (ArcGIS Online, Zurich layer); the geometry itself is an extent, unused.
   const q = await fetchJson<{ features: ObjectLayerData["features"]; assetMaps?: AssetMapJson[] }>(
     rest ? `${base}/query3D?where=1%3D1&outFields=*&returnGeometry=true` +
-           `&formatOf3DObjects=${MODEL_FORMAT}&f=json`
+           `&formatOf3DObjects=${format}&f=json`
          : `${base}/query3D.json`, log);
   log(`${q.features?.length ?? 0} features, ${q.assetMaps?.length ?? 0} asset maps ` +
       `(${(q.assetMaps ?? []).map((a) => `${a.assetName} ${a.assetType} ` +
         `${a.conversionStatus ?? ""}`).join("; ")})`);
   if (q.features?.length && !q.assetMaps?.length) {
-    log(`no asset maps for ${MODEL_FORMAT}: the service has no converted models in that ` +
+    log(`no asset maps for ${format}: the service has no converted models in that ` +
         "format, or query3D omitted them");
   }
   // Static mocks give asset URLs relative to their directory.
@@ -139,7 +163,7 @@ export async function fetchObjectLayer(url: string, log: Log = () => {}): Promis
   const assetMaps = (q.assetMaps ?? []).map((a) => ({
     ...a, assetURL: new URL(a.assetURL, absolute).href,
   }));
-  return { url, layer, features: q.features ?? [], assetMaps };
+  return { url, layer, features: q.features ?? [], assetMaps, format };
 }
 
 /**
@@ -161,7 +185,7 @@ export interface Wrapper {
   usda: string;
   /** Models to fetch: URL -> path relative to the wrapper. */
   models: { url: string; path: string }[];
-  /** Features without a model in MODEL_FORMAT (skipped). */
+  /** Features without a model in the layer's format (skipped). */
   skipped: string[];
 }
 
@@ -169,8 +193,9 @@ export interface Wrapper {
  * The wrapper layer for a 3D object layer: one GeospatialCRS from the layer's
  * spatial reference (crsWkt: its WKT2), and per feature an anchor at the
  * feature's origin whose child prim applies the feature's transform and
- * references the model. Y-up and metres like glTF, so the proposal's Y-up
- * axis mapping places the models' x east, y up, z south.
+ * references the model (glb or USD, see MODEL_FORMATS). Y-up and metres like
+ * glTF, so the proposal's Y-up axis mapping places the models' x east, y up,
+ * z south.
  */
 export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
   const roles = data.layer.infoFor3D.transformFieldRoles;
@@ -187,12 +212,12 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
     const oid = String(a.OBJECTID ?? a.objectid ?? prims.length + 1);
     const asset = data.assetMaps.find((m) =>
       m.parentGlobalId.replace(/[{}]/g, "").toLowerCase() === globalId &&
-      m.assetType === MODEL_FORMAT);
+      m.assetType === data.format);
     if (!asset) {
-      skipped.push(`feature ${oid}: no ${MODEL_FORMAT} model`);
+      skipped.push(`feature ${oid}: no ${data.format} model`);
       continue;
     }
-    const path = `assets/${asset.assetHash}.glb`;
+    const path = `assets/${asset.assetHash}.${EXTENSION[data.format] ?? "glb"}`;
     if (!models.some((m) => m.path === path)) models.push({ url: asset.assetURL, path });
 
     const origin = [num(a, "originX", 0), num(a, "originY", 0), num(a, "originZ", 0)];
