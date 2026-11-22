@@ -74,6 +74,9 @@ public:
     std::string MakeCompoundCrs(const std::string& horizontal,
                                 const std::string& vertical) override;
 
+    UsdGeospatialProjectionFactors ComputeProjectionFactors(
+        const std::string& definition, const GfVec3d& position) override;
+
 private:
     struct _Operation {
         _PjPtr pj;
@@ -125,6 +128,67 @@ UsdGeospatialProjEngine::MakeCompoundCrs(const std::string& horizontal,
     const char* wkt = compound
         ? proj_as_wkt(_ctx, compound.get(), PJ_WKT2_2019, nullptr) : nullptr;
     return wkt ? std::string(wkt) : std::string();
+}
+
+UsdGeospatialProjectionFactors
+UsdGeospatialProjEngine::ComputeProjectionFactors(
+    const std::string& definition, const GfVec3d& position)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    UsdGeospatialProjectionFactors factors;
+
+    _PjPtr crs = _Create(definition, &factors.error);
+    if (crs && proj_get_type(crs.get()) == PJ_TYPE_COMPOUND_CRS) {
+        crs.reset(proj_crs_get_sub_crs(_ctx, crs.get(), 0));
+    }
+    if (!crs) {
+        if (factors.error.empty()) {
+            factors.error = "cannot read the horizontal CRS: " + _LastError();
+        }
+        return factors;
+    }
+    if (proj_get_type(crs.get()) != PJ_TYPE_PROJECTED_CRS) {
+        factors.error = "not a projected CRS";
+        return factors;
+    }
+
+    // proj_factors takes longitude and latitude (radians) of the base
+    // geographic CRS: convert the position, axes in east/north order.
+    _PjPtr geographic(proj_crs_get_geodetic_crs(_ctx, crs.get()));
+    _PjPtr toGeographic(geographic
+        ? proj_create_crs_to_crs_from_pj(_ctx, crs.get(), geographic.get(),
+                                         nullptr, nullptr)
+        : nullptr);
+    _PjPtr normalized(toGeographic
+        ? proj_normalize_for_visualization(_ctx, toGeographic.get())
+        : nullptr);
+    if (!normalized) {
+        factors.error = "no conversion to the base geographic CRS: " +
+            _LastError();
+        return factors;
+    }
+    const PJ_COORD lonLat = proj_trans(
+        normalized.get(), PJ_FWD,
+        proj_coord(position[0], position[1], 0.0, 0.0));
+    if (!std::isfinite(lonLat.lp.lam) || !std::isfinite(lonLat.lp.phi) ||
+        lonLat.lp.lam == HUGE_VAL) {
+        factors.error = "the position is outside the projection: " +
+            _LastError();
+        return factors;
+    }
+    const PJ_FACTORS f = proj_factors(
+        crs.get(), proj_coord(proj_torad(lonLat.lp.lam),
+                              proj_torad(lonLat.lp.phi), 0.0, 0.0));
+    if (!(f.meridional_scale > 0.0) || !(f.parallel_scale > 0.0)) {
+        factors.error = "cannot compute the projection factors: " +
+            _LastError();
+        return factors;
+    }
+    factors.valid = true;
+    factors.meridianConvergence = proj_todeg(f.meridian_convergence);
+    factors.meridionalScale = f.meridional_scale;
+    factors.parallelScale = f.parallel_scale;
+    return factors;
 }
 
 USDGEOSPATIAL_DEFINE_ENGINE(UsdGeospatialProjEngine);

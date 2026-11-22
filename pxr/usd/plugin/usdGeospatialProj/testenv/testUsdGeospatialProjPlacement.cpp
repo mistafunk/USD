@@ -189,6 +189,45 @@ main()
         }
     }
 
+    // Projection factors against pyproj on the same PROJ: UTM 32N far west
+    // of its central meridian (a 3D object layer in Bergen) and California
+    // zone 5 in US survey feet; compound and non-projected CRSs.
+    const UsdGeospatialCoordinateOperationEngineSharedPtr engine =
+        UsdGeospatialEngineRegistry::GetInstance().GetEngine();
+    struct FactorsCase {
+        const char* crs;
+        GfVec3d position;
+        double convergence, meridional, parallel;
+    };
+    const FactorsCase factorsCases[] = {
+        {"EPSG:25832", GfVec3d(298549.51254411, 6709780.34498452, 0),
+         -3.1904926749780755, 1.000097310931324, 1.0000973108945979},
+        {"EPSG:25832+5773", GfVec3d(298549.51254411, 6709780.34498452, 0),
+         -3.1904926749780755, 1.000097310931324, 1.0000973108945979},
+        {"EPSG:2229", GfVec3d(6400000.0, 1900000.0, 0),
+         -0.3048037470719006, 0.9999660692149703, 0.9999660692110507},
+    };
+    for (const FactorsCase& c : factorsCases) {
+        const UsdGeospatialProjectionFactors f =
+            engine->ComputeProjectionFactors(c.crs, c.position);
+        printf("factors %s: %s convergence %.10f, scales %.12f %.12f\n",
+               c.crs, f ? "ok" : f.error.c_str(), f.meridianConvergence,
+               f.meridionalScale, f.parallelScale);
+        if (!f || std::abs(f.meridianConvergence - c.convergence) > 1e-9 ||
+            std::abs(f.meridionalScale - c.meridional) > 1e-12 ||
+            std::abs(f.parallelScale - c.parallel) > 1e-12) {
+            ++failures;
+        }
+    }
+    for (const char* crs : {"EPSG:4326", "EPSG:4979", "EPSG:4326+5773"}) {
+        const UsdGeospatialProjectionFactors f =
+            engine->ComputeProjectionFactors(crs, GfVec3d(8.5, 47.4, 0));
+        printf("factors %s: %s\n", crs, f ? "ok" : f.error.c_str());
+        if (f) {
+            ++failures;
+        }
+    }
+
     if (failures) {
         printf("FAILED: %d check(s)\n", failures);
         return 1;

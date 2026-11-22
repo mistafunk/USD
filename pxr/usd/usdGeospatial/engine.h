@@ -136,6 +136,36 @@ struct UsdGeospatialCrsInfo
     std::string promoted3D;
 };
 
+/// \struct UsdGeospatialProjectionFactors
+///
+/// Map projection properties of a projected CRS at a position: how the
+/// projection's grid differs from the ellipsoid's true directions and
+/// distances there. A client converting data that is defined in grid
+/// directions and grid lengths (for example models whose axes follow the
+/// projected CRS) can express it in the true east/north/up frame that
+/// placement uses.
+///
+struct UsdGeospatialProjectionFactors
+{
+    bool valid = false;
+
+    /// Why the factors could not be computed, if they could not (e.g. the
+    /// CRS is not projected).
+    std::string error;
+
+    /// Meridian convergence in degrees: the angle from true north to grid
+    /// north, clockwise positive.
+    double meridianConvergence = 0.0;
+
+    /// Scale factors along the meridian and along the parallel: grid
+    /// length over ellipsoid length. Equal for a conformal projection,
+    /// where they are the point scale.
+    double meridionalScale = 1.0;
+    double parallelScale = 1.0;
+
+    explicit operator bool() const { return valid; }
+};
+
 /// \class UsdGeospatialCoordinateOperationEngine
 ///
 /// Interface for coordinate operation engines, the plugins that convert and
@@ -209,6 +239,15 @@ public:
     USDGEOSPATIAL_API
     virtual std::string MakeCompoundCrs(const std::string& horizontal,
                                         const std::string& vertical);
+
+    /// The map projection factors of the projected CRS \p definition, or
+    /// the projected horizontal part of a compound CRS, at \p position
+    /// (easting, northing in the CRS's units; the third value is ignored).
+    /// Invalid, with an error, for other CRSs and if the engine cannot
+    /// compute them.
+    USDGEOSPATIAL_API
+    virtual UsdGeospatialProjectionFactors ComputeProjectionFactors(
+        const std::string& definition, const GfVec3d& position);
 
 protected:
     USDGEOSPATIAL_API

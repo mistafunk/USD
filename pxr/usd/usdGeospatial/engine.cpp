@@ -29,4 +29,14 @@ UsdGeospatialCoordinateOperationEngine::MakeCompoundCrs(
     return std::string();
 }
 
+UsdGeospatialProjectionFactors
+UsdGeospatialCoordinateOperationEngine::ComputeProjectionFactors(
+    const std::string&, const GfVec3d&)
+{
+    UsdGeospatialProjectionFactors factors;
+    factors.error = "the " + GetName() + " engine cannot compute projection "
+        "factors";
+    return factors;
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE
