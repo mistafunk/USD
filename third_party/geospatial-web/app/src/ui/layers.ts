@@ -62,6 +62,9 @@ export class LayersTab {
   private text = "";
   private loadableOnly = true;
   private vcs = "any";
+  /** Horizontal CRS: "any", "4326", "3857" or "other" (the rest: projected
+   *  layers and other test cases). */
+  private hcs = "any";
   private format = "any";
   private current: string | undefined;
 
@@ -88,6 +91,13 @@ export class LayersTab {
       b.addEventListener("click", () => {
         this.format = b.dataset.format!;
         document.querySelectorAll("#formatFilter button").forEach((x) => x.classList.toggle("active", x === b));
+        this.render();
+      });
+    });
+    document.querySelectorAll<HTMLButtonElement>("#hcsFilter button").forEach((b) => {
+      b.addEventListener("click", () => {
+        this.hcs = b.dataset.h!;
+        document.querySelectorAll("#hcsFilter button").forEach((x) => x.classList.toggle("active", x === b));
         this.render();
       });
     });
@@ -147,7 +157,10 @@ export class LayersTab {
     }
     if (this.loadableOnly && l.loadable === false) return false;
     if (this.text && !`${l.title} ${l.owner ?? ""}`.toLowerCase().includes(this.text)) return false;
-    const v = l.crs.split("+")[1];
+    const [h, v] = l.crs.split("+");
+    // Web Mercator also as its Esri code (older layers without latestWkid).
+    const hc = h === "EPSG:102100" ? "3857" : h.replace(/^EPSG:/, "");
+    if (this.hcs === "other" ? hc === "4326" || hc === "3857" : this.hcs !== "any" && hc !== this.hcs) return false;
     if (this.vcs === "none" && v) return false;
     if (this.vcs !== "any" && this.vcs !== "none" && v !== this.vcs) return false;
     return true;
