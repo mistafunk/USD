@@ -1190,10 +1190,13 @@ def arcgis_mock():
         "zurich-egm96": ({"wkid": 4326, "latestWkid": 4326, "vcsWkid": 5773,
                           "latestVcsWkid": 5773}, zurich),
         # 2 x scale east, 1.5 x up, turned 90 degrees counter-clockwise, then
-        # moved 10 m east, 5 m north, 2 m up.
+        # moved 10 m east, 5 m north, 2 m up. The fields are in the model's
+        # glTF frame (x east, y up, z south), as the Maps SDK reads them
+        # (translation (tX, -tZ, tY) in ENU, axis (rX, -rZ, rY), scale
+        # (sX, sZ, sY)): so t = (10, 2, -5), scale (2, 1.5, 1), axis y (up).
         "transform": ({"wkid": 4326, "latestWkid": 4326},
                       [feature(1, (8.51294297, 47.39215091, 427.0), (8.0, 4.0, 2.0),
-                               t=(10, 5, 2), s=(2, 1, 1.5), axis=(0, 0, 1), deg=90.0)]),
+                               t=(10, 2, -5), s=(2, 1.5, 1), axis=(0, 1, 0), deg=90.0)]),
     }
     for name, (sr, features) in layers.items():
         d = ARCGIS_MOCK_DIR / name

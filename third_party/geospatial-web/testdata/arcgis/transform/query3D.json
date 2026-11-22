@@ -9,14 +9,14 @@
     "ESRI3DO_OY": 47.39215091,
     "ESRI3DO_OZ": 427.0,
     "ESRI3DO_TX": 10,
-    "ESRI3DO_TY": 5,
-    "ESRI3DO_TZ": 2,
+    "ESRI3DO_TY": 2,
+    "ESRI3DO_TZ": -5,
     "ESRI3DO_SX": 2,
-    "ESRI3DO_SY": 1,
-    "ESRI3DO_SZ": 1.5,
+    "ESRI3DO_SY": 1.5,
+    "ESRI3DO_SZ": 1,
     "ESRI3DO_RX": 0,
-    "ESRI3DO_RY": 0,
-    "ESRI3DO_RZ": 1,
+    "ESRI3DO_RY": 1,
+    "ESRI3DO_RZ": 0,
     "ESRI3DO_RDEG": 90.0
    }
   }

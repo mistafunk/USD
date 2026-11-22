@@ -8,11 +8,14 @@
 // URL: layer resource and query3D) or, for tests, from a directory with the
 // same two responses as layer.json and query3D.json (testdata/arcgis).
 //
-// Transform semantics (from the SDK's mesh origin and MeshTransform; the
-// order and the frame are not documented and still to be verified on a
-// rotated feature): a model point p (metres east/north/up at the origin) is
-// placed at R(axis, angle) * (scale * p) + translation, the rotation
-// right-handed about an east/north/up axis.
+// Transform semantics, as the Maps SDK reads them (verified 2026-11-22 on
+// rotated features of the Zurich org's "3D Objekte" layers against the SDK's
+// baked mesh vertices, and in its source): the transform fields are in the
+// model's glTF frame (x east, y up, z south). The SDK converts them to ENU as
+// translation (tX, -tZ, tY), rotation axis (rX, -rZ, rY), scale (sX, sZ, sY),
+// angle in degrees right-handed, and places a model point p at
+// R(axis, angle) * (scale * p) + translation at the origin. The wrapper's
+// axes are that glTF frame, so the fields go into its xformOps unchanged.
 
 export interface SpatialReferenceJson {
   wkid?: number;
@@ -193,13 +196,11 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
     if (!models.some((m) => m.path === path)) models.push({ url: asset.assetURL, path });
 
     const origin = [num(a, "originX", 0), num(a, "originY", 0), num(a, "originZ", 0)];
-    // East/north/up -> the wrapper's Y-up axes: (e, n, u) -> (e, u, -n).
-    const enuToStage = (v: number[]) => [v[0], v[2], -v[1]];
-    const t = enuToStage([num(a, "translationX", 0), num(a, "translationY", 0),
-                          num(a, "translationZ", 0)]);
-    const s = [num(a, "scaleX", 1), num(a, "scaleZ", 1), num(a, "scaleY", 1)];
-    const axis = enuToStage([num(a, "rotationX", 0), num(a, "rotationY", 0),
-                             num(a, "rotationZ", 1)]);
+    // The fields are in the model's glTF frame (x east, y up, z south), which
+    // is the wrapper's Y-up frame: used as they are (see the header).
+    const t = [num(a, "translationX", 0), num(a, "translationY", 0), num(a, "translationZ", 0)];
+    const s = [num(a, "scaleX", 1), num(a, "scaleY", 1), num(a, "scaleZ", 1)];
+    const axis = [num(a, "rotationX", 0), num(a, "rotationY", 1), num(a, "rotationZ", 0)];
     const q = quaternion(axis, num(a, "rotationDeg", 0));
     prims.push(`
     def Xform "Feature_${oid}" (

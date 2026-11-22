@@ -20,9 +20,6 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   dev server (module 3.8 MB, `proj.db` 1.3 MB). Still to measure: the `wasm32-minsize` preset (all of USD at `-Oz`).
 
 **Open items**
-- **3D object layer transform semantics are assumed:** scale, then rotate about an east/north/up axis (right-handed),
-  then translate, in metres (from the SDK's MeshTransform; order and frame undocumented). The Zurich features are all
-  identity. Verify on a layer with a rotated feature (Find lists candidates in the Zurich org).
 - **Threads.** The module runs without a pre-started pthread pool and reports 24 work threads. With real models
   (the Zurich glb are 126 MB and 63 MB): measure, then pre-start a pool (`-sPTHREAD_POOL_SIZE`) and cap
   `setThreadLimit` to it.
@@ -117,6 +114,12 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   says so before querying.
 - Models are glb (USD is an upload format, not a query format); CityEngine exports are Y-up, metres, x east, y up,
   z south, centred on the origin. Asset downloads on ArcGIS Online send `access-control-allow-origin: *`.
+- **Transform fields are in the model's glTF frame** (x east, y up, z south), not ENU: the Maps SDK converts
+  translation (tX, -tZ, tY), rotation axis (rX, -rZ, rY) and scale (sX, sZ, sY) to ENU (its `MeshTransform`
+  from the fields; checked on rotated "3D Objekte - Gruppe 1" features against its baked vertices, to the mm).
+  The wrapper's Y-up frame is that glTF frame, so the fields go into its xformOps unchanged. The first version
+  mapped them as ENU, which turned heading rotations about y into tilts; the `transform` mock now uses the
+  SDK's convention.
 - Without `vcsWkid` the wrapper takes z as ellipsoidal height (promoted 3D CRS); the layer does not say.
 
 **WebAssembly build**
