@@ -1,0 +1,33 @@
+{
+ "_note": "mock (reference.py arcgis-mock), not served data",
+ "name": "zurich-duplicate",
+ "type": "Feature Layer",
+ "geometryType": "esriGeometryMultiPatch",
+ "hasZ": true,
+ "spatialReference": {
+  "wkid": 4326,
+  "latestWkid": 4326
+ },
+ "infoFor3D": {
+  "transformFieldRoles": {
+   "globalID": "GlobalID",
+   "originX": "ESRI3DO_OX",
+   "originY": "ESRI3DO_OY",
+   "originZ": "ESRI3DO_OZ",
+   "translationX": "ESRI3DO_TX",
+   "translationY": "ESRI3DO_TY",
+   "translationZ": "ESRI3DO_TZ",
+   "scaleX": "ESRI3DO_SX",
+   "scaleY": "ESRI3DO_SY",
+   "scaleZ": "ESRI3DO_SZ",
+   "rotationX": "ESRI3DO_RX",
+   "rotationY": "ESRI3DO_RY",
+   "rotationZ": "ESRI3DO_RZ",
+   "rotationDeg": "ESRI3DO_RDEG"
+  },
+  "queryFormats": [
+   "3D_shapebuffer",
+   "3D_glb"
+  ]
+ }
+}

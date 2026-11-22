@@ -205,6 +205,9 @@ export interface Wrapper {
   models: { url: string; path: string; size?: number }[];
   /** Features without a model in the layer's format (skipped). */
   skipped: string[];
+  /** Exact duplicates: anchor path -> the first anchor with the same model
+   *  (asset hash) and the same transform fields. */
+  duplicates: Record<string, string>;
 }
 
 /**
@@ -222,6 +225,8 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
     return typeof v === "number" && Number.isFinite(v) ? v : fallback;
   };
   const models: Wrapper["models"] = [];
+  const duplicates: Wrapper["duplicates"] = {};
+  const firstOf = new Map<string, string>();
   const skipped: string[] = [];
   const prims: string[] = [];
   for (const f of data.features) {
@@ -239,6 +244,13 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
     if (!models.some((m) => m.path === path)) models.push({ url: asset.assetURL, path, size: asset.size });
 
     const origin = [num(a, "originX", 0), num(a, "originY", 0), num(a, "originZ", 0)];
+    // Exact duplicate: the same model file and the same transform fields.
+    const key = [asset.assetHash, ...["originX", "originY", "originZ", "translationX", "translationY",
+      "translationZ", "scaleX", "scaleY", "scaleZ", "rotationX", "rotationY", "rotationZ", "rotationDeg"]
+      .map((r) => a[roles[r] ?? ""] ?? "")].join("|");
+    const anchor = `/ObjectLayer/Feature_${oid}`;
+    const first = firstOf.get(key);
+    if (first) duplicates[anchor] = first; else firstOf.set(key, anchor);
     // The fields are in the model's glTF frame (x east, y up, z south), which
     // is the wrapper's Y-up frame: used as they are (see the header).
     const t = [num(a, "translationX", 0), num(a, "translationY", 0), num(a, "translationZ", 0)];
@@ -282,7 +294,7 @@ def Xform "ObjectLayer"
 ${prims.join("\n")}
 }
 `;
-  return { usda, models, skipped };
+  return { usda, models, skipped, duplicates };
 }
 
 /** Unit quaternion (w, x, y, z) of a right-handed rotation about `axis`. */

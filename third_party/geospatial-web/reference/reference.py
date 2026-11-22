@@ -1222,6 +1222,10 @@ def arcgis_mock():
         "zurich-ellipsoidal": ({"wkid": 4326, "latestWkid": 4326}, zurich),
         "zurich-egm96": ({"wkid": 4326, "latestWkid": 4326, "vcsWkid": 5773,
                           "latestVcsWkid": 5773}, zurich),
+        # Feature 3 repeats feature 1 exactly (same model and transform), after
+        # it: the app reports it, and draws a selected feature last.
+        "zurich-duplicate": ({"wkid": 4326, "latestWkid": 4326},
+                             [zurich[0], feature(3, *zurich[0][1:3]), zurich[1]]),
         # Serves USD (usdz) next to glb, as layers are expected to: the app
         # prefers USD (objectLayer.ts modelFormat).
         "zurich-usd": ({"wkid": 4326, "latestWkid": 4326}, zurich),

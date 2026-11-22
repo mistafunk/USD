@@ -60,7 +60,9 @@ export interface LiveData {
   geoid?: { crs: string; operation: string; heights: Record<string, number>; applied: boolean };
   /** 3D object layers: the CRS used, the generated wrapper and skipped features. */
   objectLayer?: { title: string; url: string; features: number; crs: string; wrapper: string;
-                  skipped: string[] };
+                  skipped: string[];
+                  /** Exact duplicates: anchor path -> the first with the same model and transform. */
+                  duplicates: Record<string, string> };
 }
 
 interface SceneIndex {
@@ -108,6 +110,9 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     log(`CRS ${definition}${promote3D ? " promoted to 3D (z taken as ellipsoidal)" : ""}`);
     const wrapper = buildWrapper(data, crs.wkt);
     wrapper.skipped.forEach((s) => status.add("warn", s));
+    for (const [dup, of] of Object.entries(wrapper.duplicates)) {
+      status.add("warn", `${dup} is an exact duplicate of ${of} (same model and transform)`);
+    }
     if (!wrapper.models.length) throw new Error(`no feature has a ${data.format} model`);
     status.step(`downloading ${wrapper.models.length} model(s)`);
     wrapper.models.forEach((m) => log(`model ${m.path} from ${m.url}`));
@@ -120,7 +125,7 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     await timed("load", () => usd.open("/arcgis/layer.usda"));
     objectLayer = { title, url, features: data.features.length,
                     crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
-                    skipped: wrapper.skipped };
+                    skipped: wrapper.skipped, duplicates: wrapper.duplicates };
     const first = data.features[0]?.attributes;
     const roles = data.layer.infoFor3D.transformFieldRoles;
     if (first && (data.layer.spatialReference.latestWkid ?? data.layer.spatialReference.wkid) === 4326) {

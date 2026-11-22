@@ -203,7 +203,13 @@ export class MeshPass {
       sun.diffuse.color.map((c) => c * sun.diffuse.intensity));
 
     let triangles = 0;
-    for (const g of this.gpu) {
+    // Highlighted meshes last: at equal depth (LEQUAL) the last drawn wins,
+    // so a selected feature shows over an exact duplicate of itself.
+    const order = this.highlight
+      ? [...this.gpu.filter((g) => !this.highlight!.has(g.mesh.name)),
+         ...this.gpu.filter((g) => this.highlight!.has(g.mesh.name))]
+      : this.gpu;
+    for (const g of order) {
       if ((this.solo && !this.solo.has(g.mesh.name)) || this.muted.has(g.mesh.name)) continue;
       const { origin, matrix, color } = g.mesh;
       // view * translate(origin) * matrix, all in Float64.

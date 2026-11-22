@@ -157,6 +157,43 @@ test("object layer zurich-usd global", async ({ page }) => {
   await expect(page.locator("#log")).toContainText("models as 3D_usdz");
 });
 
+test("object layer zurich-duplicate global", async ({ page }) => {
+  // Feature 3 repeats feature 1 exactly, after it: reported as a duplicate,
+  // and a selected feature 1 is drawn last, so its highlight shows.
+  // Without terrain and buildings, so the view's centre is the box.
+  const { live } = await open(page, "global", "zurich-duplicate", "&terrain=0&buildings=0");
+  expect(live.objectLayer!.duplicates).toEqual({ "/ObjectLayer/Feature_3": "/ObjectLayer/Feature_1" });
+  await expect(page.locator('#anchorList .anchor[data-path="/ObjectLayer/Feature_3"] .dup'))
+    .toHaveText("duplicate of Feature_1");
+  await expect(page.locator("#log")).toContainText("exact duplicate of /ObjectLayer/Feature_1");
+  const app = (f: string, ...args: unknown[]) => page.evaluate(([f, args]) =>
+    (globalThis as unknown as Record<string, Record<string, (...a: unknown[]) => unknown>>)
+      .__app[f as string](...(args as unknown[])), [f, args] as [string, unknown[]]);
+  await app("zoom", "/ObjectLayer/Feature_1");
+  await page.waitForTimeout(1500);
+  const centre = async () => {
+    const png = (await page.screenshot()).toString("base64");
+    return page.evaluate(async (data) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${data}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d")!;
+      g.drawImage(img, 0, 0);
+      // The zoomed anchor is in the middle of the view, left of the panel.
+      return Array.from(g.getImageData(430, 420, 1, 1).data);
+    }, png);
+  };
+  const plain = await centre();
+  await app("select", "/ObjectLayer/Feature_1");
+  await page.waitForTimeout(500);
+  const selected = await centre();
+  // The highlight tints towards orange: more red than blue, unlike the plain grey.
+  expect(plain[0] - plain[2]).toBeLessThan(10);
+  expect(selected[0] - selected[2]).toBeGreaterThan(40);
+});
+
 test("object layer transform global", async ({ page }) => {
   const { live } = await open(page, "global", "transform");
   expect(live.anchors.map((a) => a.status)).toEqual(["ok"]);

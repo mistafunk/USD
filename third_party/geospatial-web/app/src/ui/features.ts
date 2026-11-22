@@ -198,7 +198,11 @@ export class FeaturesTab {
       h("span", { class: "acc" }, placed ? accuracyText(a.accuracy, "±") : "n/a"),
       h("span", { class: "actions" }, solo, mute, zoom),
       h("span", { class: "meta" }, `${crs?.name || a.sourceCrs || "no source CRS"} · ` +
-        `${meshes.length} mesh${meshes.length === 1 ? "" : "es"}`),
+        `${meshes.length} mesh${meshes.length === 1 ? "" : "es"}`,
+        live?.objectLayer?.duplicates[a.path]
+          ? [" · ", h("span", { class: "dup", title: "Same model and transform: drawn at the same place" },
+                      `duplicate of ${live.objectLayer.duplicates[a.path].split("/").pop()}`)]
+          : null),
       // Two lines here (CSS); the full reason is in the Placement section.
       !placed && a.reason ? h("span", { class: "reason", title: a.reason }, a.reason) : null);
     const row = h("details", {

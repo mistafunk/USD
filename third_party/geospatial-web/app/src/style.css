@@ -369,3 +369,4 @@ details.disclose > summary::before {
   border-left: 5px solid currentColor; border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
   transition: transform .12s; }
 details.disclose[open] > summary::before { content: ""; transform: rotate(90deg); }
+.anchor .dup { color: var(--warn); }
