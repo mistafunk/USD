@@ -78,7 +78,17 @@ async function c1() {
         ["crsLibrary.usda", stage].map((f) => ({ url: `${fixtures}/${f}`, path: `/c1/${f}` })),
         `/c1/${stage}`);
       for (const c of expected.anchors.filter((a) => a.stage === stage)) {
-        const geo = await usd.resolve(c.path, "EPSG:4979");
+        let geo = await usd.resolve(c.path, "EPSG:4979");
+        // Grids it needs (D23): fetch those the server has, then again.
+        if (geo.missingGrids.length && (await usd.ensureGrids(geo.missingGrids)).length) {
+          geo = await usd.resolve(c.path, "EPSG:4979");
+        }
+        // EGM2008 is not served to the browser: not comparable here.
+        if (c.status === "ok" && geo.missingGrids.length) {
+          check("C1", c.path, true,
+                `not comparable in the browser, grids not served: ${geo.missingGrids.join(", ")}`);
+          continue;
+        }
         if (c.status !== "ok" || geo.status !== "ok") {
           check("C1", c.path, geo.status === c.status,
                 `${geo.status} (expected ${c.status}): ${geo.reason}`);
@@ -100,20 +110,34 @@ async function c1() {
 
 interface Manifest {
   output: { crs: string; frame: string };
-  anchors: { path: string; status: string; origin?: Vec3; matrix?: number[] }[];
+  anchors: { path: string; status: string; origin?: Vec3; matrix?: number[];
+             gridsUsed?: string[] }[];
   meshes: { path: string; status: string; matrix?: number[]; points: { count: number } }[];
 }
 
 async function scene(usd: UsdClient, name: string) {
   const ref = await fetchJson<Manifest>(`/recorded/manifest-${name}.json`);
   await timed(`setOutput ${name}`, () => usd.setOutput(ref.output.crs, true));
-  const live = await timed(`sync ${name}`, () => usd.state());
+  let live = await timed(`sync ${name}`, () => usd.state());
+  // Grids the placement reports missing (D23): fetch those served, again.
+  const missing = live.anchors.flatMap((a) => a.missingGrids);
+  if (missing.length && (await usd.ensureGrids(missing)).length) {
+    await usd.setOutput(ref.output.crs, true);
+    live = await usd.state();
+  }
   const group = `scene ${name}`;
   check(group, "frame", live.frame === ref.output.frame, `${live.frame}`);
 
   const anchors = new Map<string, LiveAnchor>(live.anchors.map((a) => [a.path, a]));
+  const incomparable = new Set<string>();
   for (const a of ref.anchors) {
     const got = anchors.get(a.path);
+    if (got && (a.gridsUsed ?? []).some((g) => got.missingGrids.includes(g))) {
+      incomparable.add(a.path);
+      check(group, a.path, true, `not comparable in the browser, grids not served: ` +
+            got.missingGrids.join(", "));
+      continue;
+    }
     if (!got || got.status !== a.status || a.status !== "ok") {
       check(group, a.path, got?.status === a.status,
             `${got?.status ?? "missing"} (expected ${a.status})${got?.reason ? ": " + got.reason : ""}`);
@@ -130,6 +154,7 @@ async function scene(usd: UsdClient, name: string) {
   const meshes = new Map<string, LiveMesh>(live.meshes.map((m) => [m.path, m]));
   for (const m of ref.meshes) {
     const got = meshes.get(m.path);
+    if ([...incomparable].some((p) => m.path.startsWith(p + "/"))) continue;
     const counts = got?.points.length === m.points.count * 3;
     if (!got || got.status !== m.status || m.status !== "ok") {
       check(group, m.path, got?.status === m.status && counts,

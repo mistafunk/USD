@@ -3,8 +3,8 @@
 //   harness   every case (T1, T2, T3, T4, T7, T8, control points) gives its
 //             expected outcome, in the global and the local view, with matrix
 //             placement and with exact points (measurement mode)
-//   T2, T3    the operation used is named; NAD27 reports the grid-based
-//             operations it had to skip
+//   T2, T3    the operation used is named; NAD27 is placed with NADCON
+//             after the worker fetched its grids (D23)
 //   T5        matrix vs exact point map per mesh (linearization error)
 //   T6        screen error of the float32 pipeline 1 m from a control point
 //   T9        browser vs native (geo.py record) within 1 mm, and vs the
@@ -35,7 +35,8 @@ interface App {
 
 interface Manifest {
   output: { frame: string };
-  anchors: { path: string; status: string; origin?: number[]; matrix?: number[] }[];
+  anchors: { path: string; status: string; origin?: number[]; matrix?: number[];
+             gridsUsed?: string[] }[];
   meshes: { path: string; status: string; matrix?: number[] }[];
 }
 
@@ -74,14 +75,24 @@ async function settle(page: Page) {
   }, null, { timeout: 90_000 });
 }
 
-/** T9: live anchors and meshes against recorded results (native or reference). */
-function compare(label: string, live: LiveData, ref: Manifest, tolerance: number) {
+/**
+ * T9: live anchors and meshes against recorded results (native or reference).
+ * Anchors whose reference result used a grid the browser lacks (EGM2008 is
+ * not served, D23) are not comparable and listed separately.
+ */
+function compare(label: string, live: LiveData, ref: Manifest, tolerance: number,
+                 gridsUsed: Map<string, string[]>) {
   const enu = live.output.frame === "enu";
   const anchors = new Map(live.anchors.map((a) => [a.path, a]));
   let worstOrigin = 0, worstMatrix = 0, compared = 0;
   const statusMismatch: string[] = [];
+  const incomparable = new Set<string>();
   for (const a of ref.anchors) {
     const got = anchors.get(a.path);
+    if (got && (gridsUsed.get(a.path) ?? []).some((g) => got.missingGrids.includes(g))) {
+      incomparable.add(a.path);
+      continue;
+    }
     if (!got || got.status !== a.status) {
       statusMismatch.push(`${a.path}: ${got?.status ?? "missing"} vs ${a.status}`);
       continue;
@@ -95,6 +106,7 @@ function compare(label: string, live: LiveData, ref: Manifest, tolerance: number
   const meshes = new Map(live.meshes.map((m) => [m.path, m]));
   for (const m of ref.meshes) {
     const got = meshes.get(m.path);
+    if (got && [...incomparable].some((p) => m.path.startsWith(p + "/"))) continue;
     if (!got || got.status !== m.status) {
       statusMismatch.push(`${m.path}: ${got?.status ?? "missing"} vs ${m.status}`);
     } else if (m.status === "ok") {
@@ -102,6 +114,10 @@ function compare(label: string, live: LiveData, ref: Manifest, tolerance: number
     }
   }
   const unit = enu ? "m" : "units";
+  if (incomparable.size) {
+    check("T9", `${label}: not comparable in the browser`, true,
+          [...incomparable].map((p) => `${p} (needs ${gridsUsed.get(p)!.join(", ")})`).join("; "));
+  }
   check("T9", `${label}: statuses`, statusMismatch.length === 0,
         statusMismatch.length ? statusMismatch.join("; ") : `all ${ref.anchors.length} anchors, ` +
         `${ref.meshes.length} meshes agree`);
@@ -154,17 +170,21 @@ for (const run of runs) {
     const siteG = report.cases.find((c) => c.anchor === "/World/SiteG")!;
     check("T2", `${label}: WGS 72 operation`, /WGS 72 to WGS 84/.test(siteF.operation ?? ""),
           `${siteF.operation} (accuracy ${siteF.accuracy} m)`);
-    check("T3", `${label}: NAD27 placed, grid operations reported`,
-          /NAD27 to WGS 84/.test(siteG.operation ?? "") && (siteG.skippedOperations?.length ?? 0) > 0,
-          `${siteG.operation} (accuracy ${siteG.accuracy} m); skipped: ` +
-          (siteG.skippedOperations ?? []).join("; "));
+    // T3 (D23): the worker fetches NAD27's grids, then it is placed with
+    // NADCON like natively.
+    check("T3", `${label}: NAD27 through NADCON, grids fetched on demand`,
+          /NAD27 to NAD83 \(1\)/.test(siteG.operation ?? "") &&
+          live.grids.includes("us_noaa_conus.tif"),
+          `${siteG.operation} (accuracy ${siteG.accuracy} m); grids fetched: ${live.grids.join(", ")}`);
 
     // T9: browser vs native and vs the reference, same output.
     const native = manifest("recorded-cpp", live.output.name);
     expect(native, "native results missing; run: geo.py record").not.toBeNull();
-    compare(`${label} browser vs native`, live, native!, NATIVE_TOLERANCE);
-    const reference = manifest("recorded", live.output.name);
-    compare(`${label} browser vs reference`, live, reference!, EXIT_TOLERANCE);
+    const reference = manifest("recorded", live.output.name)!;
+    const gridsUsed = new Map(reference.anchors.map((a) => [a.path, a.gridsUsed ?? []]));
+    console.log(`${label}: grids fetched ${JSON.stringify(live.grids)}`);
+    compare(`${label} browser vs native`, live, native!, NATIVE_TOLERANCE, gridsUsed);
+    compare(`${label} browser vs reference`, live, reference, EXIT_TOLERANCE, gridsUsed);
 
     // T5: the matrix shortcut per mesh.
     if (!run.exact) {

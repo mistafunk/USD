@@ -29,6 +29,8 @@ export interface TestCase {
   description: string;
   /** Outcome in a local view with matrix placement, where it differs (T5). */
   expectLocal?: Outcome;
+  /** Outcome placed live in the browser, where it differs (grids, D23). */
+  expectBrowser?: Outcome;
 }
 
 export interface HarnessAnchor {
@@ -94,6 +96,8 @@ export interface HarnessInput {
    *  that CRS's spatial reference in the view. */
   exactPoint?: (controlPoint: string) => number[] | null;
   outputSpatialReference?: SpatialReference;
+  /** Placed live in the browser (expectBrowser applies). */
+  live?: boolean;
   tolerance: number;
 }
 
@@ -126,7 +130,8 @@ export function score(input: HarnessInput): HarnessReport {
   const local = input.view.viewingMode === "local";
   const cases: CaseResult[] = input.testCases.map((tc) => {
     const a = anchors.get(tc.anchor);
-    const expect = local && !exact && tc.expectLocal ? tc.expectLocal : tc.expect;
+    const expect = input.live && tc.expectBrowser ? tc.expectBrowser
+      : local && !exact && tc.expectLocal ? tc.expectLocal : tc.expect;
     const base = {
       anchor: tc.anchor, description: tc.description, expect,
       ...(a?.status === "ok" ? {

@@ -5,13 +5,38 @@ import type { FileSpec, ModuleInfo, Resolved, SceneState, StageTestData, Vec3 } 
 export const USD_BASE = "/usd";
 export const MODULE_URL = `${USD_BASE}/module/geospatialModule.js`;
 
+export interface GeoidHeights {
+  heights: number[];
+  operation: string;
+  error: string;
+  missingGrids: string[];
+}
+
+export interface UsdProgress {
+  label: string;
+  loaded: number;
+  total: number;
+}
+
 export class UsdClient {
+  /** Download progress of fetchFiles/load/ensureGrids. */
+  onProgress: ((p: UsdProgress) => void) | null = null;
+  /** The module's own output (USD errors and warnings). */
+  onLog: ((level: "usd", text: string) => void) | null = null;
   private worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
   private next = 0;
   private pending = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>();
 
   constructor() {
     this.worker.onmessage = (event: MessageEvent) => {
+      if (event.data.progress) {
+        this.onProgress?.(event.data.progress);
+        return;
+      }
+      if (event.data.log) {
+        this.onLog?.(event.data.log.level, event.data.log.text);
+        return;
+      }
       const { id, result, error } = event.data;
       const p = this.pending.get(id);
       if (!p) return;
@@ -52,10 +77,29 @@ export class UsdClient {
     return this.call("open", { stage });
   }
 
+  /**
+   * Fetches those of `names` that the server provides (baseUrl/index.json)
+   * into PROJ's grid directory and resets the engines; returns the grids
+   * fetched. Set the output again afterwards to place with them.
+   */
+  ensureGrids(names: string[], baseUrl = `${USD_BASE}/grids`): Promise<string[]> {
+    return this.call("ensureGrids", { names, baseUrl });
+  }
+
   /** WKT2 of a CRS definition PROJ accepts, e.g. "EPSG:4326+5773"; with
    *  promote3D a 2D CRS gets an ellipsoidal height axis. */
   crsWkt(definition: string, promote3D = false): Promise<{ wkt: string; error: string }> {
     return this.call("crsWkt", { definition, promote3D });
+  }
+
+  /**
+   * Geoid heights N (ellipsoidal minus `verticalCrs` height, metres) at
+   * [lon, lat] points; fetches the geoid grid on demand. heights is empty on
+   * failure (error says why).
+   */
+  geoidHeights(points: [number, number][], verticalCrs = "EPSG:5773",
+               baseUrl = `${USD_BASE}/grids`): Promise<GeoidHeights> {
+    return this.call("geoidHeights", { points, verticalCrs, baseUrl });
   }
 
   /** Fetches files into the module's file system and opens the stage. */

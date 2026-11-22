@@ -135,6 +135,13 @@ export interface PlaceInput {
   exactPoints?: Map<string, number[]>;
   /** Camera target (lon, lat, h) when no anchor could be placed. */
   fallbackTarget?: [number, number, number];
+  /** Display only (D25): metres to lower each anchor by when drawing, e.g.
+   *  the geoid height N, so ellipsoidal placements meet terrain whose
+   *  orthometric heights the SceneView draws as ellipsoidal. Scoring uses
+   *  the placed (ellipsoidal) frames. */
+  displayOffsets?: Map<string, number>;
+  /** Placed live in the browser (the harness applies expectBrowser). */
+  live?: boolean;
 }
 
 export function placeScene(view: SceneView, input: PlaceInput): Scene {
@@ -150,16 +157,28 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
     }
   }
 
+  const lowered = (a: RecordedAnchor): number[] => {
+    const o = a.origin!;
+    return [o[0], o[1], o[2] - (input.displayOffsets?.get(a.path) ?? 0)];
+  };
   const frames = new Map<string, Float64Array>();
   const frameOf = (a: RecordedAnchor): Float64Array => {
     const cached = frames.get(a.path);
     if (cached) return cached;
-    const f = computeFrame(a);
+    const f = computeFrame(a, a.origin!);
     frames.set(a.path, f);
     return f;
   };
-  const computeFrame = (a: RecordedAnchor): Float64Array => {
-    const origin = a.origin!;
+  const displayFrames = new Map<string, Float64Array>();
+  const displayFrameOf = (a: RecordedAnchor): Float64Array => {
+    if (!input.displayOffsets?.has(a.path)) return frameOf(a);
+    const cached = displayFrames.get(a.path);
+    if (cached) return cached;
+    const f = computeFrame(a, lowered(a));
+    displayFrames.set(a.path, f);
+    return f;
+  };
+  const computeFrame = (a: RecordedAnchor, origin: number[]): Float64Array => {
     if (input.output.frame === "crs") return translation(origin);
     const frame = geographicFrame(view, origin);
     if (!frame) throw new Error(`no render frame at ${a.path}`);
@@ -173,7 +192,7 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
     if (m.status !== "ok" || !a || a.status !== "ok" || !m.matrix) continue;
     // Exact mode draws the exact frame points: the matrix is the identity.
     const useExact = exact && !!m.framePoints;
-    const full = multiply(frameOf(a), useExact ? identity() : m.matrix);
+    const full = multiply(displayFrameOf(a), useExact ? identity() : m.matrix);
     renderMatrices.set(m.path, full);
     meshes.push({
       name: m.path,
@@ -204,7 +223,7 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
   if (!ref && !input.fallbackTarget) throw new Error("no placeable anchor in the data");
   return {
     name: input.name,
-    target: ref ? toLonLatH(input.output.frame, ref.origin!) : input.fallbackTarget!,
+    target: ref ? toLonLatH(input.output.frame, lowered(ref)) : input.fallbackTarget!,
     presets: PRESETS,
     meshes,
     anchors: status,
@@ -225,6 +244,7 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
         outputSpatialReference: input.output.frame === "enu"
           ? SpatialReference.WGS84 : view.spatialReference,
       } : {}),
+      live: input.live,
       tolerance: 0.01,
     }),
   };
@@ -281,7 +301,7 @@ export function geographicFrame(view: SceneView, [lon, lat, h]: number[]): Float
   return f;
 }
 
-function toLonLatH(frame: "enu" | "crs", origin: number[]): [number, number, number] {
+export function toLonLatH(frame: "enu" | "crs", origin: number[]): [number, number, number] {
   if (frame === "enu") return [origin[0], origin[1], origin[2]];
   const [lon, lat] = xyToLngLat(origin[0], origin[1]);
   return [lon, lat, origin[2]];

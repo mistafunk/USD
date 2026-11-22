@@ -11,9 +11,20 @@ type Scene = any;
 let module: Module | null = null;
 let scene: Scene | null = null;
 
+// PROJ in the module reads grid files from here (fetched on demand, D23).
+const GRID_DIR = "/proj";
+const fetchedGrids = new Set<string>();
+
 async function init(moduleUrl: string) {
   const { default: create } = await import(/* @vite-ignore */ moduleUrl);
-  module = await create();
+  // PROJ reads PROJ_DATA once it starts, so set it before the module runs.
+  // USD's messages (errors, warnings) go to the page's log.
+  module = await create({
+    preRun: [(m: Module) => { m.ENV.PROJ_DATA = GRID_DIR; }],
+    print: (text: string) => post({ log: { level: "usd", text } }),
+    printErr: (text: string) => post({ log: { level: "usd", text } }),
+  });
+  need(module).FS.mkdir(GRID_DIR);
   scene = new module.GeospatialScene();
   return module.info();
 }
@@ -23,15 +34,54 @@ async function load(files: FileSpec[], stage: string) {
   open(stage);
 }
 
+function post(message: object) {
+  (self as unknown as Worker).postMessage(message);
+}
+
+/** Downloads a file, reporting progress (label: the file's path). */
+async function download(f: FileSpec): Promise<Uint8Array> {
+  let res: Response;
+  try {
+    res = await fetch(f.url);
+  } catch (e) {
+    // CORS and network errors only say "Failed to fetch".
+    throw new Error(`${f.url}: ${String((e as Error)?.message ?? e)} (network, CORS or COEP)`);
+  }
+  if (!res.ok) throw new Error(`${f.url}: HTTP ${res.status}`);
+  const total = Number(res.headers.get("content-length") ?? 0);
+  const label = f.path.slice(f.path.lastIndexOf("/") + 1);
+  if (!res.body) {
+    const data = new Uint8Array(await res.arrayBuffer());
+    post({ progress: { label, loaded: data.length, total: data.length } });
+    return data;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0, last = 0;
+  post({ progress: { label, loaded, total } });
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+    if (loaded - last > 256 * 1024) {
+      post({ progress: { label, loaded, total } });
+      last = loaded;
+    }
+  }
+  post({ progress: { label, loaded, total: total || loaded } });
+  const data = new Uint8Array(loaded);
+  let offset = 0;
+  for (const c of chunks) {
+    data.set(c, offset);
+    offset += c.length;
+  }
+  return data;
+}
+
 /** Fetches files in parallel into the in-memory file system. */
 async function fetchFiles(files: FileSpec[]) {
-  const m = need(module);
-  // Fetch in parallel, then write into the in-memory file system.
-  const blobs = await Promise.all(files.map(async (f) => {
-    const res = await fetch(f.url);
-    if (!res.ok) throw new Error(`${f.url}: HTTP ${res.status}`);
-    return new Uint8Array(await res.arrayBuffer());
-  }));
+  const blobs = await Promise.all(files.map(download));
   files.forEach((f, i) => writeFile(f.path, blobs[i]));
 }
 
@@ -39,6 +89,32 @@ function writeFile(path: string, data: Uint8Array | string) {
   const m = need(module);
   mkdirs(m, path.slice(0, path.lastIndexOf("/")));
   m.FS.writeFile(path, data);
+}
+
+/**
+ * Fetches the grids from `baseUrl` (a directory with index.json listing the
+ * served grids) that are in `names` and not fetched yet, into PROJ's search
+ * path, and resets the engines so they see them. Returns the grids fetched.
+ */
+async function ensureGrids(baseUrl: string, names: string[]): Promise<string[]> {
+  const res = await fetch(`${baseUrl}/index.json`);
+  if (!res.ok) return [];
+  const served = new Set<string>(((await res.json()) as { grids: string[] }).grids);
+  const wanted = [...new Set(names)].filter((n) => served.has(n) && !fetchedGrids.has(n));
+  if (!wanted.length) return [];
+  await fetchFiles(wanted.map((n) => ({ url: `${baseUrl}/${n}`, path: `${GRID_DIR}/${n}` })));
+  wanted.forEach((n) => fetchedGrids.add(n));
+  need(module).resetEngines();
+  return wanted;
+}
+
+/** Geoid heights at points; fetches the geoid grid if missing, once. */
+async function geoidHeights(points: number[][], verticalCrs: string, baseUrl: string) {
+  let r = need(module).geoidHeights(points, verticalCrs);
+  if (r.missingGrids.length && (await ensureGrids(baseUrl, r.missingGrids)).length) {
+    r = need(module).geoidHeights(points, verticalCrs);
+  }
+  return r;
 }
 
 function open(stage: string) {
@@ -107,6 +183,8 @@ self.onmessage = async (event: MessageEvent) => {
       case "writeText": result = writeFile(args.path, args.text); break;
       case "open": result = open(args.stage); break;
       case "crsWkt": result = need(module).crsWkt(args.definition, args.promote3D); break;
+      case "geoidHeights": result = await geoidHeights(args.points, args.verticalCrs, args.baseUrl); break;
+      case "ensureGrids": result = await ensureGrids(args.baseUrl, args.names); break;
       case "setOutput": result = setOutput(args.crs, args.measure, args.exact); break;
       case "testData": result = need(scene).testData(); break;
       case "setTime": result = need(scene).setTime(args.time); break;

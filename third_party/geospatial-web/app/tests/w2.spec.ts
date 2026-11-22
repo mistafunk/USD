@@ -44,8 +44,8 @@ for (const mode of ["global", "local"]) {
     // at its ends in Web Mercator.
     expect(report!.cases.map((c) => [c.anchor, c.result])).toEqual([
       ["/World/SiteA", "pass"], ["/World/SiteB", "pass"], ["/World/SiteC", "fail"],
-      ["/World/SiteD", "unsupported"], ["/World/SiteE", "unsupported"],
-      ["/World/SiteF", "pass"], ["/World/SiteG", "pass"], ["/World/SiteH", "unsupported"],
+      ["/World/SiteD", "pass"], ["/World/SiteE", "unsupported"],
+      ["/World/SiteF", "pass"], ["/World/SiteG", "pass"], ["/World/SiteH", "pass"],
       ["/World/SiteI", mode === "local" ? "fail" : "pass"], ["/World/SiteJ", "pass"],
       ["/World/SiteK", "pass"]]);
     expect(report!.summary.unexpected).toBe(0);

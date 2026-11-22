@@ -93,3 +93,5 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
   (Web Mercator is reported as wkid 102100, latestWkid 3857).
 - `full = frame * matrix`, split into a float32-exact origin and a Float64 remainder; the RenderNode draws
   `viewMatrix * translate(origin) * remainder`.
+
+Heights stay ellipsoidal in all recorded data. The app's geoid correction (D25) only lowers what it draws.

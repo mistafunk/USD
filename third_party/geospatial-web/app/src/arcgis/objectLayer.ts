@@ -23,6 +23,8 @@ export interface SpatialReferenceJson {
 
 export interface ObjectLayerJson {
   name?: string;
+  /** Service capabilities, e.g. "Create,Delete,Query,Update". */
+  capabilities?: string;
   spatialReference: SpatialReferenceJson;
   infoFor3D: { transformFieldRoles: Record<string, string> };
 }
@@ -46,17 +48,89 @@ export interface ObjectLayerData {
 /** The 3D format the wrapper references (glTF binary). */
 export const MODEL_FORMAT = "3D_glb";
 
-export async function fetchObjectLayer(url: string): Promise<ObjectLayerData> {
+export type Log = (text: string) => void;
+
+/**
+ * The 3D object feature layer URL for what a user entered: an ArcGIS item id
+ * (32 hex characters, looked up on `portal`), a feature service URL (its
+ * first layer with infoFor3D), a layer URL (.../FeatureServer/<id>) or a
+ * mock directory (/usd/fixtures/arcgis/<name>).
+ */
+export async function resolveObjectLayerUrl(input: string, portal: string,
+                                            log: Log): Promise<string> {
+  let s = input.trim();
+  // An item page (https://<portal>/home/item.html?id=<id>): the item on
+  // that portal.
+  const page = /^(https?:\/\/[^?#]+?)\/home\/item\.html\?(?:[^#]*&)?id=([0-9a-f]{32})/i.exec(s);
+  if (page) {
+    portal = page[1];
+    s = page[2];
+  } else if (/^https?:\/\//.test(s) || s.startsWith("/")) {
+    // Service URLs as copied from a browser: without ?f=json or a fragment.
+    s = s.replace(/[?#].*$/, "").replace(/\/+$/, "");
+    return /\/FeatureServer$/.test(s) ? firstObjectLayer(s, log) : s;
+  }
+  if (!/^[0-9a-f]{32}$/i.test(s)) {
+    throw new Error(`"${s}" is neither an ArcGIS item id nor a layer URL`);
+  }
+  const base = portal.replace(/\/+$/, "");
+  const item = await fetchJson<{ title?: string; type?: string; url?: string; owner?: string;
+                                 access?: string; typeKeywords?: string[] }>(
+    `${base}/sharing/rest/content/items/${s}?f=json`, log);
+  log(`item ${s}: "${item.title}" (${item.type}; ${(item.typeKeywords ?? []).join(", ")}), ` +
+      `owner ${item.owner}, ${item.access}`);
+  if (!item.url) throw new Error(`item ${s} has no service URL (type ${item.type})`);
+  if (!/\/FeatureServer/.test(item.url)) {
+    throw new Error(`item ${s} is a ${item.type} (${item.url}), not a feature service: ` +
+                    "3D object layers are read from their feature layer");
+  }
+  const url = item.url.replace(/\/+$/, "");
+  return /\/FeatureServer\/\d+$/.test(url) ? url : firstObjectLayer(url, log);
+}
+
+async function firstObjectLayer(service: string, log: Log): Promise<string> {
+  const svc = await fetchJson<{ layers?: { id: number; name: string }[] }>(`${service}?f=json`, log);
+  for (const l of svc.layers ?? []) {
+    const layer = await fetchJson<Partial<ObjectLayerJson>>(`${service}/${l.id}?f=json`, log);
+    if (layer.infoFor3D) {
+      log(`layer ${l.id} "${l.name}" is a 3D object layer`);
+      return `${service}/${l.id}`;
+    }
+    log(`layer ${l.id} "${l.name}" has no infoFor3D`);
+  }
+  throw new Error(`${service} has no 3D object layer`);
+}
+
+export async function fetchObjectLayer(url: string, log: Log = () => {}): Promise<ObjectLayerData> {
   const base = url.replace(/\/+$/, "");
   const rest = /\/FeatureServer\/\d+$/.test(base);
-  const layer = await fetchJson<ObjectLayerJson>(rest ? `${base}?f=json` : `${base}/layer.json`);
+  const layer = await fetchJson<ObjectLayerJson>(rest ? `${base}?f=json` : `${base}/layer.json`, log);
   if (!layer.infoFor3D?.transformFieldRoles) {
     throw new Error(`${url} is not a 3D object feature layer (no infoFor3D)`);
   }
+  log(`layer "${layer.name}": spatial reference ${JSON.stringify(layer.spatialReference)}, ` +
+      `capabilities ${layer.capabilities ?? "(not listed)"}`);
+  // query3D needs the Query capability; without it the server only says
+  // "This operation is not supported" (e.g. Urban model layers).
+  if (rest && layer.capabilities !== undefined &&
+      !layer.capabilities.split(",").map((c) => c.trim()).includes("Query")) {
+    throw new Error(`${url} does not allow queries (capabilities: ${layer.capabilities}), so its ` +
+                    "models and transforms cannot be read; the owner can enable Query or " +
+                    "publish a view layer with Query");
+  }
+  // query3D lists the models (assetMaps) only with returnGeometry=true
+  // (ArcGIS Online, Zurich layer); the geometry itself is an extent, unused.
   const q = await fetchJson<{ features: ObjectLayerData["features"]; assetMaps?: AssetMapJson[] }>(
-    rest ? `${base}/query3D?where=1%3D1&outFields=*&returnGeometry=false` +
+    rest ? `${base}/query3D?where=1%3D1&outFields=*&returnGeometry=true` +
            `&formatOf3DObjects=${MODEL_FORMAT}&f=json`
-         : `${base}/query3D.json`);
+         : `${base}/query3D.json`, log);
+  log(`${q.features?.length ?? 0} features, ${q.assetMaps?.length ?? 0} asset maps ` +
+      `(${(q.assetMaps ?? []).map((a) => `${a.assetName} ${a.assetType} ` +
+        `${a.conversionStatus ?? ""}`).join("; ")})`);
+  if (q.features?.length && !q.assetMaps?.length) {
+    log(`no asset maps for ${MODEL_FORMAT}: the service has no converted models in that ` +
+        "format, or query3D omitted them");
+  }
   // Static mocks give asset URLs relative to their directory.
   const absolute = new URL(`${base}/`, location.href);
   const assetMaps = (q.assetMaps ?? []).map((a) => ({
@@ -184,8 +258,14 @@ function escape(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ");
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+export async function fetchJson<T>(url: string, log: Log = () => {}): Promise<T> {
+  log(`GET ${url}`);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    throw new Error(`${url}: ${String((e as Error)?.message ?? e)} (network, CORS or COEP)`);
+  }
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   const json = await res.json();
   if (json?.error) throw new Error(`${url}: ${JSON.stringify(json.error)}`);

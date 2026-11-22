@@ -20,6 +20,22 @@
         <a data-data="w0" href="?data=w0">W0</a>
         <label><input id="exact" type="checkbox" /> exact points</label>
         <label><input id="naive" type="checkbox" /> naive float32</label>
+        <label><input id="terrain" type="checkbox" /> terrain</label>
+        <label title="Display only: lower the drawn models by the EGM96 geoid height, to meet the terrain"><input id="geoid" type="checkbox" /> geoid</label>
+        <label><input id="buildings" type="checkbox" /> buildings</label>
+      </div>
+      <form id="itemForm" class="row">
+        <input id="item" type="text" list="itemPresets" size="52" spellcheck="false"
+               placeholder="3D object layer: FeatureServer URL, item id or item page" />
+        <datalist id="itemPresets"></datalist>
+        <button type="submit">Load</button>
+        <button id="find" type="button"
+                title="List the organization's public 3D object layers with models (the portal in the field, else zurich.maps.arcgis.com)">Find</button>
+      </form>
+      <div id="loadbar">
+        <div id="phase"></div>
+        <progress id="progress"></progress>
+        <details id="logbox"><summary>log</summary><pre id="log"></pre></details>
       </div>
       <div class="row"><span id="presets" class="row"></span><button id="score">Score</button></div>
       <pre id="status"></pre>

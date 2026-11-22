@@ -9,3 +9,15 @@ html, body, #viewDiv { margin: 0; padding: 0; width: 100%; height: 100%; }
 #panel .row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
 #panel a.active { font-weight: 600; text-decoration: none; color: inherit; }
 #status { margin: 0; font: 12px/1.35 ui-monospace, monospace; white-space: pre-wrap; }
+#itemForm input { font: 12px ui-monospace, monospace; padding: 2px 4px; flex: 1; min-width: 0; }
+#loadbar { margin-bottom: 6px; }
+#phase { font-weight: 600; margin-bottom: 2px; }
+#phase.failed { color: #b42318; }
+#phase.done { color: #11734b; font-weight: 400; }
+#progress { width: 100%; height: 8px; }
+#loadbar.done #progress { display: none; }
+#log { margin: 4px 0 0; max-height: 220px; overflow: auto; font: 11px/1.35 ui-monospace, monospace;
+       white-space: pre-wrap; word-break: break-all; }
+#log .warn { color: #8a5a00; }
+#log .error { color: #b42318; }
+#log .usd { color: #555; }

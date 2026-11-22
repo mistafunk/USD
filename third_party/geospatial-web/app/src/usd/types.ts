@@ -18,6 +18,8 @@ export interface LiveAnchor {
   accuracy: number | null;
   /** More accurate operations skipped for missing grids (T3). */
   skippedOperations: string[];
+  /** Grid files that would allow a better or any placement (D23). */
+  missingGrids: string[];
   sourceCrs: string;
   position: Vec3;
   orientation: Vec3;
@@ -66,6 +68,7 @@ export interface Resolved {
   matrix?: number[];
   outputPoints?: Vec3[];
   pointsError?: string;
+  missingGrids: string[];
 }
 
 /** Test data on the stage (geotest: attributes), as in the recorded format. */
@@ -75,7 +78,8 @@ export interface StageTestData {
     reference: { crs: string; position: number[] };
   }[];
   testCases: { anchor: string; expect: "pass" | "fail" | "unsupported";
-               description: string; expectLocal?: "pass" | "fail" | "unsupported" }[];
+               description: string; expectLocal?: "pass" | "fail" | "unsupported";
+               expectBrowser?: "pass" | "fail" | "unsupported" }[];
   /** The scene's evaluation time (geotest:time), or null. */
   time: number | null;
 }
