@@ -355,7 +355,10 @@ async function loadContent(): Promise<void> {
     renderPanel();
     return;
   }
-  await goto("overview", false);
+  // A 3D object layer is framed as a whole (its size and spread vary);
+  // other content, and a layer without placed meshes, starts at the
+  // Overview preset.
+  if (!(state.live?.objectLayer && await frameMeshes(null, false))) await goto("overview", false);
   state.goto = (preset) => goto(preset, false);
   state.renderPoint = (mesh, p) => {
     const m = scene?.renderMatrices.get(mesh);
@@ -453,16 +456,24 @@ function anchorMeshes(path: string): string[] {
 
 /**
  * Looks at an anchor's meshes from the south, at a distance from their
- * extent: a sample of vertices through the render matrices gives the centre
- * and radius in render space, mapped back to lon/lat/h by the SDK.
+ * extent (see frameMeshes).
  */
 function zoomTo(path: string, animate: boolean): Promise<unknown> {
-  const names = new Set(anchorMeshes(path));
+  return frameMeshes(new Set(anchorMeshes(path)), animate);
+}
+
+/**
+ * Looks at meshes (all with null) from the south, at a distance from their
+ * extent: a sample of vertices through the render matrices gives the centre
+ * and radius in render space, mapped back to lon/lat/h by the SDK. Resolves
+ * to false if there is nothing to frame.
+ */
+function frameMeshes(names: Set<string> | null, animate: boolean): Promise<boolean> {
   const lo = [Infinity, Infinity, Infinity];
   const hi = [-Infinity, -Infinity, -Infinity];
   for (const m of scene?.meshes ?? []) {
     const matrix = scene?.renderMatrices.get(m.name);
-    if (!names.has(m.name) || !matrix) continue;
+    if ((names && !names.has(m.name)) || !matrix) continue;
     const step = Math.max(3, 3 * Math.floor(m.positions.length / 3 / 2000));
     for (let i = 0; i + 2 < m.positions.length; i += step) {
       const p = transformPoint(matrix, [m.positions[i], m.positions[i + 1], m.positions[i + 2]]);
@@ -472,19 +483,28 @@ function zoomTo(path: string, animate: boolean): Promise<unknown> {
       }
     }
   }
-  if (!Number.isFinite(lo[0])) return Promise.resolve();
+  if (!Number.isFinite(lo[0])) return Promise.resolve(false);
   const centre = lo.map((v, k) => (v + hi[k]) / 2);
   const radius = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
   const geo = fromRenderCoordinates(view, centre, 0, new Array(3), 0, SpatialReference.WGS84, 1);
-  if (!geo) return Promise.resolve();
+  if (!geo) return Promise.resolve(false);
   const d = Math.max(4 * radius, 20);
   focus = [geo[0], geo[1], geo[2]];
   setClip(d);
+  // The panel covers the view's right side: move the camera east so the
+  // meshes are centred in the part left of it (half the covered share of
+  // the view's width at distance d; the camera looks north).
+  const panel = document.getElementById("panel")!.getBoundingClientRect();
+  const width = view.width || window.innerWidth;
+  const covered = Math.max(0, Math.min(panel.width, width - panel.left)) / width;
+  const halfWidth = d * Math.tan(((view.camera?.fov ?? 55) * Math.PI) / 360);
+  const east = halfWidth * covered;
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos((geo[1] * Math.PI) / 180);
   return view.goTo(new Camera({
-    position: { longitude: geo[0], latitude: geo[1] - (0.8 * d) / M_PER_DEG_LAT, z: geo[2] + 0.6 * d,
-                spatialReference: SpatialReference.WGS84 },
+    position: { longitude: geo[0] + east / mPerDegLon, latitude: geo[1] - (0.8 * d) / M_PER_DEG_LAT,
+                z: geo[2] + 0.6 * d, spatialReference: SpatialReference.WGS84 },
     heading: 0, tilt: 53,
-  }), { animate });
+  }), { animate }).then(() => true);
 }
 
 // --- panel (D27) ---------------------------------------------------------
