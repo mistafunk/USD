@@ -11,11 +11,12 @@ type Scene = any;
 let module: Module | null = null;
 let scene: Scene | null = null;
 
-// PROJ in the module reads grid files from here (fetched on demand, D23).
+// PROJ in the module reads proj.db (fetched at startup, D26) and grid files
+// (fetched on demand, D23) from here.
 const GRID_DIR = "/proj";
 const fetchedGrids = new Set<string>();
 
-async function init(moduleUrl: string) {
+async function init(moduleUrl: string, projDbUrl: string) {
   const { default: create } = await import(/* @vite-ignore */ moduleUrl);
   // PROJ reads PROJ_DATA once it starts, so set it before the module runs.
   // USD's messages (errors, warnings) go to the page's log.
@@ -25,6 +26,8 @@ async function init(moduleUrl: string) {
     printErr: (text: string) => post({ log: { level: "usd", text } }),
   });
   need(module).FS.mkdir(GRID_DIR);
+  // Before anything creates a PROJ context.
+  await fetchFiles([{ url: projDbUrl, path: `${GRID_DIR}/proj.db` }]);
   scene = new module.GeospatialScene();
   return module.info();
 }
@@ -177,7 +180,7 @@ self.onmessage = async (event: MessageEvent) => {
     let result: unknown;
     let transfer: Transferable[] = [];
     switch (op) {
-      case "init": result = await init(args.moduleUrl); break;
+      case "init": result = await init(args.moduleUrl, args.projDbUrl); break;
       case "load": result = await load(args.files, args.stage); break;
       case "fetchFiles": result = await fetchFiles(args.files); break;
       case "writeText": result = writeFile(args.path, args.text); break;

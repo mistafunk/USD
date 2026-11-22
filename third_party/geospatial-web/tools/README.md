@@ -65,7 +65,7 @@ python third_party/geospatial-web/tools/geo.py test web              # Playwrigh
   sets `EMSDK_PYTHON`.
 - ccache is optional but worth it: `dnf install ccache` (EPEL). The presets put its cache in `cache/ccache`.
 - PROJ for WASM is built static with `-pthread -fexceptions`, the same thread and exception model as USD's WASM
-  build, with `proj.db` embedded in `libproj.a` (about 9 MB until C4 trims it).
+  build, without embedded resources: the browser fetches `proj.db` (D26), WASM tests mount `deps/wasm32/share/proj`.
 
 ## usdview
 
@@ -90,7 +90,7 @@ PROJ with TIFF, and the pinned grids from cdn.proj.org: natively all six in `dep
 directory, also used by the reference's pyproj), for wasm32 the five browser grids in `deps/wasm32/share/proj-grids`
 (not EGM2008, 77 MB). The module install serves those at `/usd/grids` with an `index.json`; the worker fetches the
 grids a placement reports missing (`missingGrids`) into `/proj` (PROJ_DATA), resets the engines and places again.
-WASM PROJ keeps file access (no `USE_ONLY_EMBEDDED_RESOURCE_FILES`, which compiles it out); `proj.db` stays embedded.
+WASM PROJ reads files (no embedded resources): `proj.db` is installed at `/usd/proj` and fetched at startup (D26).
 libtiff's CMake config links `ZLIB::ZLIB` without finding zlib: `tools/cmake/zlib-target.cmake` provides it
 (`CMAKE_PROJECT_INCLUDE` in the dependency builds and the wasm32 preset, with emscripten's zlib port).
 

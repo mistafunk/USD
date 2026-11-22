@@ -107,7 +107,7 @@ usdGeospatial defines the engine interface but contains no engine. PROJ and, lat
 - **usdGeospatialProj.** First engine, a separate plugin library linking PROJ. It maps WKT2 to `proj_create`, picks operations with `proj_create_operations`, reports accuracy from `proj_coordoperation_get_accuracy`, and builds the ENU basis with PROJ's topocentric conversion.
 - **usdGeospatialEsriPE (follow-on, E1).** Second engine with the same interface. In the browser it calls the Maps SDK's `projectOperator` through an emscripten JS bridge, so it covers equation-based transforms only. A native build against Esri's Projection Engine SDK is possible later.
 - **WASM.** No `dlopen`, so engine plugins are linked statically and register at static-init time. Their `plugInfo.json` is embedded under `/usd` like any `pxr_library`. Choosing an engine works the same way as natively.
-- **PROJ for WASM.** PROJ, SQLite and libtiff built with emscripten, without curl and with network grids off. The full `proj.db` is embedded compressed; trimming it to the demo CRSs is left for I2 (D17). Grids are files the worker fetches on demand (D23).
+- **PROJ for WASM.** PROJ, SQLite and libtiff built with emscripten, without curl and with network grids off. `proj.db` is not embedded: the worker fetches it at startup (D26), and grids on demand (D23).
 
 ### WASM support for Hydra and usdImaging
 
@@ -231,7 +231,7 @@ Two tracks ran in parallel and met at I1. **Status:** W0 to W2, C0 to C4 and I1 
 
 9. **I1 End to end.** The web app swaps the recorded data for the live WASM module. The harness runs the whole test plan in the browser.
    - Exit: browser results match the native PROJ results within 1 cm on every case both engines can do.
-10. **I2 Write-up.** Findings, numbers, and feedback to the proposal authors. Split the WASM imaging port into upstreamable PRs. Trim `proj.db` (D17) and measure download size.
+10. **I2 Write-up.** Findings, numbers, and feedback to the proposal authors. Split the WASM imaging port into upstreamable PRs. Measure download size (`proj.db` is fetched separately, D26).
 
 **Follow-on**
 
@@ -277,7 +277,7 @@ Autodesk diff needed (`WASM_GAP.md`), wasm32 vs wasm64 (D12), and binding by ref
 
 - **Proposal still moving.** Placement, orientation and chart conventions are under review. Fallback: pin to a PR commit, and keep field names in one tokens file so renames are cheap.
 - **Static registration gaps.** Plugins silently missing in the static WASM link; this happened (usdGeospatialProj, the glTF plugin) and is handled by whole-archive linking. Any new plugin needs the same, plus a check that it registers.
-- **PROJ in WASM adds size.** PROJ, SQLite and `proj.db` add several MB; `proj.db` is compressed now and trimmed at I2 (D17).
+- **PROJ in WASM adds size.** PROJ, SQLite and `proj.db` add several MB; `proj.db` is a separate, cached download (D26).
 - **Download size.** OpenUSD with Hydra in WASM will be large. Acceptable for a prototype; record the number and try `-Oz` and wasm-opt in I2.
 - **COEP breaks third-party assets.** The SDK's assets are self-hosted; ArcGIS services answer with CORS. A service without CORS would need a proxy or `credentialless`.
 

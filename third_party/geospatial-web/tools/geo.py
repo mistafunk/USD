@@ -494,13 +494,12 @@ def step_proj(log, target, args):
         extra = ["-DBUILD_SHARED_LIBS=ON", "-DBUILD_APPS=ON",
                  "-DBUILD_PROJSYNC=OFF"]
     else:
-        # Static, with proj.db embedded in the library. File access stays on
-        # (no USE_ONLY_EMBEDDED_RESOURCE_FILES, which compiles it out): grids
-        # are files the worker fetches on demand (D23); proj.db comes from
-        # the embedded copy when no file has it.
+        # Static, without embedded resources: proj.db (10.7 MB) and the grids
+        # are files in PROJ_DATA. The browser worker fetches proj.db at
+        # startup and grids on demand (D23, D26); WASM tests mount the
+        # installed share/proj under Node.
         extra = ["-DBUILD_SHARED_LIBS=OFF", "-DBUILD_APPS=OFF",
-                 "-DEMBED_RESOURCE_FILES=ON",
-                 "-DUSE_ONLY_EMBEDDED_RESOURCE_FILES=OFF"] + emscripten_zlib(log)
+                 "-DEMBED_RESOURCE_FILES=OFF"] + emscripten_zlib(log)
     cmake_dep(log, target, "proj", src, common + extra, args.jobs)
 
 

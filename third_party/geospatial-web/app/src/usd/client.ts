@@ -58,8 +58,9 @@ export class UsdClient {
     });
   }
 
-  init(moduleUrl = MODULE_URL): Promise<ModuleInfo> {
-    return this.call("init", { moduleUrl });
+  /** Loads the module and PROJ's database (proj.db, D26). */
+  init(moduleUrl = MODULE_URL, projDbUrl = `${USD_BASE}/proj/proj.db`): Promise<ModuleInfo> {
+    return this.call("init", { moduleUrl, projDbUrl });
   }
 
   /** Fetches files into the module's file system. */

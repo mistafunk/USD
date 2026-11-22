@@ -89,13 +89,23 @@ install(
     DESTINATION ${webDir}/module
 )
 
-# Precompressed module for servers that send .gz files as is (nginx
-# gzip_static, the dev server): 30.7 MB -> 7.2 MB, a third of it proj.db,
-# which is trimmed later (D17).
+# PROJ's database, not embedded in the module: the worker fetches it into
+# PROJ_DATA at startup (D26), so the browser caches it apart from the module
+# and every CRS keeps working.
+get_filename_component(projDb "${PROJ_DIR}/../../../share/proj/proj.db" ABSOLUTE)
+if (NOT EXISTS "${projDb}")
+    message(FATAL_ERROR "proj.db not found at ${projDb} (geo.py bootstrap wasm32 --steps proj)")
+endif()
+install(FILES "${projDb}" DESTINATION ${webDir}/proj)
+
+# Precompressed copies for servers that send .gz files as is (nginx
+# gzip_static, the dev server).
 install(CODE "
-    set(module \"\${CMAKE_INSTALL_PREFIX}/${webDir}/module/geospatialModule.wasm\")
-    file(ARCHIVE_CREATE OUTPUT \"\${module}.gz\" PATHS \"\${module}\"
-         FORMAT raw COMPRESSION GZip COMPRESSION_LEVEL 9)
+    foreach(file module/geospatialModule.wasm proj/proj.db)
+        set(path \"\${CMAKE_INSTALL_PREFIX}/${webDir}/\${file}\")
+        file(ARCHIVE_CREATE OUTPUT \"\${path}.gz\" PATHS \"\${path}\"
+             FORMAT raw COMPRESSION GZip COMPRESSION_LEVEL 9)
+    endforeach()
 ")
 
 # Fixtures the browser tests load: the C1 PROJ placement cases (expected

@@ -11,12 +11,13 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
 ## Next
 
 **I2 write-up and upstreaming**
-- Findings, numbers and feedback to the proposal authors (from the milestone log and findings below).
+- Done: `WRITEUP.md` (results, numbers, feedback for the proposal, findings).
 - Split the WASM imaging port into upstreamable PRs (commits under `build_scripts/`, `cmake/`, `pxr/imaging`,
   `pxr/usdImaging/usdImaging`; see `WASM_GAP.md`).
-- Trim `proj.db` (D17): a reduced database that keeps every referenced datum, ellipsoid, operation and extent
-  consistent. It is 10.7 MB of the 30.7 MB module (7.2 MB served with gzip).
-- Download size: record it, try `-Oz` and wasm-opt.
+- Done: `proj.db` is fetched at startup instead of embedded (D26): module 22.9 MB (5.8 MB gzip), `proj.db` 10.7 MB
+  (2.0 MB gzip).
+- Download size: `-Oz` at link time saves 3 % gzip, nothing with brotli. Still to try: a full `-Oz` build (all of
+  USD recompiled) and serving brotli (3.6 MB instead of 5.8 MB gzip; stock nginx has no `brotli_static`).
 
 **Open items**
 - **3D object layer transform semantics are assumed:** scale, then rotate about an east/north/up axis (right-handed),
@@ -125,7 +126,7 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   `/usd`, and USD whole-archives only its own libraries: the PROJ engine and the glTF plugin lost their registrations
   until linked whole-archive. Any new plugin needs the same.
 - PROJ's `USE_ONLY_EMBEDDED_RESOURCE_FILES` compiles out all file access, so grids could never load; WASM PROJ embeds
-  `proj.db` without it.
+  `proj.db` without it. Since D26 nothing is embedded: WASM tests mount `share/proj` under Node, the browser fetches it.
 - libtiff 4.7's CMake config links `ZLIB::ZLIB` without finding zlib, and its configure picks up a broken system
   libjpeg-turbo package even with JPEG off: `geo.py` disables codec lookups and injects `tools/cmake/zlib-target.cmake`.
 - **Env settings are read when a library loads**, before `main`, so a program cannot set `USDGEOSPATIALIMAGING_*` for

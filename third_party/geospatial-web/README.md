@@ -8,7 +8,7 @@ the GPU-free Hydra subset in `build_scripts/`, `cmake/`, `pxr/imaging` and `pxr/
 
 | Path | Contents |
 |---|---|
-| `docs/` | Plan, decisions, next steps, WASM gap analysis, proposal notes, recorded data format. Start with `docs/PLAN.md` |
+| `docs/` | Plan, decisions, next steps, write-up (I2), WASM gap analysis, proposal notes, recorded data format. Start with `docs/PLAN.md` |
 | `tools/` | `geo.py` driver, CMake presets, SQLite build, nginx config. See `tools/README.md` |
 | `module/` | embind module and final WASM link (C4) |
 | `app/` | Maps SDK web app, RenderNode, worker, Playwright harness (W0 onwards) |

@@ -1,7 +1,7 @@
 # Geospatial CRS proposal: what we implement
 
 Source: https://github.com/Tamrat-B/OpenUSD-proposals/pull/1 (head 4120379fa12473b54a8f8e11999a1cefa5443614,
-2026-10-22). The proposal is still under review; re-check before C0 and keep field names in one tokens file.
+2026-10-22). The proposal is still under review; keep field names in one tokens file. Our feedback: `WRITEUP.md`.
 
 ## Schemas
 
@@ -33,7 +33,7 @@ Source: https://github.com/Tamrat-B/OpenUSD-proposals/pull/1 (head 4120379fa1247
 ## Out of scope for the prototype
 
 `GeospatialDataSource` measurement association, Profiles dependency claims, WKT normalization checks,
-coordinate epochs, grids in the browser.
+coordinate epochs.
 
 ## Fixtures
 
