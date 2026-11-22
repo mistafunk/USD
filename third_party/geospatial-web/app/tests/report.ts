@@ -3,7 +3,7 @@
 // I1 adds its numeric checks (T5, T6, T9) as an extra table.
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { CaseResult, HarnessReport } from "../src/harness";
+import type { CaseResult, HarnessReport } from "../src/checks/harness";
 
 /** A numeric check outside the control point harness (I1: T5, T6, T9). */
 export interface ExtraCheck {

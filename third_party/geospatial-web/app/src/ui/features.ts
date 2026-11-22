@@ -2,7 +2,7 @@
 // placement, position, display offset, meshes and test case. Live data adds
 // the module's CRS descriptions and fetched grids; recorded
 // data shows what its manifest has.
-import type { HarnessReport } from "../harness";
+import type { HarnessReport } from "../checks/harness";
 import { GRAVITY_VCS, type LiveData } from "../live";
 import type { AnchorPlacement } from "../render";
 import type { Scene } from "../scene";

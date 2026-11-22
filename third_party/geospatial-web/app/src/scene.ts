@@ -1,7 +1,7 @@
 // What main.ts draws: placed meshes, a geographic target for the camera
 // presets, and per-anchor status for the panel.
 
-import type { HarnessReport, TestCase } from "./harness";
+import type { HarnessReport, TestCase } from "./checks/harness";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorPlacement } from "./render";
 

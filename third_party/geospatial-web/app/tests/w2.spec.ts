@@ -3,7 +3,7 @@
 // the I1 sites F, G, I, J, K), fail (C, a planted 5 cm reference error; I in
 // the local view, T5), unsupported (D 2D CRS, E broken binding, H NAVD88). Writes reports/w2-<timestamp>.{json,html} and reports/latest.*.
 import { expect, test, type Page } from "@playwright/test";
-import type { HarnessReport } from "../src/harness";
+import type { HarnessReport } from "../src/checks/harness";
 import { writeReport } from "./report";
 
 // Recorded data directory: the reference export, or the C++ observer's

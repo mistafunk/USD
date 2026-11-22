@@ -12,7 +12,7 @@
 import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { fromRenderCoordinates, toRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
-import { multiply, transformPoint } from "./mat4";
+import { multiply, transformPoint } from "../mat4";
 
 export type Outcome = "pass" | "fail" | "unsupported";
 

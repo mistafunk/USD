@@ -5,8 +5,8 @@
 //     observer, in both outputs, against the reference export
 //     (public/recorded): statuses, origins, matrices, triangle counts.
 // Results go to window.__c4 for tests/c4.spec.ts and to the page.
-import { USD_BASE, UsdClient } from "./usd/client";
-import type { LiveAnchor, LiveMesh, Vec3 } from "./usd/types";
+import { USD_BASE, UsdClient } from "../usd/client";
+import type { LiveAnchor, LiveMesh, Vec3 } from "../usd/types";
 
 interface Check {
   group: string;

@@ -21,15 +21,15 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | `src/live.ts` | Live data: loads the test scene through the worker, places it in the view's output CRS, scores it |
 | `tests/i1.spec.ts` | I1: the whole browser test plan on live data (harness, T2, T3, T5, T6, T9, T11); report `reports/i1-*` |
 | `src/usd/` | OpenUSD in a Web Worker: `worker.ts` owns the module and stage, `client.ts` is the promise API, `types.ts` the data |
-| `c4.html`, `src/c4.ts` | C4 check page: C1 cases and the live scene chain in the browser vs pyproj (`tests/c4.spec.ts`) |
+| `c4.html`, `src/checks/c4.ts` | C4 check page: C1 cases and the live scene chain in the browser vs pyproj (`tests/c4.spec.ts`) |
 | `src/main.ts` | SceneView (`?view=global` or `local`), content (`?data=recorded` or `w0`), camera presets, panel wiring, `window.__app` test hooks |
 | `src/ui/` | The panel (D27; layers load in place through `main.ts` `loadLayer`, `__app.loads` counts loads): `panel.ts` (tabs, collapse, help popovers, status bar, Log and Diagnostics sections), `features.ts` (output CRS and anchor list), `about.ts` + `about-diagram.svg` (About dialog; the diagram is a standalone SVG, inserted inline), `layers.ts` (organization search and layer cards, kept in local storage as `geospatial-web.discovery.v2`), `dom.ts` |
 | `mockup.html` | Static mockup the panel follows (open directly or at `/mockup.html`); tweak there first |
 | `tests/ui.spec.ts` | Panel: tabs, the About dialog, layer cards from a stored search, filters, in-place Load |
 | `src/render.ts` | Places recorded and live placement results in render space (D13); global frame from the SDK's own geographic-to-render mapping |
-| `src/recorded.ts` | Loads recorded data (manifest and buffers from the offline reference) |
+| `src/checks/recorded.ts` | Loads recorded data (manifest and buffers from the offline reference) |
 | `src/spike/` | W0 spike only (`?data=w0`): `w0Scene.ts` and `shapes.ts`, hard-coded test meshes in Zurich, also as naive float32 (`&naive=1`) |
-| `src/harness.ts` | W2 harness: scores control points (pass, fail, unsupported) via `fromRenderCoordinates`; also the panel's Score button |
+| `src/checks/harness.ts` | W2 harness: scores control points (pass, fail, unsupported) via `fromRenderCoordinates`; also the panel's Score button |
 | `src/scene.ts`, `src/mat4.ts` | Shared scene type; Float64 matrix helpers |
 | `public/recorded/` | Reference export (generated: `python ../tools/geo.py reference -- export`) |
 | `vite.config.ts` | COOP/COEP headers; serves the SDK assets from our origin at `/arcgis-assets` |

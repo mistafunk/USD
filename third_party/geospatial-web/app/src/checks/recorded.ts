@@ -4,8 +4,8 @@
 
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import type { ControlPoint, TestCase } from "./harness";
-import type { Scene } from "./scene";
-import { placeScene, type AnchorPlacement } from "./render";
+import type { Scene } from "../scene";
+import { placeScene, type AnchorPlacement } from "../render";
 
 interface BufferView {
   byteOffset: number;

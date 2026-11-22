@@ -12,7 +12,7 @@ import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import { xyToLngLat } from "@arcgis/core/geometry/support/webMercatorUtils.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { toRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
-import { score, type ControlPoint, type TestCase } from "./harness";
+import { score, type ControlPoint, type TestCase } from "./checks/harness";
 import { identity, multiply, normalMatrix3, splitOrigin, translation } from "./mat4";
 import type { PlacedMesh } from "./meshPass";
 import type { AnchorStatus, CameraPreset, Scene } from "./scene";
