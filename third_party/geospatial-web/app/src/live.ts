@@ -11,7 +11,7 @@ import { formatBytes, LoadStatus } from "./loadStatus";
 import { placeScene, toLonLatH, type RecordedAnchor } from "./recorded";
 import type { Scene } from "./scene";
 import { USD_BASE, UsdClient } from "./usd/client";
-import type { ModuleInfo, SceneState, StageTestData } from "./usd/types";
+import type { CrsDescription, ModuleInfo, SceneState, StageTestData } from "./usd/types";
 
 export interface LiveOptions {
   /** Measurement mode (T5): exact per-vertex placement instead of matrices. */
@@ -44,8 +44,12 @@ export interface LiveData {
   time: number | null;
   exact: boolean;
   anchors: SceneState["anchors"];
-  meshes: { path: string; status: string; matrix: number[];
-            linearizationError: number | null }[];
+  meshes: { path: string; anchor: string | null; status: string; matrix: number[];
+            linearizationError: number | null; triangles: number }[];
+  /** CRS diagnostics (D27): the output CRS and each anchor's source CRS. */
+  crs: { output: CrsDescription; anchors: Record<string, CrsDescription> };
+  /** The stage's test cases (empty for object layers). */
+  testCases: StageTestData["testCases"];
   timings: Record<string, number>;
   /** Grids fetched for this placement (D23). */
   grids: string[];
@@ -188,6 +192,11 @@ export async function loadLiveScene(
       r.outputPoints?.forEach((p, i) => exactPoints!.set(cps[i].path, p));
     }
   }
+  // CRS diagnostics (D27), before the worker ends.
+  const crsInfo = {
+    output: await usd.describeCrs(state.outputWkt || crs),
+    anchors: await usd.anchorCrs(state.anchors.map((a) => a.path)),
+  };
   usd.terminate();
 
   const engine = state.anchors.find((a) => a.engine)?.engine ?? info.engine;
@@ -217,9 +226,11 @@ export async function loadLiveScene(
       exact: options.exact,
       anchors: state.anchors,
       meshes: state.meshes.map((m) => ({
-        path: m.path, status: m.status, matrix: m.matrix,
-        linearizationError: m.linearizationError,
+        path: m.path, anchor: m.anchor, status: m.status, matrix: m.matrix,
+        linearizationError: m.linearizationError, triangles: m.indices.length / 3,
       })),
+      crs: crsInfo,
+      testCases: test.testCases,
       timings,
       objectLayer,
       grids,

@@ -25,6 +25,7 @@
 #include "pxr/usdImaging/usdImaging/stageSceneIndex.h"
 #include "pxr/usd/usd/stage.h"
 #include "pxr/usd/usdGeom/metrics.h"
+#include "pxr/usd/usdGeospatial/binding.h"
 #include "pxr/usd/usdGeospatial/engineRegistry.h"
 #include "pxr/usd/usdGeospatial/placement.h"
 #include "pxr/imaging/hd/retainedDataSource.h"
@@ -96,6 +97,171 @@ _Errors(const TfErrorMark& mark)
 } // anonymous namespace
 
 /// One stage, placed in one output CRS at a time.
+namespace {
+
+/// "EPSG:4326" for a PROJ object with an identifier, else empty.
+std::string
+_CrsId(const PJ* obj)
+{
+    const char* auth = proj_get_id_auth_name(obj, 0);
+    const char* code = proj_get_id_code(obj, 0);
+    return auth && code ? std::string(auth) + ":" + code : std::string();
+}
+
+/// The EPSG identifier of a CRS PROJ matches with full confidence (e.g. a
+/// WKT without ID[]), else empty.
+std::string
+_Identify(PJ_CONTEXT* ctx, const PJ* crs)
+{
+    int* confidence = nullptr;
+    PJ_OBJ_LIST* list = proj_identify(ctx, crs, "EPSG", nullptr, &confidence);
+    std::string id;
+    if (list && proj_list_get_count(list) > 0 && confidence &&
+        confidence[0] == 100) {
+        PJ* best = proj_list_get(ctx, list, 0);
+        id = _CrsId(best);
+        proj_destroy(best);
+    }
+    proj_int_list_destroy(confidence);
+    proj_list_destroy(list);
+    return id;
+}
+
+/// _CrsId, else _Identify.
+std::string
+_IdOrIdentify(PJ_CONTEXT* ctx, const PJ* crs)
+{
+    const std::string id = _CrsId(crs);
+    return id.empty() ? _Identify(ctx, crs) : id;
+}
+
+int
+_AxisCount(PJ_CONTEXT* ctx, const PJ* crs)
+{
+    if (proj_get_type(crs) == PJ_TYPE_COMPOUND_CRS) {
+        int n = 0;
+        for (int i = 0; i < 2; ++i) {
+            if (PJ* sub = proj_crs_get_sub_crs(ctx, crs, i)) {
+                n += _AxisCount(ctx, sub);
+                proj_destroy(sub);
+            }
+        }
+        return n;
+    }
+    PJ* cs = proj_crs_get_coordinate_system(ctx, crs);
+    const int n = cs ? proj_cs_get_axis_count(ctx, cs) : 0;
+    proj_destroy(cs);
+    return n;
+}
+
+const char*
+_CrsType(PJ_TYPE type)
+{
+    switch (type) {
+    case PJ_TYPE_GEOGRAPHIC_2D_CRS: return "geographic 2D";
+    case PJ_TYPE_GEOGRAPHIC_3D_CRS: return "geographic 3D";
+    case PJ_TYPE_GEOCENTRIC_CRS: return "geocentric";
+    case PJ_TYPE_PROJECTED_CRS: return "projected";
+    case PJ_TYPE_COMPOUND_CRS: return "compound";
+    case PJ_TYPE_VERTICAL_CRS: return "vertical";
+    case PJ_TYPE_ENGINEERING_CRS: return "engineering";
+    case PJ_TYPE_DERIVED_PROJECTED_CRS: return "derived projected";
+    case PJ_TYPE_OTHER_CRS: return "other";
+    default: return "unknown";
+    }
+}
+
+val
+_NameAndId(PJ_CONTEXT* ctx, const PJ* obj)
+{
+    val o = val::object();
+    const char* name = proj_get_name(obj);
+    o.set("name", std::string(name ? name : ""));
+    o.set("id", _IdOrIdentify(ctx, obj));
+    return o;
+}
+
+/// A CRS for the app's diagnostics (D27): name, identifier, type, axis count,
+/// horizontal and vertical parts, area of use and WKT2. A 2D CRS gets the
+/// proposal's default height (EPSG:3855, EGM2008), as placement applies it.
+val
+_DescribeCrs(const std::string& definition)
+{
+    val o = val::object();
+    PJ_CONTEXT* ctx = proj_context_create();
+    PJ* crs = proj_create(ctx, definition.c_str());
+    if (!crs || !proj_is_crs(crs)) {
+        o.set("error", std::string(
+            proj_context_errno_string(ctx, proj_context_errno(ctx))));
+        proj_destroy(crs);
+        proj_context_destroy(ctx);
+        return o;
+    }
+    const PJ_TYPE type = proj_get_type(crs);
+    const int dimension = _AxisCount(ctx, crs);
+    const char* name = proj_get_name(crs);
+    const char* wkt = proj_as_wkt(ctx, crs, PJ_WKT2_2019, nullptr);
+    o.set("name", std::string(name ? name : ""));
+    std::string id = _IdOrIdentify(ctx, crs);
+    o.set("type", std::string(_CrsType(type)));
+    o.set("dimension", dimension);
+    o.set("wkt", std::string(wkt ? wkt : definition));
+    if (type == PJ_TYPE_COMPOUND_CRS) {
+        PJ* horizontal = proj_crs_get_sub_crs(ctx, crs, 0);
+        PJ* vertical = proj_crs_get_sub_crs(ctx, crs, 1);
+        const val hpart = horizontal ? _NameAndId(ctx, horizontal) : val::undefined();
+        const val vpart = vertical ? _NameAndId(ctx, vertical) : val::undefined();
+        if (horizontal) {
+            o.set("horizontal", hpart);
+        }
+        if (vertical) {
+            o.set("vertical", vpart);
+        }
+        // A compound without its own code: "EPSG:2229+6360" from its parts.
+        const std::string hid = horizontal ? hpart["id"].as<std::string>() : "";
+        const std::string vid = vertical ? vpart["id"].as<std::string>() : "";
+        if (id.empty() && TfStringStartsWith(hid, "EPSG:") &&
+            TfStringStartsWith(vid, "EPSG:")) {
+            id = hid + "+" + vid.substr(5);
+        }
+        proj_destroy(horizontal);
+        proj_destroy(vertical);
+    } else {
+        // The horizontal part of a 3D CRS (e.g. a projected CRS promoted to
+        // 3D) is its 2D form, which EPSG usually has.
+        PJ* demoted = _AxisCount(ctx, crs) == 3 && type != PJ_TYPE_GEOCENTRIC_CRS
+            ? proj_crs_demote_to_2D(ctx, nullptr, crs) : nullptr;
+        o.set("horizontal", _NameAndId(ctx, demoted ? demoted : crs));
+        proj_destroy(demoted);
+        if (dimension == 3 && type != PJ_TYPE_GEOCENTRIC_CRS) {
+            val v = val::object();
+            v.set("name", std::string("ellipsoidal height"));
+            v.set("id", std::string());
+            o.set("vertical", v);
+        } else if (dimension == 2) {
+            o.set("defaultHeight", std::string("EPSG:3855"));
+        }
+    }
+    double west, south, east, north;
+    const char* area = nullptr;
+    if (proj_get_area_of_use(ctx, crs, &west, &south, &east, &north, &area)) {
+        val a = val::object();
+        a.set("name", std::string(area ? area : ""));
+        a.set("west", west);
+        a.set("south", south);
+        a.set("east", east);
+        a.set("north", north);
+        o.set("areaOfUse", a);
+    }
+    o.set("id", id);
+    o.set("error", std::string());
+    proj_destroy(crs);
+    proj_context_destroy(ctx);
+    return o;
+}
+
+} // anonymous namespace
+
 class GeospatialScene
 {
 public:
@@ -378,6 +544,31 @@ public:
         return o;
     }
 
+    /// The source CRS of each anchor in \p paths, from its composed
+    /// crs:wkt (D27): { path: description } (see _DescribeCrs); a broken
+    /// binding gives { error }.
+    val AnchorCrs(const val& paths) const
+    {
+        val o = val::object();
+        const unsigned n = paths["length"].as<unsigned>();
+        for (unsigned i = 0; i < n; ++i) {
+            const std::string path = paths[i].as<std::string>();
+            const UsdPrim prim = _stage
+                ? _stage->GetPrimAtPath(SdfPath(path)) : UsdPrim();
+            const UsdGeospatialBinding binding =
+                UsdGeospatialResolveBinding(prim);
+            if (binding) {
+                o.set(path, _DescribeCrs(binding.wkt.GetString()));
+            } else {
+                val e = val::object();
+                e.set("error", binding.error.empty()
+                    ? std::string("not bound") : binding.error);
+                o.set(path, e);
+            }
+        }
+        return o;
+    }
+
 private:
     UsdStageRefPtr _stage;
     UsdTimeCode _time = UsdTimeCode::Default();
@@ -512,10 +703,12 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
         .function("anchors", &GeospatialScene::Anchors)
         .function("meshes", &GeospatialScene::Meshes)
         .function("resolve", &GeospatialScene::Resolve)
-        .function("testData", &GeospatialScene::TestData);
+        .function("testData", &GeospatialScene::TestData)
+        .function("anchorCrs", &GeospatialScene::AnchorCrs);
     emscripten::function("info", &GetInfo);
     emscripten::function("crsWkt", &CrsWkt);
     emscripten::function("resetEngines", &ResetEngines);
     emscripten::function("geoidHeights", &GeoidHeights);
+    emscripten::function("describeCrs", &_DescribeCrs);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

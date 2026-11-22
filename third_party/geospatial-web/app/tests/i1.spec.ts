@@ -178,6 +178,13 @@ for (const run of runs) {
           `${siteG.operation} (accuracy ${siteG.accuracy} m); grids fetched: ${live.grids.join(", ")}`);
 
     // T9: browser vs native and vs the reference, same output.
+    // CRS descriptions (D27): identifiers found for authored and promoted CRSs.
+    const crs = live.crs.anchors;
+    check("D27", `${label}: CRS descriptions`,
+      crs["/World/SiteD"].defaultHeight === "EPSG:3855" && crs["/World/SiteD"].dimension === 2 &&
+      crs["/World/SiteH"].vertical?.id === "EPSG:6360" && crs["/World/SiteH"].horizontal?.id === "EPSG:2229" &&
+      crs["/World/SiteA"].horizontal?.id === "EPSG:32611" && crs["/World/SiteE"].error !== "",
+      `D ${crs["/World/SiteD"].defaultHeight}, H ${crs["/World/SiteH"].id}, A ${crs["/World/SiteA"].horizontal?.id}`);
     const native = manifest("recorded-cpp", live.output.name);
     expect(native, "native results missing; run: geo.py record").not.toBeNull();
     const reference = manifest("recorded", live.output.name)!;

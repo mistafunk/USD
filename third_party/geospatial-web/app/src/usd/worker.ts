@@ -186,6 +186,8 @@ self.onmessage = async (event: MessageEvent) => {
       case "writeText": result = writeFile(args.path, args.text); break;
       case "open": result = open(args.stage); break;
       case "crsWkt": result = need(module).crsWkt(args.definition, args.promote3D); break;
+      case "describeCrs": result = need(module).describeCrs(args.definition); break;
+      case "anchorCrs": result = need(scene).anchorCrs(args.paths); break;
       case "geoidHeights": result = await geoidHeights(args.points, args.verticalCrs, args.baseUrl); break;
       case "ensureGrids": result = await ensureGrids(args.baseUrl, args.names); break;
       case "setOutput": result = setOutput(args.crs, args.measure, args.exact); break;

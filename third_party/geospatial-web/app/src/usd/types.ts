@@ -89,3 +89,27 @@ export interface FileSpec {
   url: string;
   path: string;
 }
+
+/** A CRS part with its identifier, e.g. { name: "WGS 84", id: "EPSG:4326" }. */
+export interface CrsPart {
+  name: string;
+  /** "AUTH:code", empty if PROJ knows none (e.g. "ellipsoidal height"). */
+  id: string;
+}
+
+/** A CRS described by the module for diagnostics (D27). */
+export interface CrsDescription {
+  /** Empty when the CRS could be read. */
+  error: string;
+  name?: string;
+  id?: string;
+  /** "geographic 2D", "geographic 3D", "projected", "compound", ... */
+  type?: string;
+  dimension?: number;
+  wkt?: string;
+  horizontal?: CrsPart;
+  vertical?: CrsPart;
+  /** "EPSG:3855" for a 2D CRS: the proposal's default height (EGM2008). */
+  defaultHeight?: string;
+  areaOfUse?: { name: string; west: number; south: number; east: number; north: number };
+}

@@ -1,5 +1,5 @@
 // Main-thread side of the OpenUSD worker: promise-based calls.
-import type { FileSpec, ModuleInfo, Resolved, SceneState, StageTestData, Vec3 } from "./types";
+import type { CrsDescription, FileSpec, ModuleInfo, Resolved, SceneState, StageTestData, Vec3 } from "./types";
 
 /** Where the dev server (vite.config.ts) and nginx serve the install. */
 export const USD_BASE = "/usd";
@@ -101,6 +101,16 @@ export class UsdClient {
   geoidHeights(points: [number, number][], verticalCrs = "EPSG:5773",
                baseUrl = `${USD_BASE}/grids`): Promise<GeoidHeights> {
     return this.call("geoidHeights", { points, verticalCrs, baseUrl });
+  }
+
+  /** A CRS definition (WKT, "EPSG:..."), described for diagnostics (D27). */
+  describeCrs(definition: string): Promise<CrsDescription> {
+    return this.call("describeCrs", { definition });
+  }
+
+  /** The source CRS of each anchor, from its composed crs:wkt (D27). */
+  anchorCrs(paths: string[]): Promise<Record<string, CrsDescription>> {
+    return this.call("anchorCrs", { paths });
   }
 
   /** Fetches files into the module's file system and opens the stage. */
