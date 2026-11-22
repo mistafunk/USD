@@ -111,11 +111,14 @@ test("object layer zurich-egm96 global", async ({ page }) => {
   await expect(page.locator("#anchorList .anchor")).toHaveCount(live.anchors.length);
   await expect(page.locator("#outSummary")).toHaveText(/\(EPSG:4326\+5773\)$/);
   // Defined by the app (an EPSG code, so no WKT shown).
-  await expect(page.locator("#outBody")).toContainText("compounddefined bythe app, from the global view (WGS 84) and the scene's height model (terrain: EGM96 heights)");
+  await expect(page.locator("#outBody")).toContainText("compoundCRS familyGeographicdefined bythe app, from the global view (WGS 84) and the scene's height model (terrain: EGM96 heights)");
   await expect(page.locator("#outBody details")).toHaveCount(0);
   await expect(page.locator("#outHeights")).toHaveText(/EGM96/);
   // Input CRS, like the output: the layer's compound, from its spatial reference.
   await expect(page.locator("#inSummary")).toHaveText("WGS 84 + EGM96 height (EPSG:4326+5773)");
+  // The proposal's CRS family: a compound has its horizontal part's.
+  await expect(page.locator("#inBody")).toContainText("CRS familyGeographic");
+  await expect(page.locator("#outBody")).toContainText("CRS familyGeographic");
   // Selecting and zooming to an anchor: no errors, the camera moves.
   await page.evaluate(() => (globalThis as unknown as { __app: { select(p: string): void } })
     .__app.select("/ObjectLayer/Feature_2"));
@@ -314,6 +317,7 @@ test("projected layer matches ArcGIS's footprint", async ({ page }) => {
   await page.goto("/?view=local&data=live&terrain=0&buildings=0&layer=/usd/fixtures/arcgis/bergen-utm");
   await page.waitForFunction(() => (globalThis as any).__app?.ready, null, { timeout: 90_000 });
   await expect(page.locator("#log")).toContainText("projected layer: models turned from grid to true north by -3.1905°");
+  await expect(page.locator("#inBody")).toContainText("CRS familyProjected");
   const expected: Record<string, number[][]> =
     await (await page.request.get("/usd/fixtures/arcgis/bergen-utm/footprint.json")).json();
   const bounds: Record<string, number[][]> = await page.evaluate(() => (globalThis as any).__app.placedBounds());

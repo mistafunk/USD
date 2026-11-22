@@ -108,6 +108,10 @@ export interface CrsDescription {
   id?: string;
   /** "geographic 2D", "geographic 3D", "projected", "compound", ... */
   type?: string;
+  /** The proposal's CRS family: "Geographic", "Geocentric", "Projected" or
+   *  "Engineering" (a compound: its horizontal part's), "(derived)" marked;
+   *  empty outside the four. */
+  family?: string;
   dimension?: number;
   wkt?: string;
   horizontal?: CrsPart;

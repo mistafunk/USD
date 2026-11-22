@@ -444,7 +444,8 @@ function whyHelp(why: string): HTMLElement[] {
 /**
  * One CRS, the same for the layer and the output CRS cards (code and name are
  * on the card's title line): horizontal, vertical, CRS type, where it is
- * defined (output), WKT (output: only when defined as WKT).
+ * defined (output), WKT (output: only when defined as WKT); CRS family after
+ * CRS type.
  */
 function crsBlock(c: CrsDescription, o: CrsBlockOptions = {}): HTMLElement {
   const heights: (Node | string)[] = o.heights ? [o.heights]
@@ -459,6 +460,7 @@ function crsBlock(c: CrsDescription, o: CrsBlockOptions = {}): HTMLElement {
       ["vertical", [h("span", { id: o.ids ? `${o.ids}Heights` : undefined }, ...heights),
                     o.assumed ? h("span", { class: "muted" }, " (assumed)") : null]],
       ["CRS type", c.type || undefined],
+      ["CRS family", c.family || undefined],
       ["defined by", o.definedBy],
     ]),
     c.wkt && o.wkt !== false ? h("details", { class: "disclose", style: "margin-top: 3px" },

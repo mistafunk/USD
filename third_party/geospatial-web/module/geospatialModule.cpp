@@ -171,6 +171,57 @@ _CrsType(PJ_TYPE type)
     }
 }
 
+/// The proposal's CRS family ("Families of CRS", after ISO 19111): Geographic,
+/// Geocentric, Projected or Engineering, from the CRS's type and coordinate
+/// system. A compound CRS has its horizontal part's family, a bound CRS its
+/// source CRS's; a derived CRS is marked "(derived)". Empty for CRSs outside
+/// the four (e.g. a vertical CRS on its own).
+std::string
+_CrsFamily(PJ_CONTEXT* ctx, PJ* crs)
+{
+    std::string family;
+    switch (proj_get_type(crs)) {
+    case PJ_TYPE_GEOGRAPHIC_2D_CRS:
+    case PJ_TYPE_GEOGRAPHIC_3D_CRS: family = "Geographic"; break;
+    case PJ_TYPE_GEOCENTRIC_CRS: family = "Geocentric"; break;
+    case PJ_TYPE_PROJECTED_CRS:
+    case PJ_TYPE_DERIVED_PROJECTED_CRS: family = "Projected"; break;
+    case PJ_TYPE_ENGINEERING_CRS: family = "Engineering"; break;
+    case PJ_TYPE_GEODETIC_CRS: {
+        // Geodetic with its coordinate system deciding: ellipsoidal axes
+        // are geographic, Cartesian ones geocentric.
+        PJ* cs = proj_crs_get_coordinate_system(ctx, crs);
+        const PJ_COORDINATE_SYSTEM_TYPE csType =
+            cs ? proj_cs_get_type(ctx, cs) : PJ_CS_TYPE_UNKNOWN;
+        proj_destroy(cs);
+        family = csType == PJ_CS_TYPE_ELLIPSOIDAL ? "Geographic"
+               : csType == PJ_CS_TYPE_CARTESIAN ? "Geocentric" : "";
+        break;
+    }
+    case PJ_TYPE_COMPOUND_CRS: {
+        PJ* horizontal = proj_crs_get_sub_crs(ctx, crs, 0);
+        family = horizontal ? _CrsFamily(ctx, horizontal) : "";
+        proj_destroy(horizontal);
+        return family;
+    }
+    case PJ_TYPE_BOUND_CRS: {
+        PJ* source = proj_get_source_crs(ctx, crs);
+        family = source ? _CrsFamily(ctx, source) : "";
+        proj_destroy(source);
+        return family;
+    }
+    default: return "";
+    }
+    // A projected CRS is derived from its base geographic CRS in PROJ's
+    // model, but is its own family: only other derived CRSs are marked.
+    const PJ_TYPE type = proj_get_type(crs);
+    if (type == PJ_TYPE_DERIVED_PROJECTED_CRS ||
+        (type != PJ_TYPE_PROJECTED_CRS && proj_is_derived_crs(ctx, crs))) {
+        family += " (derived)";
+    }
+    return family;
+}
+
 val
 _NameAndId(PJ_CONTEXT* ctx, const PJ* obj)
 {
@@ -204,6 +255,7 @@ _DescribeCrs(const std::string& definition)
     o.set("name", std::string(name ? name : ""));
     std::string id = _IdOrIdentify(ctx, crs);
     o.set("type", std::string(_CrsType(type)));
+    o.set("family", _CrsFamily(ctx, crs));
     o.set("dimension", dimension);
     o.set("wkt", std::string(wkt ? wkt : definition));
     if (type == PJ_TYPE_COMPOUND_CRS) {
