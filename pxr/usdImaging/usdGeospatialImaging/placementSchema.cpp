@@ -81,6 +81,13 @@ UsdGeospatialImagingPlacementSchema::GetSkippedOperations() const
         UsdGeospatialImagingPlacementSchemaTokens->skippedOperations);
 }
 
+HdStringArrayDataSourceHandle
+UsdGeospatialImagingPlacementSchema::GetMissingGrids() const
+{
+    return _GetTypedDataSource<HdStringArrayDataSource>(
+        UsdGeospatialImagingPlacementSchemaTokens->missingGrids);
+}
+
 HdStringDataSourceHandle
 UsdGeospatialImagingPlacementSchema::GetSourceCrs() const
 {
@@ -133,6 +140,7 @@ UsdGeospatialImagingPlacementSchema::BuildRetained(
         const HdStringDataSourceHandle &operation,
         const HdDoubleDataSourceHandle &accuracy,
         const HdStringArrayDataSourceHandle &skippedOperations,
+        const HdStringArrayDataSourceHandle &missingGrids,
         const HdStringDataSourceHandle &sourceCrs,
         const HdVec3dDataSourceHandle &origin,
         const HdTokenDataSourceHandle &frame,
@@ -141,8 +149,8 @@ UsdGeospatialImagingPlacementSchema::BuildRetained(
         const HdDoubleDataSourceHandle &linearizationError
 )
 {
-    TfToken _names[13];
-    HdDataSourceBaseHandle _values[13];
+    TfToken _names[14];
+    HdDataSourceBaseHandle _values[14];
 
     size_t _count = 0;
 
@@ -179,6 +187,11 @@ UsdGeospatialImagingPlacementSchema::BuildRetained(
     if (skippedOperations) {
         _names[_count] = UsdGeospatialImagingPlacementSchemaTokens->skippedOperations;
         _values[_count++] = skippedOperations;
+    }
+
+    if (missingGrids) {
+        _names[_count] = UsdGeospatialImagingPlacementSchemaTokens->missingGrids;
+        _values[_count++] = missingGrids;
     }
 
     if (sourceCrs) {
@@ -270,6 +283,14 @@ UsdGeospatialImagingPlacementSchema::Builder::SetSkippedOperations(
 }
 
 UsdGeospatialImagingPlacementSchema::Builder &
+UsdGeospatialImagingPlacementSchema::Builder::SetMissingGrids(
+    const HdStringArrayDataSourceHandle &missingGrids)
+{
+    _missingGrids = missingGrids;
+    return *this;
+}
+
+UsdGeospatialImagingPlacementSchema::Builder &
 UsdGeospatialImagingPlacementSchema::Builder::SetSourceCrs(
     const HdStringDataSourceHandle &sourceCrs)
 {
@@ -328,6 +349,7 @@ UsdGeospatialImagingPlacementSchema::Builder::Build()
         _operation,
         _accuracy,
         _skippedOperations,
+        _missingGrids,
         _sourceCrs,
         _origin,
         _frame,
@@ -431,6 +453,16 @@ UsdGeospatialImagingPlacementSchema::GetSkippedOperationsLocator()
     static const HdDataSourceLocator locator =
         GetDefaultLocator().Append(
             UsdGeospatialImagingPlacementSchemaTokens->skippedOperations);
+    return locator;
+}
+
+/* static */
+const HdDataSourceLocator &
+UsdGeospatialImagingPlacementSchema::GetMissingGridsLocator()
+{
+    static const HdDataSourceLocator locator =
+        GetDefaultLocator().Append(
+            UsdGeospatialImagingPlacementSchemaTokens->missingGrids);
     return locator;
 }
 

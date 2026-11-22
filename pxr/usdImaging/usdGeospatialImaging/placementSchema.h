@@ -41,6 +41,7 @@ PXR_NAMESPACE_OPEN_SCOPE
     (operation) \
     (accuracy) \
     (skippedOperations) \
+    (missingGrids) \
     (sourceCrs) \
     (origin) \
     (frame) \
@@ -119,6 +120,11 @@ public:
     /// need (e.g. grid files).
     USDGEOSPATIALIMAGING_API
     HdStringArrayDataSourceHandle GetSkippedOperations() const;
+
+    /// Grid files that would allow a better placement, or any placement when
+    /// not ok (UsdGeospatialPlacement::GetMissingGrids).
+    USDGEOSPATIALIMAGING_API
+    HdStringArrayDataSourceHandle GetMissingGrids() const;
 
     /// Name of the anchor's CRS.
     USDGEOSPATIALIMAGING_API
@@ -206,6 +212,10 @@ public:
     USDGEOSPATIALIMAGING_API
     static const HdDataSourceLocator &GetSkippedOperationsLocator();
 
+    /// Prim-level relative data source locator to locate missingGrids.
+    USDGEOSPATIALIMAGING_API
+    static const HdDataSourceLocator &GetMissingGridsLocator();
+
     /// Prim-level relative data source locator to locate sourceCrs.
     USDGEOSPATIALIMAGING_API
     static const HdDataSourceLocator &GetSourceCrsLocator();
@@ -251,6 +261,7 @@ public:
         const HdStringDataSourceHandle &operation,
         const HdDoubleDataSourceHandle &accuracy,
         const HdStringArrayDataSourceHandle &skippedOperations,
+        const HdStringArrayDataSourceHandle &missingGrids,
         const HdStringDataSourceHandle &sourceCrs,
         const HdVec3dDataSourceHandle &origin,
         const HdTokenDataSourceHandle &frame,
@@ -290,6 +301,9 @@ public:
         Builder &SetSkippedOperations(
             const HdStringArrayDataSourceHandle &skippedOperations);
         USDGEOSPATIALIMAGING_API
+        Builder &SetMissingGrids(
+            const HdStringArrayDataSourceHandle &missingGrids);
+        USDGEOSPATIALIMAGING_API
         Builder &SetSourceCrs(
             const HdStringDataSourceHandle &sourceCrs);
         USDGEOSPATIALIMAGING_API
@@ -320,6 +334,7 @@ public:
         HdStringDataSourceHandle _operation;
         HdDoubleDataSourceHandle _accuracy;
         HdStringArrayDataSourceHandle _skippedOperations;
+        HdStringArrayDataSourceHandle _missingGrids;
         HdStringDataSourceHandle _sourceCrs;
         HdVec3dDataSourceHandle _origin;
         HdTokenDataSourceHandle _frame;

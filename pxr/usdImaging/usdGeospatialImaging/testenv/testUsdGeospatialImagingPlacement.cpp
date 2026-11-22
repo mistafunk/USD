@@ -43,6 +43,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <sstream>
 
 PXR_NAMESPACE_USING_DIRECTIVE
@@ -197,6 +198,8 @@ _CheckOutput(const UsdStageRefPtr& stage, const std::string& name)
     UsdGeospatialImagingMeshObserver observer(chain.placement);
     observer.Sync();
 
+    std::set<std::string> incomparable;
+
     // Anchors: status, origin within 1 mm, matrix within 1 um per metre.
     const double originTolerance[3] = {
         enu ? 1e-8 : 1e-3, enu ? 1e-8 : 1e-3, 1e-3 };
@@ -210,6 +213,23 @@ _CheckOutput(const UsdStageRefPtr& stage, const std::string& name)
         }
         const UsdGeospatialImagingMeshObserver::Anchor& anchor = it->second;
         const std::string status = expected.at("status").GetString();
+        // Builds without a grid the expected result used (e.g. WebAssembly)
+        // place it differently or not at all, and say which are missing.
+        bool usedGridMissing = false;
+        if (expected.count("gridsUsed")) {
+            for (const JsValue& g : expected.at("gridsUsed").GetJsArray()) {
+                usedGridMissing |= std::find(anchor.missingGrids.begin(),
+                                             anchor.missingGrids.end(),
+                                             g.GetString()) !=
+                    anchor.missingGrids.end();
+            }
+        }
+        if (status == "ok" && usedGridMissing) {
+            printf("  --   %s not comparable in this build, grids missing: %s\n",
+                   path.c_str(), TfStringJoin(anchor.missingGrids, ", ").c_str());
+            incomparable.insert(path);
+            continue;
+        }
         check(anchor.status.GetString() == status,
               TfStringPrintf("%s %s (%s)", path.c_str(),
                              anchor.status.GetText(),
@@ -231,15 +251,11 @@ _CheckOutput(const UsdStageRefPtr& stage, const std::string& name)
         const double d = _MaxMatrixDiff(expected.at("matrix"),
                                         anchor.modelToFrame);
         check(d < 1e-6, TfStringPrintf("  matrix (max diff %.2g)", d));
-        // T3: NAD27 is placed with an equation-based operation; the grid
-        // based ones it could not use are reported.
+        // T3: with its grids NAD27 is placed with the grid-based NADCON
+        // operation (without them it reports them missing, see above).
         if (path == "/World/SiteG") {
-            check(!anchor.skippedOperations.empty(),
-                  TfStringPrintf("  %zu skipped grid operations reported%s",
-                                 anchor.skippedOperations.size(),
-                                 anchor.skippedOperations.empty() ? "" :
-                                 (", e.g. " + anchor.skippedOperations[0])
-                                     .c_str()));
+            check(TfStringContains(anchor.operation, "NAD27 to NAD83"),
+                  "  NAD27 through NADCON: " + anchor.operation);
         }
     }
 
@@ -254,6 +270,9 @@ _CheckOutput(const UsdStageRefPtr& stage, const std::string& name)
         }
         const UsdGeospatialImagingMeshObserver::Mesh& mesh = it->second;
         const std::string status = expected.at("status").GetString();
+        if (incomparable.count(mesh.anchor.GetString())) {
+            continue;
+        }
         check(mesh.status.GetString() == status,
               path + " " + mesh.status.GetString());
         check(_SameBuffer(blob, expected.at("points").GetJsObject(),
@@ -389,8 +408,8 @@ _CheckPlugin(const UsdStageRefPtr& stage)
     const GfVec3d siteA = _Xform(sceneIndex, "/World/SiteA")
         .Transform(GfVec3d(0.0));
     check(siteA.GetLength() < 1e-6, "Site A at the display origin");
-    check(!_IsVisible(sceneIndex, "/World/SiteD/Box") &&
-          !_IsVisible(sceneIndex, "/World/SiteE/Box"),
+    // Site E: direct binding to a missing CRS prim.
+    check(!_IsVisible(sceneIndex, "/World/SiteE/Box"),
           "unplaceable models are not drawn");
     check(_IsVisible(sceneIndex, "/World/SiteC/Box"), "placed models are");
     return ok;

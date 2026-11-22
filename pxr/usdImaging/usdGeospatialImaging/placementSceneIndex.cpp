@@ -208,6 +208,12 @@ UsdGeospatialImagingPlacementSceneIndex::GetPrim(
     const UsdGeospatialPlacement &placement = anchor->placement;
 
     UsdGeospatialImagingPlacementSchema::Builder builder;
+    if (!placement.GetMissingGrids().empty()) {
+        const std::vector<std::string>& grids = placement.GetMissingGrids();
+        builder.SetMissingGrids(
+            HdRetainedTypedSampledDataSource<VtStringArray>::New(
+                VtStringArray(grids.begin(), grids.end())));
+    }
     builder
         .SetStatus(HdRetainedTypedSampledDataSource<TfToken>::New(
             _StatusToken(placement.GetStatus())))

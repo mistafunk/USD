@@ -190,6 +190,9 @@ UsdGeospatialImagingMeshObserver::_Read(const SdfPath &path,
         const VtStringArray skipped =
             _Get(placement.GetSkippedOperations(), VtStringArray());
         anchor.skippedOperations.assign(skipped.begin(), skipped.end());
+        const VtStringArray grids =
+            _Get(placement.GetMissingGrids(), VtStringArray());
+        anchor.missingGrids.assign(grids.begin(), grids.end());
         anchor.sourceCrs = _Get(placement.GetSourceCrs(), std::string());
         anchor.position = _Get(inputs.GetPosition(), GfVec3d(0.0));
         anchor.orientation = _Get(inputs.GetOrientation(), GfVec3d(0.0));

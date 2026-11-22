@@ -99,6 +99,10 @@
             ('skippedOperations', T_STRINGARRAY,
              dict(DOC='''More accurate operations the engine skipped
                 because it lacks data they need (e.g. grid files).''')),
+            ('missingGrids', T_STRINGARRAY,
+             dict(DOC='''Grid files that would allow a better placement,
+                or any placement when not ok
+                (UsdGeospatialPlacement::GetMissingGrids).''')),
             ('sourceCrs', T_STRING,
              dict(DOC='''Name of the anchor's CRS.''')),
             ('origin', T_VEC3D,

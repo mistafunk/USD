@@ -53,6 +53,8 @@ public:
         std::optional<double> accuracy;
         /// More accurate operations skipped for missing data (grids).
         std::vector<std::string> skippedOperations;
+        /// Grid files that would allow a better or any placement.
+        std::vector<std::string> missingGrids;
         std::string sourceCrs;
         GfVec3d position{0.0};
         GfVec3d orientation{0.0};
