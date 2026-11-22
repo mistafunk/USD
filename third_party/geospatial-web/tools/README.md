@@ -34,14 +34,15 @@ Pinned versions live at the top of `geo.py`: emsdk 5.0.7, PROJ 9.9.0, SQLite 3.5
 
 ```
 python third_party/geospatial-web/tools/geo.py check
-python third_party/geospatial-web/tools/geo.py bootstrap native     # venv, SQLite, PROJ, then build_usd.py
-python third_party/geospatial-web/tools/geo.py bootstrap wasm32     # emsdk, SQLite, PROJ, then build_usd.py --build-target wasm
+python third_party/geospatial-web/tools/geo.py bootstrap native     # venv, SQLite, libtiff, PROJ, grids, tinygltf, then build_usd.py
+python third_party/geospatial-web/tools/geo.py bootstrap wasm32     # emsdk, the same dependencies, then build_usd.py --build-target wasm
 python third_party/geospatial-web/tools/geo.py build native-debug
 python third_party/geospatial-web/tools/geo.py test native-debug -- -R usdGeospatial
-python third_party/geospatial-web/tools/geo.py test web              # Playwright: W0, W1, W2 specs
+python third_party/geospatial-web/tools/geo.py test web              # Playwright specs (app/tests)
 ```
 
-- `bootstrap <target> --steps a,b` runs a subset (`native`: venv,sqlite,proj,usd-deps; `wasm32`: emsdk,sqlite,proj,usd-deps).
+- `bootstrap <target> --steps a,b` runs a subset (`native`: venv,sqlite,tiff,proj,grids,tinygltf,usd-deps;
+  `wasm32`: emsdk,sqlite,tiff,proj,grids,tinygltf,usd-deps).
 - `build_usd.py` has no deps-only mode, so `usd-deps` also builds an unmodified USD into
   `install/upstream-<target>`. That is the reference "what upstream does" build.
 - `bootstrap wasm32 --imaging` passes `--imaging` to `build_usd.py`, which builds OpenSubdiv for WASM. Not needed before C2.
