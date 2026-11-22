@@ -12,15 +12,13 @@
 //   &layer=<url|item>    live only: an ArcGIS 3D object layer instead of the
 //                        test scene; the panel loads others in place
 //   &terrain=1|0         Esri World Elevation as ground (default: on for
-//                        &layer=, off for the test scene, which is flat)
-//   &geoid=1|0           live only, display only (D25): lower drawn anchors by
-//                        the EGM96 geoid height to meet the terrain, whose
-//                        orthometric heights the view draws as ellipsoidal
-//                        (default: as terrain)
+//                        &layer=, off for the test scene, which is flat); it
+//                        sets the height model the output CRS follows (D28):
+//                        gravity-related (EGM96) with terrain, else ellipsoidal
 //   &buildings=1|0       Open 3D Buildings scene layer as visual reference
 //                        (default: on for &layer=)
-// Layers, terrain, geoid and buildings change in place (the URL follows);
-// view, content, exact and naive reload the page.
+// Layers, terrain and buildings change in place (the URL follows; terrain
+// places the content again); view, content, exact and naive reload the page.
 
 import esriConfig from "@arcgis/core/config.js";
 import Basemap from "@arcgis/core/Basemap.js";
@@ -32,12 +30,12 @@ import SceneLayer from "@arcgis/core/layers/SceneLayer.js";
 import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import TileLayer from "@arcgis/core/layers/TileLayer.js";
 import SceneView from "@arcgis/core/views/SceneView.js";
-import { watch } from "@arcgis/core/core/reactiveUtils.js";
+import { watch, whenOnce } from "@arcgis/core/core/reactiveUtils.js";
 import { fromRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
 import type { HarnessReport } from "./harness";
 import { transformPoint } from "./mat4";
 import { MeshPass, type PassStats, type ScreenError } from "./meshPass";
-import { DEFAULT_PORTAL, loadLiveScene, type LiveData, type LoadedLive } from "./live";
+import { DEFAULT_PORTAL, heightModelOf, loadLiveScene, type HeightModel, type LiveData } from "./live";
 import { LoadStatus } from "./loadStatus";
 import { loadRecordedScene } from "./recorded";
 import type { CameraPreset, Scene } from "./scene";
@@ -188,12 +186,6 @@ function setTerrain(on: boolean) {
 let terrain = layerDefault("terrain", objectLayer);
 setTerrain(terrain);
 
-const geoidDefault = () => {
-  const v = new URLSearchParams(location.search).get("geoid");
-  return v ? v === "1" : terrain;
-};
-let geoid = geoidDefault();
-
 // Visual reference: Esri's Open 3D Buildings (ArcGIS Online item).
 const OPEN_3D_BUILDINGS = "c444b24b184c4523a5dc96248bfea4e1";
 const buildings = layerDefault("buildings", objectLayer);
@@ -247,7 +239,6 @@ watch(() => view.updating, (updating) => { state.updating = updating; },
 const pass = new MeshPass(view);
 state.stats = pass.stats;
 
-let loadedLive: LoadedLive | null = null;
 let loadSeq = 0;
 
 /** Shows a scene: meshes, test hooks and the panel. */
@@ -257,6 +248,33 @@ function showScene(next: Scene) {
   state.anchors = next.anchors;
   pass.setMeshes(next.meshes);
   renderPanel();
+}
+
+/**
+ * The scene's height model, read from the view at runtime (D28). The view
+ * sets heightModelInfo from its elevation layers and keeps it after they are
+ * removed, so it counts only while the ground has an elevation layer; without
+ * one the ground is the ellipsoid. A freshly added layer reports it once
+ * loaded: waited for briefly, else EGM96 is assumed.
+ */
+async function sceneHeightModel(): Promise<HeightModel> {
+  if (!ground.layers.length) return { kind: "ellipsoidal" };
+  // SceneView.heightModelInfo exists at runtime but is not in the SDK's
+  // typings (5.2.7: only WebScene declares it); missing, the rule applies.
+  const viewInfo = () => (view as unknown as
+    { heightModelInfo?: { heightModel?: string; vertCRS?: string | null } | null }).heightModelInfo;
+  const info = await Promise.race([
+    whenOnce(() => viewInfo()).then(() => viewInfo()),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+  ]);
+  const { model, note } = heightModelOf(info);
+  if (note) loadStatus.add("info", `height model: ${note}`);
+  if (!model) {
+    loadStatus.add("warn", "height model: the view reports none with terrain; EGM96 assumed");
+    return { kind: "gravity" };
+  }
+  loadStatus.add("info", `height model: ${model.kind}${model.verticalCrs ? ` (${model.verticalCrs})` : ""}`);
+  return model;
 }
 
 /**
@@ -277,9 +295,9 @@ async function loadContent(): Promise<void> {
     let next: Scene;
     if (data === "live") {
       const loaded = await loadLiveScene(view, { exact, layer: objectLayer, portal,
-                                                 status: loadStatus, geoid });
+                                                 status: loadStatus,
+                                                 heightModel: await sceneHeightModel() });
       if (seq !== loadSeq) return;
-      loadedLive = loaded;
       state.live = loaded.live;
       next = loaded.scene;
     } else {
@@ -319,7 +337,7 @@ async function loadContent(): Promise<void> {
 /**
  * Loads a 3D object layer in place: the view, map and context layers stay,
  * the URL is updated (history entry) and the layer-dependent defaults of
- * terrain, buildings and geoid apply unless the URL sets them. Recorded and
+ * terrain and buildings apply unless the URL sets them. Recorded and
  * spike content switch to live data with a reload.
  */
 async function loadLayer(url: string): Promise<void> {
@@ -336,8 +354,6 @@ async function loadLayer(url: string): Promise<void> {
   terrain = layerDefault("terrain", objectLayer);
   setTerrain(terrain);
   terrainBox.checked = terrain;
-  geoid = geoidDefault();
-  geoidBox.checked = geoid;
   const b = layerDefault("buildings", objectLayer);
   buildingsBox.checked = b;
   showBuildings(b);
@@ -477,22 +493,15 @@ function reloadingBox(id: string, checked: boolean, enabled: boolean, param: str
 reloadingBox("exact", exact, data === "live", "exact", ["1", null]);
 reloadingBox("naive", naive, data === "w0", "naive", ["1", null]);
 
-// Terrain and the geoid correction switch in place.
+// Terrain switches in place. It sets the height model, so live content is
+// placed again in the matching output CRS (D28).
 const terrainBox = document.getElementById("terrain") as HTMLInputElement;
 terrainBox.checked = terrain;
 terrainBox.addEventListener("change", () => {
   terrain = terrainBox.checked;
   setTerrain(terrain);
   setParams({ terrain: terrain ? "1" : "0" });
-});
-const geoidBox = document.getElementById("geoid") as HTMLInputElement;
-geoidBox.checked = geoid;
-geoidBox.disabled = data !== "live";
-geoidBox.addEventListener("change", () => {
-  geoid = geoidBox.checked;
-  setParams({ geoid: geoid ? "1" : "0" });
-  // Re-placed from the loaded data with or without the offsets; no module.
-  if (loadedLive && state.ready) showScene(loadedLive.place(geoid));
+  if (data === "live") void loadContent();
 });
 
 // Open 3D Buildings: added on first use, then only shown or hidden (no

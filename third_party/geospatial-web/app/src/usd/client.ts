@@ -5,13 +5,6 @@ import type { CrsDescription, FileSpec, ModuleInfo, Resolved, SceneState, StageT
 export const USD_BASE = "/usd";
 export const MODULE_URL = `${USD_BASE}/module/geospatialModule.js`;
 
-export interface GeoidHeights {
-  heights: number[];
-  operation: string;
-  error: string;
-  missingGrids: string[];
-}
-
 export interface UsdProgress {
   label: string;
   loaded: number;
@@ -91,16 +84,6 @@ export class UsdClient {
    *  promote3D a 2D CRS gets an ellipsoidal height axis. */
   crsWkt(definition: string, promote3D = false): Promise<{ wkt: string; error: string }> {
     return this.call("crsWkt", { definition, promote3D });
-  }
-
-  /**
-   * Geoid heights N (ellipsoidal minus `verticalCrs` height, metres) at
-   * [lon, lat] points; fetches the geoid grid on demand. heights is empty on
-   * failure (error says why).
-   */
-  geoidHeights(points: [number, number][], verticalCrs = "EPSG:5773",
-               baseUrl = `${USD_BASE}/grids`): Promise<GeoidHeights> {
-    return this.call("geoidHeights", { points, verticalCrs, baseUrl });
   }
 
   /** A CRS definition (WKT, "EPSG:..."), described for diagnostics (D27). */

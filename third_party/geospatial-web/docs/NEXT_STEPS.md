@@ -4,7 +4,7 @@
 
 Milestones W0 to W2, C0 to C4 and I1 are done (exit criteria in `PLAN.md`), plus three additions: grids for vertical
 CRSs and grid-based datum shifts (D23), ArcGIS 3D object layers through wrapper layers with Adobe's glTF plugin (D24),
-and the app's display geoid correction (D25). The app draws the live WASM module by default; the browser and native
+and output CRSs that follow the scene's height model (D28, EGM96 heights with terrain; replaced D25's display correction). The app draws the live WASM module by default; the browser and native
 results agree to 0.000 mm on every case both can place. How to build and test: `README.md` (development section) and
 `tools/README.md`.
 
@@ -25,8 +25,6 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
 - **Threads.** The module runs without a pre-started pthread pool and reports 24 work threads. With real models
   (the Zurich glb are 126 MB and 63 MB): measure, then pre-start a pool (`-sPTHREAD_POOL_SIZE`) and cap
   `setThreadLimit` to it.
-- **Local views and heights.** The local view's output (`EPSG:3857` promoted to 3D) has ellipsoidal heights, which the
-  geoid correction (D25) lowers for terrain; check whether a local scene needs its own vertical CRS choice.
 - The anchor's own ordinary transform `A` (post-placement adjustment in the working chart) is still a candidate in
   the proposal; reference and C++ report it as unsupported.
 - Native instancing under an anchor is untested (instances get separate prototypes; anchor paths into prototypes).
@@ -80,6 +78,11 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   place (no page reload; a fresh worker per load), terrain and the geoid correction switch in place (geoid heights
   are looked up on every live load, the toggle re-places without the module).
 
+- **Height model (D28, 2026-11-22):** with terrain the output CRS is the view's horizontal CRS with EGM96 heights
+  (engine: geographic compound outputs, via the output's geographic 3D CRS; native test against pyproj for all
+  anchors); the app's display correction (D25) is gone; switching terrain places the content again. Native 8 and
+  WASM 4 geospatial tests, 22 browser specs pass; an EGM96 layer is placed at its own heights (427.18 m).
+
 ## Findings
 
 **Coordinate operations (PROJ, engine, reference)**
@@ -109,8 +112,14 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   real local scenes are better in a conformal CRS with scale near 1 (UTM, LV95).
 - **The matrix shortcut is not enough at 1 km in Web Mercator** (25 mm at the runway ends; under 1 um in the global
   ENU frame). Options for real data: exact mode for large models, or one matrix per tile.
-- The SceneView draws all heights as ellipsoidal; World Elevation's are orthometric with no geoid named (its service
-  description). Hence D25.
+- The SceneView draws all heights as they are (as ellipsoidal); World Elevation's are orthometric with no geoid named
+  (its service description; `view.heightModelInfo` says gravity_related_height without a vertical CRS, and is null
+  without terrain). Hence D28: the output CRS gets EGM96 heights with terrain. `view.heightModelInfo` is not in the
+  SDK 5.2.7 typings (only `WebScene` declares it) and stays gravity-related after the terrain is removed: the app reads
+  it only while the ground has an elevation layer.
+- A compound output reached directly from the source can take another datum shift than the ellipsoidal output (6.8 cm
+  for NAD83 in California): placement goes through the output's geographic 3D CRS, and passes on the missing grids of
+  both steps (the geoid of the second step was lost at first, so the browser never fetched it).
 - The SDK reports Web Mercator as wkid 102100 (latestWkid 3857); compare both.
 - The CDN worker is blocked under COEP `require-corp`: the SDK's assets are self-hosted.
 - The SDK does not know RenderNode geometry when choosing clip distances; close-range views set
@@ -132,7 +141,9 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   The wrapper's Y-up frame is that glTF frame, so the fields go into its xformOps unchanged. The first version
   mapped them as ENU, which turned heading rotations about y into tilts; the `transform` mock now uses the
   SDK's convention.
-- Without `vcsWkid` the wrapper takes z as ellipsoidal height (promoted 3D CRS); the layer does not say.
+- **Without `vcsWkid` a layer's z is in the scene's height model**, as the Maps SDK draws it as it is: the wrapper's
+  CRS gets the scene's vertical CRS (EGM96 with terrain), else it is promoted to 3D (ellipsoidal). Taking z as
+  ellipsoidal put the 2025 EsriKon demo layer (z 428.81 m in central Zurich) 47 m too low with EGM96 output.
 
 **WebAssembly build**
 - emscripten 5.0.7 needs Python >= 3.10; the venv is Python 3.12 and `geo.py` sets `EMSDK_PYTHON`.

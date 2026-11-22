@@ -2,7 +2,8 @@
 // layer (mocks in testdata/arcgis, the REST API's shape; reference.py
 // arcgis-mock), generates a wrapper with the geospatial CRS schemas and loads
 // the glb models through the Adobe glTF plugin, all in the browser module.
-//   zurich-ellipsoidal  WGS 84 without vertical CRS: placed at the origins
+//   zurich-ellipsoidal  WGS 84 without vertical CRS: z in the scene's height
+//                       model (D28), placed at the origins
 //   zurich-egm96        WGS 84 + EGM96 heights: the worker fetches the EGM96
 //                       grid (D23), heights become ellipsoidal (+47.4 m)
 //   transform           translation, non-uniform scale, 90 degree rotation
@@ -70,13 +71,18 @@ for (const view of ["global", "local"]) {
       await page.locator("#buildings").uncheck();
       expect(page.url()).toContain("buildings=0");
       await page.locator("#buildings").check();
-      // EPSG:4326 promoted to 3D into EPSG:4979: the origins unchanged.
+      // No vertical CRS: z is in the scene's height model (D28), with
+      // terrain EGM96 like the output, so the anchors are at the layer's z
+      // values, as the Maps SDK draws them.
       live.anchors.forEach((a, i) => {
         expect(Math.abs(a.origin[0] - ZURICH[i][0])).toBeLessThan(1e-9);
         expect(Math.abs(a.origin[1] - ZURICH[i][1])).toBeLessThan(1e-9);
-        expect(Math.abs(a.origin[2] - ZURICH[i][2])).toBeLessThan(1e-6);
+        expect(Math.abs(a.origin[2] - ZURICH[i][2])).toBeLessThan(1e-3);
       });
+      await expect(page.locator("#log")).toContainText(
+        "the layer names no vertical CRS: z in the scene's gravity-related heights (EPSG:5773)");
     }
+    expect(live.output.crs).toBe(view === "global" ? "EPSG:4326+5773" : "EPSG:3857+5773");
     await page.screenshot({ path: `test-results/object-layer-zurich-${view}.png` });
   });
 }
@@ -85,30 +91,26 @@ test("object layer zurich-egm96 global", async ({ page }) => {
   const { live } = await open(page, "global", "zurich-egm96");
   expect(live.objectLayer!.crs).toBe("EPSG:4326+5773");
   expect(live.grids).toEqual(["us_nga_egm96_15.tif"]);
-  // EGM96 height 427.18 m at the first origin is 474.56 m above the ellipsoid
-  // (native cs2cs with the same grid).
+  // With terrain the output has EGM96 heights too (D28): placed through the
+  // ellipsoid and back, the anchors are at the layer's own heights.
+  expect(live.output.crs).toBe("EPSG:4326+5773");
+  expect(live.output.frame).toBe("enu");
+  // Read from the view at runtime: gravity-related, no geoid named.
+  await expect(page.locator("#log")).toContainText("height model: gravity-related heights without a named geoid: EGM96 assumed");
+  await expect(page.locator("#log")).toContainText("height model: gravity (EPSG:5773)");
   expect(live.anchors.map((a) => a.status)).toEqual(["ok", "ok"]);
-  expect(Math.abs(live.anchors[0].origin[2] - 474.562305)).toBeLessThan(1e-3);
   live.anchors.forEach((a, i) => {
     expect(Math.abs(a.origin[0] - ZURICH[i][0])).toBeLessThan(1e-9);
     expect(Math.abs(a.origin[1] - ZURICH[i][1])).toBeLessThan(1e-9);
-    expect(a.origin[2] - ZURICH[i][2]).toBeGreaterThan(40);
+    expect(Math.abs(a.origin[2] - ZURICH[i][2])).toBeLessThan(1e-3);
   });
-  // Display correction (D25, on with terrain): lowered by the EGM96 geoid
-  // height, the models are drawn at the layer's own heights, where the
-  // terrain's orthometric heights put the ground.
-  expect(live.geoid!.crs).toBe("EPSG:5773");
-  live.anchors.forEach((a, i) => {
-    const n = live.geoid!.heights[a.path];
-    expect(Math.abs(a.origin[2] - n - ZURICH[i][2])).toBeLessThan(1e-3);
-  });
-  expect(Math.abs(live.geoid!.heights["/ObjectLayer/Feature_1"] - 47.382)).toBeLessThan(1e-3);
   // Features tab (D27): the module's CRS description, one row per anchor.
   const crs = live.crs.anchors["/ObjectLayer/Feature_1"];
   expect([crs.type, crs.id, crs.horizontal?.id, crs.vertical?.id])
     .toEqual(["compound", "EPSG:9707", "EPSG:4326", "EPSG:5773"]);
   await expect(page.locator("#anchorList .anchor")).toHaveCount(live.anchors.length);
-  await expect(page.locator("#outCode")).toHaveText("EPSG:4979");
+  await expect(page.locator("#outCode")).toHaveText("EPSG:4326+5773");
+  await expect(page.locator("#outHeights")).toHaveText(/EGM96/);
   // Selecting and zooming to an anchor: no errors, the camera moves.
   await page.evaluate(() => (globalThis as unknown as { __app: { select(p: string): void } })
     .__app.select("/ObjectLayer/Feature_2"));
@@ -119,26 +121,23 @@ test("object layer zurich-egm96 global", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("object layer zurich-egm96 global without geoid correction", async ({ page }) => {
-  const { live } = await open(page, "global", "zurich-egm96", "&geoid=0");
-  // Looked up either way, not applied.
-  expect(live.geoid!.applied).toBe(false);
-  // Switching it on re-places in place (no reload): the drawn model moves
-  // down by the geoid height, the placement stays.
+test("object layer zurich-egm96 global, terrain switched off", async ({ page }) => {
+  await open(page, "global", "zurich-egm96");
+  // Without terrain the height model is ellipsoidal: the content is placed
+  // again in place (no page reload) in EPSG:4979, where the EGM96 height
+  // 427.18 m at the first origin is 474.56 m (native cs2cs, same grid).
   await page.evaluate(() => { (globalThis as unknown as { marker: number }).marker = 1; });
-  const mesh = live.meshes[0].path;
-  const point = (p: typeof page) => p.evaluate((m) => (globalThis as unknown as
-    { __app: { renderPoint(m: string, q: number[]): number[] | null } }).__app.renderPoint(m, [0, 0, 0]), mesh);
-  const before = (await point(page))!;
-  await expect(page.locator("#geoid")).not.toBeChecked();
-  // The display option is in the Output CRS section, collapsed by default.
-  await page.locator("#outputCard > summary").click();
-  await page.locator("#geoid").check();
-  const after = (await point(page))!;
-  const moved = Math.hypot(after[0] - before[0], after[1] - before[1], after[2] - before[2]);
-  expect(Math.abs(moved - live.geoid!.heights[live.meshes[0].anchor!])).toBeLessThan(0.01);
-  expect(page.url()).toContain("geoid=1");
+  await page.locator("#terrain").uncheck();
+  await page.waitForFunction(() => {
+    const a = (globalThis as unknown as { __app: { ready: boolean; loads: number } }).__app;
+    return a.ready && a.loads === 2;
+  }, null, { timeout: 90_000 });
+  const live = await page.evaluate(() => (globalThis as unknown as { __app: { live: LiveData } }).__app.live);
+  expect(live.output.crs).toBe("EPSG:4979");
+  expect(Math.abs(live.anchors[0].origin[2] - 474.562305)).toBeLessThan(1e-3);
+  expect(page.url()).toContain("terrain=0");
   expect(await page.evaluate(() => (globalThis as unknown as { marker?: number }).marker)).toBe(1);
+  await expect(page.locator("#outHeights")).toHaveText("ellipsoidal");
 });
 
 test("object layer zurich-usd global", async ({ page }) => {
@@ -195,7 +194,10 @@ test("object layer zurich-duplicate global", async ({ page }) => {
 });
 
 test("object layer transform global", async ({ page }) => {
-  const { live } = await open(page, "global", "transform");
+  // Without terrain: an ENU frame at the ellipsoidal height, so the feature
+  // transform is checked alone (with EGM96 heights the frame sits at the
+  // drawn height, 7 um per metre different from it).
+  const { live } = await open(page, "global", "transform", "&terrain=0&buildings=0");
   expect(live.anchors.map((a) => a.status)).toEqual(["ok"]);
   const mesh = live.meshes.find((m) => m.status === "ok")!;
   // The glb's corners (x east, y up, z south) mapped by the mesh matrix into

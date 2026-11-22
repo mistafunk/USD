@@ -1,9 +1,9 @@
 // Features tab (D27): the output CRS and, per anchor, its source CRS,
 // placement, position, display offset, meshes and test case. Live data adds
-// the module's CRS descriptions, fetched grids and geoid heights; recorded
+// the module's CRS descriptions and fetched grids; recorded
 // data shows what its manifest has.
 import type { HarnessReport } from "../harness";
-import type { LiveData } from "../live";
+import { GRAVITY_VCS, type LiveData } from "../live";
 import type { RecordedAnchor } from "../recorded";
 import type { Scene } from "../scene";
 import type { CrsDescription } from "../usd/types";
@@ -121,8 +121,14 @@ export class FeaturesTab {
         "placed in geographic 3D WGS 84 with an east-north-up frame in metres, and the app maps them " +
         "through the SDK's own geographic-to-render function."
       : "A local view renders in its own spatial reference, so anchors are placed directly in it, " +
-        "promoted to 3D with ellipsoidal heights. Web Mercator is not metric: placement includes its " +
-        "scale, about 1/cos(latitude).";
+        "with 3D heights. Web Mercator is not metric: placement includes its scale, about " +
+        "1/cos(latitude).";
+    // Heights follow the scene's height model (D28).
+    const gravity = crs.endsWith(`+${GRAVITY_VCS.slice(5)}`);
+    $("outWhy").textContent += gravity
+      ? " Heights are EGM96 (gravity-related), like the terrain's, which the view draws as they are."
+      : " Heights are ellipsoidal: without terrain the view's ground is the ellipsoid.";
+    $("outHeights").textContent = gravity ? "EGM96, gravity-related (terrain)" : "ellipsoidal";
     const wkt = live?.output.wkt || live?.crs.output.wkt || "";
     const wktBox = $("outWktBox") as HTMLDetailsElement;
     wktBox.hidden = !wkt;
@@ -213,7 +219,6 @@ export class FeaturesTab {
       sourceSection(a, crs),
       placementSection(a, live),
       placed && a.origin ? positionSection(a.origin, global, live?.output.crs ?? details?.output.crs) : null,
-      displaySection(a.path, details?.displayOffsets),
       meshesSection(meshes),
       testSection(a.path, details?.testCases ?? live?.testCases ?? [], report, !!live)));
     row.addEventListener("toggle", () => {
@@ -308,13 +313,6 @@ function positionSection(origin: number[], global: boolean, crs: string | undefi
             ["h", h("span", { class: "mono" }, `${origin[2].toFixed(3)} m`)]])
       : kv([["x, y", h("span", { class: "mono" }, `${origin[0].toFixed(3)}, ${origin[1].toFixed(3)}`)],
             ["z", h("span", { class: "mono" }, origin[2].toFixed(3))]]));
-}
-
-function displaySection(path: string, offsets: Map<string, number> | undefined): HTMLElement | null {
-  const n = offsets?.get(path);
-  if (n === undefined) return null;
-  return sub("Display", [], kv([["geoid offset", [h("span", { class: "mono" }, `${n.toFixed(2)} m`),
-    `: drawn ${n.toFixed(2)} m lower, placement unchanged`]]]));
 }
 
 function meshesSection(meshes: { triangles?: number; linearizationError: number | null }[]): HTMLElement | null {

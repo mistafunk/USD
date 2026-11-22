@@ -624,54 +624,6 @@ CrsWkt(const std::string& definition, bool promote3D)
     return o;
 }
 
-/// Geoid heights N (metres, ellipsoidal height minus the \p verticalCrs
-/// height) at \p points ([lon, lat] in degrees, WGS 84), through the active
-/// engine, e.g. "EPSG:5773" for EGM96. The app lowers drawn anchors by N to
-/// match terrain with orthometric heights (D25). Returns { heights, operation,
-/// error, missingGrids }; heights is empty on failure.
-val
-GeoidHeights(const val& points, const std::string& verticalCrs)
-{
-    val o = val::object();
-    val heights = val::array();
-    std::string operation, error;
-    std::vector<std::string> missing;
-    UsdGeospatialCoordinateOperationEngineSharedPtr engine =
-        UsdGeospatialEngineRegistry::GetInstance().GetEngine();
-    const std::string target = "EPSG:4326+" +
-        (TfStringStartsWith(verticalCrs, "EPSG:")
-             ? verticalCrs.substr(5) : verticalCrs);
-    const unsigned n = points["length"].as<unsigned>();
-    for (unsigned i = 0; engine && error.empty() && i < n; ++i) {
-        const double lon = points[i][0].as<double>();
-        const double lat = points[i][1].as<double>();
-        std::vector<GfVec3d> p = {GfVec3d(lon, lat, 0.0)};
-        const UsdGeospatialOperationResult r = engine->Transform(
-            "EPSG:4979", target, UsdGeospatialAreaOfInterest::AtPoint(lon, lat),
-            &p);
-        missing.insert(missing.end(), r.missingGrids.begin(),
-                       r.missingGrids.end());
-        if (!r) {
-            error = r.error;
-            break;
-        }
-        operation = r.operation;
-        heights.call<void>("push", -p[0][2]);
-    }
-    if (!engine) {
-        error = "no coordinate operation engine";
-    }
-    val grids = val::array();
-    for (const std::string& g : missing) {
-        grids.call<void>("push", g);
-    }
-    o.set("heights", error.empty() ? heights : val::array());
-    o.set("operation", operation);
-    o.set("error", error);
-    o.set("missingGrids", grids);
-    return o;
-}
-
 /// New engine instances, which see grid files added to PROJ's search path
 /// (PROJ_DATA, e.g. /proj) since; call setOutput again afterwards.
 void
@@ -708,7 +660,6 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
     emscripten::function("info", &GetInfo);
     emscripten::function("crsWkt", &CrsWkt);
     emscripten::function("resetEngines", &ResetEngines);
-    emscripten::function("geoidHeights", &GeoidHeights);
     emscripten::function("describeCrs", &_DescribeCrs);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

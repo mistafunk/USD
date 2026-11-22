@@ -1107,6 +1107,12 @@ def proj_expected():
             ecef = Placement(anchor, mpu, up, "EPSG:4978", "crs")
             rec["origin4979"] = geo["origin"]
             rec["gridsUsed"] = geo["gridsUsed"]
+            # The origin with EGM96 heights (a gravity-related height model,
+            # as displays with terrain use), with the engine's policy.
+            lon, lat = geo["origin"][0], geo["origin"][1]
+            to_egm96 = best_transformer(CRS("EPSG:4979"), CRS("EPSG:4326+5773"), area_at(lon, lat))
+            rec["originEgm96"] = list(to_egm96.transform(*geo["origin"]))
+            rec["gridsUsedEgm96"] = grids_used(to_egm96)
             rec["operation"] = geo["operation"]
             rec["points"] = [list(p) for p in points]
             rec["points4978"] = [list(map(float, ecef.origin_out + ecef.exact(p)))

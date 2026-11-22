@@ -121,8 +121,6 @@ dl.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 details > summary { cursor: pointer; list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details.disclose > summary { color: var(--accent); font-size: var(--fs-small); }
-details.disclose > summary::before { content: "▸ "; }
-details.disclose[open] > summary::before { content: "▾ "; }
 
 pre.wkt { position: relative; margin: 5px 0 0; padding: 7px 8px; background: var(--surface-2); border: 1px solid var(--line);
   border-radius: var(--radius); font: 10.5px/1.4 var(--mono); white-space: pre-wrap; max-height: 160px; overflow: auto; }
@@ -201,8 +199,6 @@ pre.wkt { position: relative; margin: 5px 0 0; padding: 7px 8px; background: var
 .footer { border-top: 1px solid var(--line); padding: 8px 12px 10px; background: rgba(245,247,249,.7); }
 .footer > summary { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; cursor: pointer; list-style: none; }
 .footer > summary::-webkit-details-marker { display: none; }
-.footer > summary::before { content: "▸ "; }
-.footer[open] > summary::before { content: "▾ "; }
 .view { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--line); }
 .section-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; }
 .view .pop, .card .pop { bottom: auto; top: 20px; }
@@ -306,8 +302,6 @@ figure.diagram figcaption { font-size: var(--fs-small); color: var(--muted); mar
 .toolbar { margin-top: 6px; }
 details.card.output { margin-top: 8px; flex: none; }
 details.card.output > summary { display: flex; align-items: baseline; gap: 8px; }
-details.card.output > summary::before { content: "▸"; color: var(--faint); font-size: 10px; }
-details.card.output[open] > summary::before { content: "▾"; }
 details.card.output > summary .section-title { margin: 0; }
 details.card.output[open] > summary { margin-bottom: 6px; }
 .loaded-head { margin-bottom: 8px; }

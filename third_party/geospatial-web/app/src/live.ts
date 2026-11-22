@@ -24,20 +24,47 @@ export interface LiveOptions {
   portal?: string;
   /** Progress and log for the panel. */
   status?: LoadStatus;
-  /** Display only (D25): draw anchors lowered by the EGM96 geoid height, to
-   *  meet terrain with orthometric heights (World Elevation). The heights
-   *  are looked up either way, so the app can switch this without the
-   *  module (LoadedLive.place). */
-  geoid?: boolean;
+  /** The scene's height model, which the output CRS follows (D28): read
+   *  from the view at runtime (sceneHeightModel in main.ts); ellipsoidal by
+   *  default. */
+  heightModel?: HeightModel;
 }
 
 /** Portal for item ids and Find: the Esri R&D Center Zurich organization
  *  (public items of other ArcGIS Online organizations resolve there too). */
 export const DEFAULT_PORTAL = "https://zurich.maps.arcgis.com";
 
-/** The geoid the display correction uses: World Elevation's heights are
- *  orthometric without a named geoid; EGM96 is global and served (D25). */
-export const DISPLAY_GEOID = "EPSG:5773";
+/** The vertical CRS of the gravity-related height model: World Elevation
+ *  names no geoid (heightModelInfo: gravity_related_height, no vertCRS);
+ *  EGM96 height, global and served to the browser (D28). */
+export const GRAVITY_VCS = "EPSG:5773";
+
+/** A scene's height model: ellipsoidal, or gravity-related heights in a
+ *  vertical CRS ("EPSG:5773" EGM96, "EPSG:3855" EGM2008). */
+export interface HeightModel {
+  kind: "ellipsoidal" | "gravity";
+  verticalCrs?: string;
+}
+
+/** Vertical CRSs the SDK names in heightModelInfo.vertCRS. */
+const VERT_CRS: Record<string, string> = { EGM96_Geoid: "EPSG:5773", EGM2008_Geoid: "EPSG:3855" };
+
+/**
+ * The height model of a SceneView's heightModelInfo: gravity-related in its
+ * vertCRS (EGM96 when it names none or one not known here), ellipsoidal, or
+ * undefined without heightModelInfo. Returns a note when EGM96 is assumed.
+ */
+export function heightModelOf(info: { heightModel?: string; vertCRS?: string | null } | null | undefined):
+    { model?: HeightModel; note?: string } {
+  if (!info?.heightModel) return {};
+  if (!/gravity/.test(info.heightModel)) return { model: { kind: "ellipsoidal" } };
+  const vcs = info.vertCRS ? VERT_CRS[info.vertCRS] : undefined;
+  return {
+    model: { kind: "gravity", verticalCrs: vcs ?? GRAVITY_VCS },
+    note: vcs ? undefined : `gravity-related heights ${info.vertCRS ? `in ${info.vertCRS}, not known here` :
+      "without a named geoid"}: EGM96 assumed`,
+  };
+}
 
 /** What the live module returned, for numeric checks (T9). */
 export interface LiveData {
@@ -55,9 +82,6 @@ export interface LiveData {
   timings: Record<string, number>;
   /** Grids fetched for this placement (D23). */
   grids: string[];
-  /** Display correction (D25): geoid heights N per anchor path, metres;
-   *  `applied` when the drawn anchors are lowered by them. */
-  geoid?: { crs: string; operation: string; heights: Record<string, number>; applied: boolean };
   /** 3D object layers: the CRS used, the generated wrapper and skipped features. */
   objectLayer?: { title: string; url: string; features: number; crs: string; wrapper: string;
                   skipped: string[];
@@ -73,9 +97,6 @@ interface SceneIndex {
 export interface LoadedLive {
   scene: Scene;
   live: LiveData;
-  /** The same placement drawn with or without the geoid correction (D25),
-   *  without the module: a new scene, and live.geoid.applied updated. */
-  place(geoid: boolean): Scene;
 }
 
 export async function loadLiveScene(view: SceneView, options: LiveOptions): Promise<LoadedLive> {
@@ -104,10 +125,15 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     status.step("reading the 3D object layer");
     const { url, title } = await resolveObjectLayerUrl(options.layer, options.portal ?? DEFAULT_PORTAL, log);
     const data = await timed("layer", () => fetchObjectLayer(url, log));
-    const { definition, promote3D } = crsDefinition(data.layer.spatialReference);
+    // A layer without a vertical CRS has its heights in the scene's height
+    // model (D28): the vertical CRS of a gravity-related model, else ellipsoidal.
+    const sceneVcs = options.heightModel?.kind === "gravity"
+      ? options.heightModel.verticalCrs ?? GRAVITY_VCS : undefined;
+    const { definition, promote3D, assumed } = crsDefinition(data.layer.spatialReference, sceneVcs);
     const crs = await usd.crsWkt(definition, promote3D);
     if (!crs.wkt) throw new Error(`CRS ${definition}: ${crs.error}`);
-    log(`CRS ${definition}${promote3D ? " promoted to 3D (z taken as ellipsoidal)" : ""}`);
+    log(`CRS ${definition}${promote3D ? " promoted to 3D" : ""}` +
+        (assumed ? ` (the layer names no vertical CRS: z in ${assumed})` : ""));
     const wrapper = buildWrapper(data, crs.wkt);
     wrapper.skipped.forEach((s) => status.add("warn", s));
     for (const [dup, of] of Object.entries(wrapper.duplicates)) {
@@ -148,8 +174,15 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
 
   const sr = view.spatialReference;
   const global = view.viewingMode === "global";
-  const crs = global ? "EPSG:4979" : `EPSG:${sr.latestWkid ?? sr.wkid}`;
-  const outputName = global ? "global" : `local-${sr.latestWkid ?? sr.wkid}`;
+  // The output CRS follows the scene's height model (D28): the view's
+  // horizontal CRS with ellipsoidal heights, or with EGM96 heights where the
+  // terrain's gravity-related heights are drawn as they are.
+  const vcs = options.heightModel?.kind === "gravity"
+    ? (options.heightModel.verticalCrs ?? GRAVITY_VCS).slice(5) : "";
+  const wkid = sr.latestWkid ?? sr.wkid;
+  const crs = global ? (vcs ? `EPSG:4326+${vcs}` : "EPSG:4979") : `EPSG:${wkid}${vcs ? `+${vcs}` : ""}`;
+  const outputName = (global ? "global" : `local-${wkid}`) +
+    (vcs ? `-${vcs === "5773" ? "egm96" : vcs === "3855" ? "egm2008" : vcs}` : "");
   status.step(`placing in ${crs}`);
   await timed("setOutput", () => usd.setOutput(crs, true, options.exact));
   let state = await timed("sync", () => usd.state());
@@ -176,27 +209,6 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
                meshes.length || a.status !== "ok" ? line : line + " (no geometry: see USD messages)");
   }
 
-  // Display correction (D25): geoid heights at the placed anchors, looked up
-  // whether or not the correction is on, so it can be switched later.
-  let geoid: LiveData["geoid"];
-  let displayOffsets: Map<string, number> | undefined;
-  const placed = state.anchors.filter((a) => a.status === "ok");
-  if (placed.length) {
-    status.step(`geoid heights (${DISPLAY_GEOID}) for the display`);
-    const points = placed.map((a) => toLonLatH(state.frame, a.origin).slice(0, 2) as [number, number]);
-    const r = await timed("geoid", () => usd.geoidHeights(points, DISPLAY_GEOID));
-    if (r.heights.length) {
-      displayOffsets = new Map(placed.map((a, i) => [a.path, r.heights[i]]));
-      geoid = { crs: DISPLAY_GEOID, operation: r.operation,
-                heights: Object.fromEntries(displayOffsets), applied: !!options.geoid };
-      placed.forEach((a, i) => status.add("info",
-        `${a.path}: geoid height ${r.heights[i].toFixed(2)} m (${r.operation})`));
-    } else {
-      status.add("warn", `no geoid correction: ${r.error}` +
-                 (r.missingGrids.length ? ` (grids not served: ${r.missingGrids.join(", ")})` : ""));
-    }
-  }
-
   // Exact mode scores control points at their exact output positions.
   let exactPoints: Map<string, number[]> | undefined;
   if (options.exact) {
@@ -221,7 +233,7 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     ...a,
     reason: a.reason || undefined,
   }));
-  const place = (applyGeoid: boolean) => placeScene(view, {
+  const scene = placeScene(view, {
     name: `live ${outputName} (${engine} in the browser${options.exact ? ", exact points" : ""})`,
     output: { name: outputName, crs, frame: state.frame },
     engine: `${engine} (browser)`,
@@ -232,7 +244,6 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     exactPoints,
     fallbackTarget,
     live: true,
-    displayOffsets: applyGeoid ? displayOffsets : undefined,
   });
   const live: LiveData = {
     info,
@@ -249,14 +260,6 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     timings,
     objectLayer,
     grids,
-    geoid,
   };
-  return {
-    scene: place(!!options.geoid),
-    live,
-    place(applyGeoid) {
-      if (live.geoid) live.geoid.applied = applyGeoid;
-      return place(applyGeoid);
-    },
-  };
+  return { scene, live };
 }

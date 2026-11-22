@@ -94,4 +94,5 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
 - `full = frame * matrix`, split into a float32-exact origin and a Float64 remainder; the RenderNode draws
   `viewMatrix * translate(origin) * remainder`.
 
-Heights stay ellipsoidal in all recorded data. The app's geoid correction (D25) only lowers what it draws.
+Recorded data uses ellipsoidal heights (EPSG:4979, the test scene has no terrain). With terrain the app's live output
+has EGM96 heights instead (D28); its output name then ends in `-egm96`.

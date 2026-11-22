@@ -135,11 +135,6 @@ export interface PlaceInput {
   exactPoints?: Map<string, number[]>;
   /** Camera target (lon, lat, h) when no anchor could be placed. */
   fallbackTarget?: [number, number, number];
-  /** Display only (D25): metres to lower each anchor by when drawing, e.g.
-   *  the geoid height N, so ellipsoidal placements meet terrain whose
-   *  orthometric heights the SceneView draws as ellipsoidal. Scoring uses
-   *  the placed (ellipsoidal) frames. */
-  displayOffsets?: Map<string, number>;
   /** Placed live in the browser (the harness applies expectBrowser). */
   live?: boolean;
 }
@@ -148,7 +143,9 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
   const exact = !!input.exactPoints;
   const anchors = new Map(input.anchors.map((a) => [a.path, a]));
   if (input.output.frame === "crs") {
-    const wkid = Number(input.output.crs.replace(/^EPSG:/, ""));
+    // The horizontal part: a compound output (e.g. EPSG:3857+5773) has the
+    // view's CRS with a vertical CRS (D28).
+    const wkid = Number(input.output.crs.replace(/^EPSG:/, "").split("+")[0]);
     const sr = view.spatialReference;
     // The SDK reports Web Mercator as wkid 102100 (latestWkid 3857).
     if (sr.wkid !== wkid && sr.latestWkid !== wkid) {
@@ -157,25 +154,12 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
     }
   }
 
-  const lowered = (a: RecordedAnchor): number[] => {
-    const o = a.origin!;
-    return [o[0], o[1], o[2] - (input.displayOffsets?.get(a.path) ?? 0)];
-  };
   const frames = new Map<string, Float64Array>();
   const frameOf = (a: RecordedAnchor): Float64Array => {
     const cached = frames.get(a.path);
     if (cached) return cached;
     const f = computeFrame(a, a.origin!);
     frames.set(a.path, f);
-    return f;
-  };
-  const displayFrames = new Map<string, Float64Array>();
-  const displayFrameOf = (a: RecordedAnchor): Float64Array => {
-    if (!input.displayOffsets?.has(a.path)) return frameOf(a);
-    const cached = displayFrames.get(a.path);
-    if (cached) return cached;
-    const f = computeFrame(a, lowered(a));
-    displayFrames.set(a.path, f);
     return f;
   };
   const computeFrame = (a: RecordedAnchor, origin: number[]): Float64Array => {
@@ -192,7 +176,7 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
     if (m.status !== "ok" || !a || a.status !== "ok" || !m.matrix) continue;
     // Exact mode draws the exact frame points: the matrix is the identity.
     const useExact = exact && !!m.framePoints;
-    const full = multiply(displayFrameOf(a), useExact ? identity() : m.matrix);
+    const full = multiply(frameOf(a), useExact ? identity() : m.matrix);
     renderMatrices.set(m.path, full);
     meshes.push({
       name: m.path,
@@ -223,7 +207,7 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
   if (!ref && !input.fallbackTarget) throw new Error("no placeable anchor in the data");
   return {
     name: input.name,
-    target: ref ? toLonLatH(input.output.frame, lowered(ref)) : input.fallbackTarget!,
+    target: ref ? toLonLatH(input.output.frame, ref.origin!) : input.fallbackTarget!,
     presets: PRESETS,
     meshes,
     anchors: status,
@@ -235,7 +219,6 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
       meshAnchor: new Map(input.meshes.filter((m) => m.anchor && renderMatrices.has(m.path))
         .map((m) => [m.path, m.anchor!])),
       testCases: input.testCases,
-      displayOffsets: input.displayOffsets,
     },
     score: () => score({
       view,

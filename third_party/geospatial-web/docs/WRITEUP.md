@@ -85,7 +85,9 @@ Two observations from the consumer side, not about the proposal itself:
 
 - **Display systems have their own height conventions.** The Maps SDK draws all heights as ellipsoidal, while its
   terrain service stores orthometric heights. Correct ellipsoidal placements therefore float above the terrain by the
-  geoid height (47 m in Zurich); the app lowers what it draws by the EGM96 geoid height (D25) and keeps placement exact.
+  geoid height (47 m in Zurich). The app therefore places in the scene's height model (D28): with terrain, the output
+  CRS has EGM96 heights (EPSG:4326+5773), so placement and drawing agree and an EGM96 layer comes out at its own
+  heights. The proposal's consumer-chosen output CRS covers this: the consumer's CRS includes its vertical part.
 - **Assets without the schemas.** ArcGIS 3D object layers serve plain glb models with a CRS and transform in the layer's
   metadata. A generated wrapper layer that references each model and binds it with `GeospatialCRSBindingAPI` places
   them without touching the files, which supports the proposal's minimal-disruption principle.

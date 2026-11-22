@@ -119,15 +119,6 @@ async function ensureGrids(baseUrl: string, names: string[]): Promise<string[]> 
   return wanted;
 }
 
-/** Geoid heights at points; fetches the geoid grid if missing, once. */
-async function geoidHeights(points: number[][], verticalCrs: string, baseUrl: string) {
-  let r = need(module).geoidHeights(points, verticalCrs);
-  if (r.missingGrids.length && (await ensureGrids(baseUrl, r.missingGrids)).length) {
-    r = need(module).geoidHeights(points, verticalCrs);
-  }
-  return r;
-}
-
 function open(stage: string) {
   const error = need(scene).open(stage);
   if (error) throw new Error(error);
@@ -196,7 +187,6 @@ self.onmessage = async (event: MessageEvent) => {
       case "crsWkt": result = need(module).crsWkt(args.definition, args.promote3D); break;
       case "describeCrs": result = need(module).describeCrs(args.definition); break;
       case "anchorCrs": result = need(scene).anchorCrs(args.paths); break;
-      case "geoidHeights": result = await geoidHeights(args.points, args.verticalCrs, args.baseUrl); break;
       case "ensureGrids": result = await ensureGrids(args.baseUrl, args.names); break;
       case "setOutput": result = setOutput(args.crs, args.measure, args.exact); break;
       case "testData": result = need(scene).testData(); break;

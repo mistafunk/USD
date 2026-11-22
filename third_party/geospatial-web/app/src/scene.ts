@@ -31,8 +31,6 @@ export interface SceneDetails {
   /** Mesh path -> anchor path, for drawn meshes. */
   meshAnchor: Map<string, string>;
   testCases: TestCase[];
-  /** Display only (D25): metres each anchor is drawn lower. */
-  displayOffsets?: Map<string, number>;
 }
 
 export interface Scene {

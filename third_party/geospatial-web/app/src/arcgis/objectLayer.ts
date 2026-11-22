@@ -186,16 +186,22 @@ export async function fetchObjectLayer(url: string, log: Log = () => {}): Promis
 
 /**
  * The CRS of a layer's spatial reference: the compound "EPSG:<h>+<v>" with a
- * vertical CRS (heights relative to it, e.g. EGM96), else "EPSG:<h>" promoted
- * to 3D, taking z as ellipsoidal height (an assumption: without vcsWkid the
- * layer does not say).
+ * vertical CRS (heights relative to it, e.g. EGM96). Without vcsWkid the
+ * layer's z values are in the scene's height model, as the Maps SDK draws
+ * them as they are (D28): with a gravity-related model (`sceneVcs`, e.g.
+ * "EPSG:5773") the compound with that vertical CRS, else "EPSG:<h>" promoted
+ * to 3D (ellipsoidal heights). `assumed` says which heights were assumed.
  */
-export function crsDefinition(sr: SpatialReferenceJson): { definition: string; promote3D: boolean } {
+export function crsDefinition(sr: SpatialReferenceJson, sceneVcs?: string):
+    { definition: string; promote3D: boolean; assumed?: string } {
   const h = sr.latestWkid ?? sr.wkid;
   const v = sr.latestVcsWkid ?? sr.vcsWkid;
   if (!h) throw new Error("spatial reference without wkid");
-  return v ? { definition: `EPSG:${h}+${v}`, promote3D: false }
-           : { definition: `EPSG:${h}`, promote3D: true };
+  if (v) return { definition: `EPSG:${h}+${v}`, promote3D: false };
+  return sceneVcs
+    ? { definition: `EPSG:${h}+${sceneVcs.replace(/^EPSG:/, "")}`, promote3D: false,
+        assumed: `the scene's gravity-related heights (${sceneVcs})` }
+    : { definition: `EPSG:${h}`, promote3D: true, assumed: "the scene's ellipsoidal heights" };
 }
 
 export interface Wrapper {
