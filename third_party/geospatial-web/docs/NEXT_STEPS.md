@@ -108,6 +108,12 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   `ComputeProjectionFactors` (native test against pyproj, also in WASM), the wrapper writes `crs:orientation` and a
   grid scale. Native 8, WASM 4 geospatial tests, 26 browser specs pass; Bergen 3 mm in the app.
 
+- **USD model units (2026-11-22):** USD does not convert `metersPerUnit` across a reference, so the wrapper scales a
+  USD model whose stage is not in metres (`xformOp:scale:units`, innermost: only the model's points; the module's
+  `modelMetrics` reads it after the download). Unauthored `metersPerUnit` follows USD's fallback (0.01, centimetres)
+  with a warning; no layer serves USD yet to show what ArcGIS's conversions author. A non-Y `upAxis` is reported,
+  not converted. The `zurich-usd-cm` mock (centimetres) is placed exactly like `zurich-usd`; 28 browser specs pass.
+
 ## Findings
 
 **Coordinate operations (PROJ, engine, reference)**

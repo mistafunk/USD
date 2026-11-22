@@ -1171,13 +1171,16 @@ def write_glb(path, size):
     return digest
 
 
-def write_usdz(path, size):
-    """The write_glb box as usdz, in the same convention (Y-up, metres; x
-    east, y up, z south): what a 3D object layer serving USD would return."""
+def write_usdz(path, size, meters_per_unit=1.0):
+    """The write_glb box as usdz, in the same convention (Y-up; x east, y up,
+    z south): what a 3D object layer serving USD would return. In metres, or
+    in other units with that metersPerUnit (e.g. 0.01: the same box in
+    centimetres, coordinates 100 x larger)."""
     import hashlib
     import tempfile
     from pxr import UsdUtils
-    sx, sy, sz = size[0] / 2, size[1], size[2] / 2
+    u = 1.0 / meters_per_unit
+    sx, sy, sz = size[0] / 2 * u, size[1] * u, size[2] / 2 * u
     pos = [(-sx, 0, -sz), (sx, 0, -sz), (sx, 0, sz), (-sx, 0, sz),
            (-sx, sy, -sz), (sx, sy, -sz), (sx, sy, sz), (-sx, sy, sz)]
     tris = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1,
@@ -1186,7 +1189,7 @@ def write_usdz(path, size):
         usda = Path(tmp) / "box.usda"
         stage = Usd.Stage.CreateNew(str(usda))
         UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
-        UsdGeom.SetStageMetersPerUnit(stage, 1.0)
+        UsdGeom.SetStageMetersPerUnit(stage, meters_per_unit)
         root = UsdGeom.Xform.Define(stage, "/Box")
         stage.SetDefaultPrim(root.GetPrim())
         mesh = UsdGeom.Mesh.Define(stage, "/Box/Mesh")
@@ -1256,6 +1259,9 @@ def arcgis_mock():
         # Serves USD (usdz) next to glb, as layers are expected to: the app
         # prefers USD (objectLayer.ts modelFormat).
         "zurich-usd": ({"wkid": 4326, "latestWkid": 4326}, zurich),
+        # The same boxes as usdz in centimetres (metersPerUnit 0.01): placed
+        # like zurich-usd, as the app scales them to metres.
+        "zurich-usd-cm": ({"wkid": 4326, "latestWkid": 4326}, zurich),
         # 2 x scale east, 1.5 x up, turned 90 degrees counter-clockwise, then
         # moved 10 m east, 5 m north, 2 m up. The fields are in the model's
         # glTF frame (x east, y up, z south), as the Maps SDK reads them
@@ -1285,7 +1291,7 @@ def arcgis_mock():
                  "spatialReference": sr,
                  "infoFor3D": {"transformFieldRoles": ARCGIS_ROLES,
                                "queryFormats": ["3D_shapebuffer", "3D_glb"] +
-                                               (["3D_usdz"] if name == "zurich-usd" else [])}}
+                                               (["3D_usdz"] if name.startswith("zurich-usd") else [])}}
         out = {"features": [], "assetMaps": []}
         for oid, origin, size, t, s, axis, deg in features:
             gid = "00000000-0000-4000-8000-{:012d}".format(oid)
@@ -1302,8 +1308,8 @@ def arcgis_mock():
                 "parentGlobalId": gid, "assetName": "box_{}.glb".format(oid),
                 "assetHash": digest, "assetType": "3D_glb", "conversionStatus": "COMPLETED",
                 "assetURL": "assets/{}.glb".format(digest)})
-            if name == "zurich-usd":
-                usdz = write_usdz(d, size)
+            if name.startswith("zurich-usd"):
+                usdz = write_usdz(d, size, 0.01 if name == "zurich-usd-cm" else 1.0)
                 out["assetMaps"].append({
                     "parentGlobalId": gid, "assetName": "box_{}.usdz".format(oid),
                     "assetHash": usdz, "assetType": "3D_usdz", "conversionStatus": "COMPLETED",

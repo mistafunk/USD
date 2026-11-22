@@ -162,7 +162,7 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
           `${range(placedGrid.map((g) => g.meridianConvergence), 4)}° and scaled by 1/` +
           `${range(placedGrid.map((g) => g.meridionalScale), 6)} (meridian convergence, point scale)`);
     }
-    const wrapper = buildWrapper(data, crs.wkt, gridFactors);
+    let wrapper = buildWrapper(data, crs.wkt, gridFactors);
     wrapper.skipped.forEach((s) => status.add("warn", s));
     for (const [dup, of] of Object.entries(wrapper.duplicates)) {
       status.add("warn", `${dup} is an exact duplicate of ${of} (same model and transform)`);
@@ -175,6 +175,27 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
       wrapper.models.map((m) => ({ url: m.url, path: `/arcgis/${m.path}`, size: m.size }))));
     const d = status.downloads();
     log(`downloaded ${formatBytes(d.loaded)}`);
+    // USD models in other units than metres: USD does not convert across the
+    // wrapper's reference, so the wrapper scales them (xformOp:scale:units).
+    if (!wrapper.models.every((m) => m.path.endsWith(".glb"))) {
+      const usdModels = wrapper.models.filter((m) => !m.path.endsWith(".glb"));
+      const metrics = await usd.modelMetrics(usdModels.map((m) => `/arcgis/${m.path}`));
+      const mpu: Record<string, number> = {};
+      metrics.forEach((r, i) => {
+        const path = usdModels[i].path;
+        if (r.error) { status.add("warn", `${path}: ${r.error}`); return; }
+        mpu[path] = r.metersPerUnit!;
+        if (!r.authored) {
+          status.add("warn", `${path}: metersPerUnit not authored: USD's fallback ${r.metersPerUnit} (centimetres) used`);
+        } else if (r.metersPerUnit !== 1) {
+          log(`${path}: metersPerUnit ${r.metersPerUnit}, scaled to metres`);
+        }
+        if (r.upAxis && r.upAxis !== "Y") {
+          status.add("warn", `${path}: upAxis ${r.upAxis}; the wrapper and the transform fields assume Y-up (glTF frame), not converted`);
+        }
+      });
+      if (Object.values(mpu).some((v) => v !== 1)) wrapper = buildWrapper(data, crs.wkt, gridFactors, mpu);
+    }
     await usd.writeText("/arcgis/layer.usda", wrapper.usda);
     status.step(`opening the wrapper layer (reads the ${data.format.slice(3)} models)`);
     await timed("load", () => usd.open("/arcgis/layer.usda"));

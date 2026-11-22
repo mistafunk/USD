@@ -332,3 +332,28 @@ test("projected layer matches ArcGIS's footprint", async ({ page }) => {
     expect(Math.abs(hi[k] - expected["1"][1][k]) * m).toBeLessThan(0.01);
   }
 });
+
+// USD models in other units: USD does not convert metersPerUnit across the
+// wrapper's reference, so the wrapper scales them. The zurich-usd-cm mock's
+// usdz are the zurich-usd boxes in centimetres (metersPerUnit 0.01) and must
+// be placed exactly like them.
+test("USD models in centimetres are scaled to metres", async ({ page }) => {
+  const bounds = async (layer: string) => {
+    await page.goto(`/?view=global&data=live&terrain=0&buildings=0&layer=/usd/fixtures/arcgis/${layer}`);
+    await page.waitForFunction(() => (globalThis as any).__app?.ready, null, { timeout: 90_000 });
+    const b: Record<string, number[][]> = await page.evaluate(() => (globalThis as any).__app.placedBounds());
+    return Object.fromEntries(Object.entries(b).map(([mesh, v]) => [mesh.replace(/\/Model\/.*/, ""), v]));
+  };
+  const metres = await bounds("zurich-usd");
+  const centimetres = await bounds("zurich-usd-cm");
+  await expect(page.locator("#log")).toContainText("metersPerUnit 0.01, scaled to metres");
+  const usda: string = await page.evaluate(() => (globalThis as any).__app.live.objectLayer.wrapper);
+  expect(usda).toContain("double3 xformOp:scale:units = (0.01, 0.01, 0.01)");
+  expect(Object.keys(centimetres).sort()).toEqual(Object.keys(metres).sort());
+  for (const [anchor, [lo, hi]] of Object.entries(metres)) {
+    for (let k = 0; k < 3; k++) {
+      expect(Math.abs(centimetres[anchor][0][k] - lo[k])).toBeLessThan(1e-3);
+      expect(Math.abs(centimetres[anchor][1][k] - hi[k])).toBeLessThan(1e-3);
+    }
+  }
+});

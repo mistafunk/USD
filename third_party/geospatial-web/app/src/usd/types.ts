@@ -130,3 +130,12 @@ export interface ProjectionFactors {
   meridionalScale?: number;
   parallelScale?: number;
 }
+
+/** A USD model file's stage metrics (module), or why it could not be read. */
+export interface ModelMetrics {
+  error?: string;
+  /** USD's fallback 0.01 (centimetres) when not authored. */
+  metersPerUnit?: number;
+  authored?: boolean;
+  upAxis?: string;
+}

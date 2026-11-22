@@ -719,6 +719,34 @@ ProjectionFactors(const std::string& definition, const val& positions)
     return out;
 }
 
+/// Stage metrics of USD model files (e.g. a 3D object layer's usdz models):
+/// [{ metersPerUnit, authored, upAxis } or { error }]. USD does not convert
+/// units or axes across references, so the app's wrapper scales a model
+/// whose metersPerUnit is not 1; metersPerUnit is USD's fallback (0.01) when
+/// it is not authored.
+val
+ModelMetrics(const val& paths)
+{
+    val out = val::array();
+    const unsigned n = paths["length"].as<unsigned>();
+    for (unsigned i = 0; i < n; ++i) {
+        val o = val::object();
+        const std::string path = paths[i].as<std::string>();
+        TfErrorMark mark;
+        const UsdStageRefPtr stage = UsdStage::Open(path, UsdStage::LoadNone);
+        if (!stage) {
+            o.set("error", "cannot open " + path);
+        } else {
+            o.set("metersPerUnit", UsdGeomGetStageMetersPerUnit(stage));
+            o.set("authored", UsdGeomStageHasAuthoredMetersPerUnit(stage));
+            o.set("upAxis", UsdGeomGetStageUpAxis(stage).GetString());
+        }
+        mark.Clear();
+        out.call<void>("push", o);
+    }
+    return out;
+}
+
 /// Caps USD's work threads, e.g. to the module's pthread pool.
 void
 SetThreadLimit(int n)
@@ -749,5 +777,6 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
     emscripten::function("resetEngines", &ResetEngines);
     emscripten::function("describeCrs", &_DescribeCrs);
     emscripten::function("projectionFactors", &ProjectionFactors);
+    emscripten::function("modelMetrics", &ModelMetrics);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

@@ -1,5 +1,5 @@
 // Main-thread side of the OpenUSD worker: promise-based calls.
-import type { CrsDescription, FileSpec, ModuleInfo, ProjectionFactors, Resolved, SceneState, StageTestData, Vec3 } from "./types";
+import type { CrsDescription, FileSpec, ModelMetrics, ModuleInfo, ProjectionFactors, Resolved, SceneState, StageTestData, Vec3 } from "./types";
 
 /** Where the dev server (vite.config.ts) and nginx serve the install. */
 export const USD_BASE = "/usd";
@@ -95,6 +95,11 @@ export class UsdClient {
    *  northing] in its units), from the engine; non-projected CRSs give errors. */
   projectionFactors(definition: string, positions: number[][]): Promise<ProjectionFactors[]> {
     return this.call("projectionFactors", { definition, positions });
+  }
+
+  /** Stage metrics of USD model files in the module's file system (paths). */
+  modelMetrics(paths: string[]): Promise<ModelMetrics[]> {
+    return this.call("modelMetrics", { paths });
   }
 
   /** The source CRS of each anchor, from its composed crs:wkt (D27). */

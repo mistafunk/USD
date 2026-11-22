@@ -250,7 +250,8 @@ export const SUSPICIOUS_TRANSLATION = 10_000;
  * z south.
  */
 export function buildWrapper(data: ObjectLayerData, crsWkt: string,
-                             gridFactors?: (GridFactors | null)[]): Wrapper {
+                             gridFactors?: (GridFactors | null)[],
+                             modelMetersPerUnit?: Record<string, number>): Wrapper {
   const roles = data.layer.infoFor3D.transformFieldRoles;
   const num = (attrs: Record<string, unknown>, role: string, fallback: number) => {
     const v = attrs[roles[role] ?? ""];
@@ -305,7 +306,14 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string,
         double3 crs:orientation = (${fmt(g.meridianConvergence)}, 0.0, 0.0)` : "";
     const gridScale = g ? `
             double3 xformOp:scale:grid = (${fmt(1 / g.parallelScale)}, 1.0, ${fmt(1 / g.meridionalScale)})` : "";
-    const opOrder = `${g ? '"xformOp:scale:grid", ' : ""}"xformOp:translate", "xformOp:orient", "xformOp:scale"`;
+    // A USD model in other units than the wrapper's metres: USD does not
+    // convert metersPerUnit across a reference, so the Model scales the
+    // model's own points (innermost op; the transform fields are metres).
+    const mpu = modelMetersPerUnit?.[path] ?? 1;
+    const units = mpu !== 1 ? `
+            double3 xformOp:scale:units = (${fmt(mpu)}, ${fmt(mpu)}, ${fmt(mpu)})` : "";
+    const opOrder = `${g ? '"xformOp:scale:grid", ' : ""}"xformOp:translate", "xformOp:orient", "xformOp:scale"` +
+                    `${units ? ', "xformOp:scale:units"' : ""}`;
     prims.push(`
     def Xform "Feature_${oid}" (
         prepend apiSchemas = ["GeospatialCRSBindingAPI"]
@@ -321,7 +329,7 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string,
         {${gridScale}
             double3 xformOp:translate = (${t.map(fmt).join(", ")})
             quatd xformOp:orient = (${q.map(fmt).join(", ")})
-            double3 xformOp:scale = (${s.map(fmt).join(", ")})
+            double3 xformOp:scale = (${s.map(fmt).join(", ")})${units}
             uniform token[] xformOpOrder = [${opOrder}]
         }
     }`);
