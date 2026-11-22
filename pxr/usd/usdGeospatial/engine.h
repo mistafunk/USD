@@ -104,8 +104,15 @@ struct UsdGeospatialCrsInfo
     /// CRS.
     int dimension = 0;
 
-    /// True for a geographic CRS (longitude and latitude on an ellipsoid).
+    /// True for a geographic CRS (longitude and latitude on an ellipsoid),
+    /// also a compound CRS with a geographic horizontal part, whose heights
+    /// then come from its vertical CRS (e.g. EPSG:4326+5773, WGS 84 with
+    /// EGM96 heights, the height model of displays with gravity-related
+    /// terrain).
     bool isGeographic = false;
+
+    /// True for a compound CRS (a horizontal and a vertical CRS).
+    bool isCompound = false;
 
     /// True for a geocentric (earth-centred Cartesian) CRS.
     bool isGeocentric = false;

@@ -16,6 +16,14 @@
     12.5
    ],
    "gridsUsed": [],
+   "originEgm96": [
+    -117.19549999470657,
+    34.05650000008854,
+    44.67433204970631
+   ],
+   "gridsUsedEgm96": [
+    "us_nga_egm96_15.tif"
+   ],
    "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
    "points": [
     [
@@ -104,6 +112,14 @@
    "gridsUsed": [
     "us_noaa_cshpgn.tif"
    ],
+   "originEgm96": [
+    -117.19649926679978,
+    34.05650008605998,
+    32.176450606507714
+   ],
+   "gridsUsedEgm96": [
+    "us_nga_egm96_15.tif"
+   ],
    "operation": "NAD83 to WGS 84 (54) (with axis order normalized for visualization)",
    "points": [
     [
@@ -191,6 +207,14 @@
    ],
    "gridsUsed": [
     "us_nga_egm08_25.tif"
+   ],
+   "originEgm96": [
+    -117.19549999470657,
+    34.05650000008855,
+    -0.5315998876157124
+   ],
+   "gridsUsedEgm96": [
+    "us_nga_egm96_15.tif"
    ],
    "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
    "points": [
@@ -282,6 +306,14 @@
     "us_noaa_nadcon5_nad83_1986_nad83_harn_conus.tif",
     "us_noaa_cshpgn.tif"
    ],
+   "originEgm96": [
+    -117.19649926679946,
+    34.0565000860593,
+    365.3598785885405
+   ],
+   "gridsUsedEgm96": [
+    "us_nga_egm96_15.tif"
+   ],
    "operation": "NAD83 to WGS 84 (54) (with axis order normalized for visualization)",
    "points": [
     [
@@ -368,6 +400,14 @@
     32.999999998137355
    ],
    "gridsUsed": [],
+   "originEgm96": [
+    2.294500000000001,
+    48.8584,
+    -11.578888503364112
+   ],
+   "gridsUsedEgm96": [
+    "us_nga_egm96_15.tif"
+   ],
    "operation": "Null geographic offset from WGS 84 to WGS 84 (with axis order normalized for visualization)",
    "points": [
     [

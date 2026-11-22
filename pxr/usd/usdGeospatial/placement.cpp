@@ -467,8 +467,13 @@ UsdGeospatialPlacementQuery::Resolve(
     // into a projected CRS with an ellipsoidal height axis keep the source's
     // height through the datum shift (PROJ wraps it in push/pop v_3), which
     // loses the height change of e.g. a Helmert shift (2 m from WGS 72,
-    // 21 m from NAD27 at Redlands).
-    const bool viaGeographic = !_outputInfo.isGeographic &&
+    // 21 m from NAD27 at Redlands). Into a compound output (heights from a
+    // vertical CRS, e.g. WGS 84 + EGM96), likewise: the same datum shift as
+    // into its ellipsoidal form, then the height conversion; a direct
+    // operation may pick another datum shift (6.8 cm for NAD83 in
+    // California).
+    const bool viaGeographic =
+        (!_outputInfo.isGeographic || _outputInfo.isCompound) &&
         !_outputInfo.isGeocentric && !_outputInfo.geographic3D.empty() &&
         _outputInfo.geographic3D != _output;
     const std::string& datumTarget =
@@ -485,6 +490,14 @@ UsdGeospatialPlacementQuery::Resolve(
         toOutput.accuracy =
             (toOutput.accuracy < 0.0 || toProjection.accuracy < 0.0)
             ? -1.0 : toOutput.accuracy + toProjection.accuracy;
+        // The second step can need grids too (a compound output's geoid).
+        toOutput.missingGrids.insert(toOutput.missingGrids.end(),
+                                     toProjection.missingGrids.begin(),
+                                     toProjection.missingGrids.end());
+        toOutput.skippedOperations.insert(
+            toOutput.skippedOperations.end(),
+            toProjection.skippedOperations.begin(),
+            toProjection.skippedOperations.end());
     }
     for (const std::string& grid : toOutput.missingGrids) {
         if (std::find(r._missingGrids.begin(), r._missingGrids.end(), grid) ==

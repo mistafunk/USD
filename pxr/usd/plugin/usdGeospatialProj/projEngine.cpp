@@ -255,6 +255,14 @@ UsdGeospatialProjEngine::DescribeCrs(const std::string& definition)
     const PJ_TYPE type = proj_get_type(crs.get());
     info.isGeographic = type == PJ_TYPE_GEOGRAPHIC_2D_CRS ||
                         type == PJ_TYPE_GEOGRAPHIC_3D_CRS;
+    info.isCompound = type == PJ_TYPE_COMPOUND_CRS;
+    if (info.isCompound) {
+        // Longitude and latitude from a geographic horizontal part, heights
+        // from the vertical part.
+        _PjPtr horizontal(proj_crs_get_sub_crs(_ctx, crs.get(), 0));
+        info.isGeographic = horizontal &&
+            proj_get_type(horizontal.get()) == PJ_TYPE_GEOGRAPHIC_2D_CRS;
+    }
     info.isGeocentric = !info.axisDirections.empty() &&
                         info.axisDirections[0] == "geocentricX";
 

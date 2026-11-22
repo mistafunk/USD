@@ -51,8 +51,12 @@ main()
              == "proj");
     const UsdGeospatialPlacementQuery geographic("EPSG:4979");
     const UsdGeospatialPlacementQuery geocentric("EPSG:4978");
-    TF_AXIOM(geographic.IsValid() && geocentric.IsValid());
+    // WGS 84 with EGM96 heights: a compound output with a geographic
+    // horizontal part, placed in an east/north/up frame like EPSG:4979.
+    const UsdGeospatialPlacementQuery gravity("EPSG:4326+5773");
+    TF_AXIOM(geographic.IsValid() && geocentric.IsValid() && gravity.IsValid());
     TF_AXIOM(geographic.GetOutputInfo().isGeographic);
+    TF_AXIOM(gravity.GetOutputInfo().isGeographic);
     TF_AXIOM(geocentric.GetOutputInfo().isGeocentric);
 
     int failures = 0;
@@ -117,6 +121,39 @@ main()
         printf("  origin error %.6f m\n", originError);
         if (originError > tolerance) {
             ++failures;
+        }
+
+        // Origin in EPSG:4326+5773 (EGM96 heights), in the ENU frame. Builds
+        // without the geoid grid (WebAssembly tests) cannot compare it.
+        if (a.count("originEgm96")) {
+            const UsdGeospatialPlacement g = gravity.Resolve(anchor);
+            bool gridMissing = false;
+            for (const JsValue& grid : a.at("gridsUsedEgm96").GetJsArray()) {
+                const std::vector<std::string>& m = g.GetMissingGrids();
+                gridMissing |= std::find(m.begin(), m.end(),
+                                         grid.GetString()) != m.end();
+            }
+            if (gridMissing) {
+                printf("  EGM96 output not comparable in this build, grids "
+                       "missing: %s\n",
+                       TfStringJoin(g.GetMissingGrids(), ", ").c_str());
+            } else if (!g.IsOk() || !g.IsLocalFrame()) {
+                printf("  FAIL: EGM96 output: %s\n", g.IsOk()
+                       ? "not an east/north/up frame" : g.GetReason().c_str());
+                ++failures;
+            } else {
+                const GfVec3d expected = _Vec(a.at("originEgm96"));
+                const GfVec3d e = g.GetOrigin() - expected;
+                const double error = std::hypot(
+                    e[0] * metresPerDegree * std::cos(expected[1] * M_PI / 180.0),
+                    e[1] * metresPerDegree, e[2]);
+                printf("  EGM96 origin error %.6f m (height %.3f m, "
+                       "ellipsoidal %.3f m)\n", error, g.GetOrigin()[2],
+                       geo.GetOrigin()[2]);
+                if (error > tolerance) {
+                    ++failures;
+                }
+            }
         }
 
         // Exact model points in EPSG:4978 (geocentric metres).
