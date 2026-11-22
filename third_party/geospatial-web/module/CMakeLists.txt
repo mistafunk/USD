@@ -98,13 +98,19 @@ if (NOT EXISTS "${projDb}")
 endif()
 install(FILES "${projDb}" DESTINATION ${webDir}/proj)
 
-# Precompressed copies for servers that send .gz files as is (nginx
-# gzip_static, the dev server).
+# Precompressed copies for servers that send them as is: .gz (nginx
+# gzip_static, the dev server) and .br (the dev server; stock nginx has no
+# brotli_static), brotli through emsdk's Node.
 install(CODE "
     foreach(file module/geospatialModule.wasm proj/proj.db)
         set(path \"\${CMAKE_INSTALL_PREFIX}/${webDir}/\${file}\")
         file(ARCHIVE_CREATE OUTPUT \"\${path}.gz\" PATHS \"\${path}\"
              FORMAT raw COMPRESSION GZip COMPRESSION_LEVEL 9)
+        execute_process(
+            COMMAND \"${NODE_JS_EXECUTABLE}\" -e
+                \"const fs = require('fs'), z = require('zlib'); fs.writeFileSync(process.argv[1] + '.br', z.brotliCompressSync(fs.readFileSync(process.argv[1]), { params: { [z.constants.BROTLI_PARAM_QUALITY]: 11 } }))\"
+                \"\${path}\"
+            COMMAND_ERROR_IS_FATAL ANY)
     endforeach()
 ")
 

@@ -96,6 +96,18 @@
         "ZLIB_INCLUDE_DIR": "${sourceDir}/../../cache/emscripten/sysroot/include",
         "ZLIB_LIBRARY": "${sourceDir}/../../cache/emscripten/sysroot/lib/wasm32-emscripten/libz.a"
       }
+    },
+    {
+      "name": "wasm32-minsize",
+      "displayName": "WASM size-optimized (wasm32, -Oz)",
+      "description": "As wasm32, compiled and linked with -Oz: for deployment and size numbers. Same tests.",
+      "inherits": "wasm32",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
+        "CMAKE_C_FLAGS_MINSIZEREL": "-Oz -DNDEBUG",
+        "CMAKE_CXX_FLAGS_MINSIZEREL": "-Oz -DNDEBUG",
+        "CMAKE_EXE_LINKER_FLAGS_MINSIZEREL": "-Oz"
+      }
     }
   ],
   "buildPresets": [
@@ -116,6 +128,13 @@
     {
       "name": "wasm32",
       "configurePreset": "wasm32",
+      "targets": [
+        "install"
+      ]
+    },
+    {
+      "name": "wasm32-minsize",
+      "configurePreset": "wasm32-minsize",
       "targets": [
         "install"
       ]
@@ -155,6 +174,11 @@
           "name": "^testUsdImagingInstanceProxyTraversal_"
         }
       }
+    },
+    {
+      "name": "wasm32-minsize",
+      "inherits": "wasm32",
+      "configurePreset": "wasm32-minsize"
     }
   ]
 }

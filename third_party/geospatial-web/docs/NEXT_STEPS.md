@@ -16,8 +16,8 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   `pxr/usdImaging/usdImaging`; see `WASM_GAP.md`).
 - Done: `proj.db` is fetched at startup instead of embedded (D26): module 22.9 MB (5.8 MB gzip), `proj.db` 10.7 MB
   (2.0 MB gzip).
-- Download size: `-Oz` at link time saves 3 % gzip, nothing with brotli. Still to try: a full `-Oz` build (all of
-  USD recompiled) and serving brotli (3.6 MB instead of 5.8 MB gzip; stock nginx has no `brotli_static`).
+- Download size: `-Oz` at link time saves 3 % gzip, nothing with brotli. Brotli copies are installed and served by the
+  dev server (module 3.8 MB, `proj.db` 1.3 MB). Still to measure: the `wasm32-minsize` preset (all of USD at `-Oz`).
 
 **Open items**
 - **3D object layer transform semantics are assumed:** scale, then rotate about an east/north/up axis (right-handed),

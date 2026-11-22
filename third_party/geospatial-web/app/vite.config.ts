@@ -29,7 +29,11 @@ const TYPES: Record<string, string> = {
 const USD_URL = "/usd";
 const WORKSPACE = process.env.USD_GEO_WS ||
   fileURLToPath(new URL("../../../../..", import.meta.url));
-const USD_DIR = resolve(WORKSPACE, "install", "wasm32", "share", "geospatial-web");
+// GEO_WASM_PRESET picks another wasm32 build (e.g. wasm32-minsize), served on
+// its own port so a running dev server of the default build is not reused.
+const WASM_PRESET = process.env.GEO_WASM_PRESET || "wasm32";
+const USD_DIR = resolve(WORKSPACE, "install", WASM_PRESET, "share", "geospatial-web");
+const DEV_PORT = WASM_PRESET === "wasm32" ? 5173 : 5174;
 
 /**
  * Serves files under dir with the isolation headers, and a precompressed
@@ -48,12 +52,15 @@ function serveDir(dir: string) {
     }
     for (const [k, v] of Object.entries(isolation)) res.setHeader(k, v);
     res.setHeader("Content-Type", TYPES[extname(file)] ?? "application/octet-stream");
-    const gz = file + ".gz";
-    if (/\bgzip\b/.test(String(req.headers["accept-encoding"] ?? "")) && existsSync(gz)) {
-      res.setHeader("Content-Encoding", "gzip");
-      res.setHeader("Vary", "Accept-Encoding");
-      createReadStream(gz).pipe(res);
-      return;
+    const accept = String(req.headers["accept-encoding"] ?? "");
+    for (const [encoding, ext] of [["br", ".br"], ["gzip", ".gz"]]) {
+      const compressed = file + ext;
+      if (new RegExp(`\\b${encoding}\\b`).test(accept) && existsSync(compressed)) {
+        res.setHeader("Content-Encoding", encoding);
+        res.setHeader("Vary", "Accept-Encoding");
+        createReadStream(compressed).pipe(res);
+        return;
+      }
     }
     createReadStream(file).pipe(res);
   };
@@ -96,7 +103,7 @@ export default defineConfig({
       "@arcgis/core/views/SceneView.js",
     ],
   },
-  server: { port: 5173, strictPort: true, headers: isolation },
+  server: { port: DEV_PORT, strictPort: true, headers: isolation },
   preview: { port: 4173, strictPort: true, headers: isolation },
   build: {
     target: "es2022",

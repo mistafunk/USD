@@ -92,7 +92,20 @@ VENV_PYTHON = (3, 12)
 
 TARGETS = ("native", "wasm32")
 PRESETS = {"native-debug": "native", "native-release": "native",
-           "wasm32": "wasm32"}
+           "wasm32": "wasm32", "wasm32-minsize": "wasm32"}
+WASM_PRESETS = [p for p, t in PRESETS.items() if t == "wasm32"]
+
+
+def web_env(args):
+    """Environment for the web app's dev server and Playwright: which wasm32
+    install it serves at /usd (GEO_WASM_PRESET; vite.config.ts), on its own
+    port for presets other than wasm32 (playwright.config.ts)."""
+    env = base_env()
+    env["GEO_WASM_PRESET"] = args.wasm_preset
+    site = WS / "install" / args.wasm_preset / SITE_SUBDIR
+    if not site.is_dir():
+        fail("nothing installed at {}; run: geo.py build {}".format(site, args.wasm_preset))
+    return env
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 GEO_DIR = SCRIPT_DIR.parent
@@ -638,14 +651,20 @@ def cmd_build(args):
 
 def split_test_args(args):
     """argparse.REMAINDER also swallows our own flags after the preset name;
-    take --ui and --headed back out of the part before '--'."""
+    take --ui, --headed and --wasm-preset back out of the part before '--'."""
     rest = list(args.ctest_args)
     cut = rest.index("--") if "--" in rest else len(rest)
     own, passthrough = rest[:cut], rest[cut + 1:]
     keep = []
-    for a in own:
+    it = iter(own)
+    for a in it:
         if a in ("--ui", "--headed"):
             setattr(args, a[2:], True)
+        elif a == "--wasm-preset" or a.startswith("--wasm-preset="):
+            value = a.split("=", 1)[1] if "=" in a else next(it, "")
+            if value not in WASM_PRESETS:
+                fail("--wasm-preset: one of " + ", ".join(WASM_PRESETS))
+            args.wasm_preset = value
         else:
             keep.append(a)
     args.ctest_args = keep + passthrough
@@ -687,7 +706,7 @@ def cmd_test_web(args):
     logged; --ui opens Playwright's UI mode (pick, watch and step through
     tests), --headed shows the browser during a normal run."""
     npx = web_tool("npx")
-    env = base_env()
+    env = web_env(args)
     extra = args.ctest_args
     # Downloads the pinned Chromium once; a no-op when it is present.
     subprocess.run([npx, "playwright", "install", "chromium"], cwd=WEB_APP,
@@ -844,11 +863,11 @@ def container_tool():
 def cmd_serve(args):
     if args.mode == "dev":
         npm = web_tool("npm")
-        sys.exit(subprocess.call([npm, "run", "dev"], cwd=WEB_APP, env=base_env()))
+        sys.exit(subprocess.call([npm, "run", "dev"], cwd=WEB_APP, env=web_env(args)))
 
-    site = WS / "install" / "wasm32" / SITE_SUBDIR
+    site = WS / "install" / args.wasm_preset / SITE_SUBDIR
     if not site.is_dir():
-        fail("nothing installed at {}; run: geo.py build wasm32".format(site))
+        fail("nothing installed at {}; run: geo.py build {}".format(site, args.wasm_preset))
     # SELinux (AlmaLinux) needs the bind mounts relabelled.
     opts = "ro,z" if platform.system() == "Linux" else "ro"
     cmd = [container_tool(), "run", "--rm", "-p", "{}:80".format(args.port),
@@ -975,6 +994,8 @@ def main():
     s.add_argument("-j", "--jobs", default=jobs)
     s.add_argument("--ui", action="store_true",
                    help="web: Playwright UI mode (interactive)")
+    s.add_argument("--wasm-preset", default="wasm32", choices=WASM_PRESETS,
+                   help="web only: which wasm32 install the specs run on")
     s.add_argument("--headed", action="store_true",
                    help="web: show the browser during the run")
     s.add_argument("ctest_args", nargs=argparse.REMAINDER,
@@ -1009,6 +1030,9 @@ def main():
 
     s = sub.add_parser("serve", help="serve the web app with COOP/COEP")
     s.add_argument("mode", choices=("dev", "docker"))
+    s.add_argument("--wasm-preset", default="wasm32", choices=WASM_PRESETS,
+                   help="which wasm32 install to serve at /usd (dev: port "
+                        "5174 for presets other than wasm32)")
     s.add_argument("--port", default="8080")
     s.set_defaults(fn=cmd_serve)
 

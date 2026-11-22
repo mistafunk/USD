@@ -5,7 +5,7 @@ Local tooling for the geospatial web prototype. No GitHub workflows: everything 
 | File | Purpose |
 |---|---|
 | `geo.py` | Driver: `check`, `bootstrap`, `build`, `test`, `reference`, `record`, `usdview`, `serve` |
-| `CMakePresets.json` | Presets `native-debug`, `native-release`, `wasm32` |
+| `CMakePresets.json` | Presets `native-debug`, `native-release`, `wasm32`, `wasm32-minsize` |
 | `cmake/sqlite3/` | CMake build of the SQLite amalgamation (PROJ dependency) |
 | `requirements.txt` | Pinned Python packages for the native build's venv |
 | `nginx.conf` | COOP/COEP nginx config for serving the built app |
@@ -55,6 +55,15 @@ python third_party/geospatial-web/tools/geo.py test web              # Playwrigh
 - `build <preset> --reconfigure` reruns CMake's configure step; `--fresh` configures from scratch, which is
   needed when a preset drops a variable (CMake keeps the old cached value otherwise).
 - Every command logs to `cache/logs/<name>-<timestamp>.log` (except interactive `test web --ui` and `serve`).
+
+## Size-optimized WebAssembly build
+
+`wasm32-minsize` is `wasm32` compiled and linked with `-Oz` (`MinSizeRel`), in its own build and install trees; it
+shares `deps/wasm32`. Build it with `geo.py build wasm32-minsize` (all of USD again: ccache does not help across
+flags), test it with `geo.py test wasm32-minsize` and `geo.py test web --wasm-preset wasm32-minsize`, serve it with
+`geo.py serve dev --wasm-preset wasm32-minsize` (port 5174, so a dev server of `wasm32` on 5173 is not reused) or
+`serve docker --wasm-preset wasm32-minsize`. Both presets install `.gz` and `.br` copies of the module and `proj.db`;
+the dev server prefers brotli (Chromium asks for it on localhost), nginx serves gzip.
 
 ## Platform notes
 
