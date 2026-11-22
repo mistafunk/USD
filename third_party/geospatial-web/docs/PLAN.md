@@ -13,16 +13,17 @@ Build a small browser app that loads a USD stage composed from two or more geo-r
 - Reprojection of each 3DOL in a Hydra scene index during composition, resolved in double precision.
 - A WASM build of Hydra and usdImaging on v26.08, guided by the Autodesk fork's changes.
 - An automated check: two 3DOLs vs control points with a stated tolerance, and explicit failure reports for transforms the engine cannot do.
+- Added during the work: vertical CRSs with grids, native and fetched on demand in the browser (D23), and ArcGIS 3D object layers loaded through generated wrapper layers with Adobe's glTF plugin (D24).
 
 **Not in scope**
 
 - three.js, Needle, or any Hydra render delegate for the web; a scene index observer feeds the RenderNode directly.
-- Grid files in the browser, the Esri engine plugin (a follow-on, see E1), coordinate epochs, and materials beyond a basic shaded surface.
+- The Esri engine plugin (a follow-on, see E1), coordinate epochs, and materials beyond a basic shaded surface.
 - The proposal's `GeospatialDataSource` measurement association, Profiles dependency claims and WKT normalization checks; these follow once placement works.
 
 ## Building blocks
 
-Every piece exists today except the WASM build of Hydra and usdImaging, and nothing connects OpenUSD to the Maps SDK yet. The prototype's real work is that port plus the glue: CRS resolution in a scene index, double-precision placement, and a mesh pass inside a RenderNode.
+At the start every piece existed except the WASM build of Hydra and usdImaging, and nothing connected OpenUSD to the Maps SDK. The prototype's real work was that port plus the glue: CRS resolution in a scene index, double-precision placement, and a mesh pass inside a RenderNode.
 
 | Piece | What it gives us | Constraint that matters |
 | --- | --- | --- |
@@ -30,7 +31,7 @@ Every piece exists today except the WASM build of Hydra and usdImaging, and noth
 | [OpenUSD v26.08](https://github.com/PixarAnimationStudios/OpenUSD/releases/tag/v26.08) | Native and WASM builds of `pxr/usd` (wasm32 and wasm64 via `build_usd.py --build-target wasm`, CI-tested since v25.11); `plugInfo.json` embedded under `/usd` | WASM: static libs only, pthreads, no Python; `build_usd.py` refuses `--usd-imaging`, and Hydra (`--imaging`) is never built in CI |
 | [`geospatial-web` branch](https://github.com/mistafunk/USD/tree/geospatial-web) | Our branch on the mistafunk/USD fork, at upstream `release` (v26.08, commit ee47c67) | Clean start: the library and the WASM port are written fresh |
 | [Autodesk USD fork](https://github.com/autodesk-forks/USD) | Working emscripten patches for Hydra and usdImaging on `adsk/feature/wasm` (26.05 dev, last synced March 2026); a fresh `adsk/hgiWebGPU` on 26.08 dev | One release behind; we cherry-pick the imaging build fixes only, not its WebGPU backend |
-| [PROJ](https://proj.org/) | First engine plugin, natively and in WASM: WKT2 parsing, operation selection, accuracy, grids (native only for now), ENU (topocentric) conversion | Needs SQLite and `proj.db` (about 9 MB in full) built for WASM; grid files stay native |
+| [PROJ](https://proj.org/) | First engine plugin, natively and in WASM: WKT2 parsing, operation selection, accuracy, grids, ENU (topocentric) conversion | Needs SQLite, libtiff and `proj.db` (about 9 MB in full) built for WASM; grids are fetched on demand in the browser (D23) |
 | [Maps SDK `RenderNode`](https://developers.arcgis.com/javascript/latest/references/core/views/3d/webgl/RenderNode/) | Custom WebGL2 pass in SceneView: `consumes`/`produces`, `render()`, `camera.viewMatrix`/`projectionMatrix`, `requestRender()` | Shares the SDK's GL context and FBOs; must restore GL state |
 | [`webgl` utilities](https://developers.arcgis.com/javascript/latest/references/core/views/3d/webgl/) | `toRenderCoordinates`, `renderCoordinateTransformAt`, `fromRenderCoordinates` | Render space is ECEF on a 6378137 m sphere (global, not EPSG:4978) or the view SR (local); float32 jitter unless we subtract a local origin ([windmills sample](https://developers.arcgis.com/javascript/latest/sample-code/custom-render-node-windmills)) |
 | [`projectOperator`](https://developers.arcgis.com/javascript/latest/references/core/geometry/operators/projectOperator/) + [`geographicTransformationUtils`](https://developers.arcgis.com/javascript/latest/references/core/geometry/operators/support/geographicTransformationUtils/) | Client-side Esri Projection Engine (WASM): `projectLoad()`, `projectExecuteMany()`, `getTransformations()` | Alternative engine plugin in E1. Equation-based datum transforms only; grid-based and vertical CRS projection unsupported |
@@ -66,7 +67,7 @@ Only a 3DOL whose source-to-output transform the engine can perform reaches the 
 
 1. **Load.** A Web Worker loads our WASM build of v26.08 with usdGeospatial. JS preloads the USD files into the in-memory file system and opens the root layer. The app passes the output CRS (requirement 16): geographic 3D (EPSG:4979) for a global SceneView, whose render space is a sphere the SDK maps to (D13), or the view's spatial reference for a local one. A session layer is used only to override source bindings in tests.
 2. **Compose.** OpenUSD composes sublayers, references and payloads. `UsdImagingStageSceneIndex` turns the stage into Hydra scene index prims.
-3. **Check support.** For each direct CRS binding, the geospatial scene index asks the engine whether it can transform source to output. The engine is whichever engine plugin is active, PROJ to start with, in the browser as well as natively. If no usable transform exists, or the vertical CRSs differ, the prim gets an error data source and is reported as unsupported.
+3. **Check support.** For each direct CRS binding, the geospatial scene index asks the engine whether it can transform source to output. The engine is whichever engine plugin is active, PROJ to start with, in the browser as well as natively. If no usable transform exists (for example a grid that is not available), the prim gets an error data source and is reported as unsupported, with the missing grids named.
 4. **Place.** The geospatial scene index (an `HdSingleInputFilteringSceneIndex`) evaluates the proposal's placement F(x). It publishes, per 3DOL, an anchor in the output CRS and a Float64 matrix from mesh-local units to that anchor's frame: ENU metres for a global view, view-SR units for a local one.
 5. **Observe and render.** A C++ `HdSceneIndexObserver` collects mesh points, indices and normals plus the placement matrices. embind exposes them as typed arrays, which the worker transfers to the main thread. JS turns each anchor into a render frame (global: the derivative of the SDK's geographic-to-render mapping via `toRenderCoordinates`; local: a translation in view-SR units; see `RECORDED_FORMAT.md`), splits off a float32-exact origin, and the RenderNode draws with modelView = `camera.viewMatrix` x translate(origin) x frame x matrix, computed in Float64 before casting.
 
@@ -78,7 +79,7 @@ Only a 3DOL whose source-to-output transform the engine can perform reaches the 
 
 **Hosting**
 
-Serve with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` (or `credentialless`), because the full OpenUSD WASM builds need `SharedArrayBuffer`. Basemaps and the SDK's CDN assets must then load with CORP/CORS, which W0 verifies.
+Serve with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` (or `credentialless`), because the full OpenUSD WASM builds need `SharedArrayBuffer`. Basemaps, the SDK's assets and ArcGIS services must then load with CORP or CORS; W0 settled this by self-hosting the SDK's assets.
 
 ## C++ CRS support on OpenUSD v26.08
 
@@ -94,23 +95,23 @@ We implement the proposal's initial scope as a `usdGeospatial` library on the ge
 | Engine backends | usdGeospatialProj plugin first (native and WASM); usdGeospatialEsriPE plugin later as an alternative. See Transformation engine plugins below | Initial scope: the engine chooses operations |
 | Geospatial scene index | In `usdGeospatialImaging` (D16). `HdSingleInputFilteringSceneIndex` after `UsdImagingStageSceneIndex` (as a usdImaging scene index plugin, after flattening): resolves each anchor into the requested output CRS in double precision, emits an anchor plus an anchor-relative matrix (D13), and attaches error data sources for failures | Queries, scene charts and instances; Tamrat's suggestion |
 | Scene index observer | In `usdGeospatialImaging` (D16). `HdSceneIndexObserver` that keeps mesh buffers, matrices and status per prim and reports dirty ranges; replaces a render delegate | No render delegate needed |
-| JS API (embind) | Open stage, set output CRS, register engine callbacks, read buffers as typed-array views, read the status report | Not in the proposal; prototype only |
+| JS API (embind) | Open stage, set output CRS and time, read anchors and mesh buffers as typed arrays, resolve points, CRS WKT, geoid heights, reset engines after fetching grids | Not in the proposal; prototype only |
 | Query API | Resolve a prim or point into an output CRS, returning coordinates, operation and accuracy | Runtime coordinate transformation |
 
 ### Transformation engine plugins
 
 usdGeospatial defines the engine interface but contains no engine. PROJ and, later, the Esri Projection Engine are separate USD plugins that register against it, so the core library has no PROJ dependency and engines can be swapped without code changes.
 
-- **Interface.** `UsdGeospatialCoordinateOperationEngine`, an abstract base with a `TfType` and a factory, like `ArResolver` or `HdSceneIndexPlugin`. Calls: `CanTransform(srcWkt, dstWkt)` returning the candidate operations, and `Transform(srcWkt, dstWkt, points)` returning points, the operation used, accuracy (or unknown) and any failure reason. It is synchronous, because scene index queries are.
+- **Interface.** `UsdGeospatialCoordinateOperationEngine`, an abstract base with a `TfType` and a factory, like `ArResolver` or `HdSceneIndexPlugin`. Calls: `CanTransform(src, dst, area)` reporting the operation it would use for an area of interest, `Transform(src, dst, area, points)` returning points, the operation used, accuracy (or unknown), any failure reason, skipped better operations and missing grids, `DescribeCrs`, and `MakeCompoundCrs` for the EGM2008 default height of 2D CRSs. It is synchronous, because scene index queries are.
 - **Registry.** `UsdGeospatialEngineRegistry` finds engines through `PlugRegistry` from each plugin's `plugInfo.json` (`Types` entry with `bases: ["UsdGeospatialCoordinateOperationEngine"]`), loads them on first use, and picks one by a `TfEnvSetting` (`USDGEOSPATIAL_ENGINE`), an explicit API call, or a priority in `plugInfo.json`. The chosen engine's name is stamped on every result, as the proposal requires.
 - **usdGeospatialProj.** First engine, a separate plugin library linking PROJ. It maps WKT2 to `proj_create`, picks operations with `proj_create_operations`, reports accuracy from `proj_coordoperation_get_accuracy`, and builds the ENU basis with PROJ's topocentric conversion.
 - **usdGeospatialEsriPE (follow-on, E1).** Second engine with the same interface. In the browser it calls the Maps SDK's `projectOperator` through an emscripten JS bridge, so it covers equation-based transforms only. A native build against Esri's Projection Engine SDK is possible later.
 - **WASM.** No `dlopen`, so engine plugins are linked statically and register at static-init time. Their `plugInfo.json` is embedded under `/usd` like any `pxr_library`. Choosing an engine works the same way as natively.
-- **PROJ for WASM.** Build PROJ and SQLite with emscripten, without curl or libtiff and with network grids off. Embed a `proj.db` trimmed to the CRSs the demo uses, since the full database is about 9 MB. Grid files stay out of the browser for now.
+- **PROJ for WASM.** PROJ, SQLite and libtiff built with emscripten, without curl and with network grids off. The full `proj.db` is embedded compressed; trimming it to the demo CRSs is left for I2 (D17). Grids are files the worker fetches on demand (D23).
 
 ### WASM support for Hydra and usdImaging
 
-Upstream v26.08 builds `pxr/usd` for WASM but stops before Hydra. We close that gap on geospatial-web, using the Autodesk fork's `adsk/feature/wasm` branch as the reference rather than merging it.
+Upstream v26.08 builds `pxr/usd` for WASM but stops before Hydra. We closed that gap on geospatial-web in C2, using the Autodesk fork's `adsk/feature/wasm` branch as the reference rather than merging it. The steps, kept as the record of what the port consists of:
 
 1. **Extract the reference diff.** Diff `adsk/feature/wasm` against upstream 26.05, limited to `build_scripts/`, `cmake/`, `pxr/imaging/{hd,hdar,hdsi,hf,hio,pxOsd,cameraUtil,geomUtil}` and `pxr/usdImaging/usdImaging`. Drop everything for WebGPU, Hgi, hdSt and Python. Done 2026-11-21, results in `WASM_GAP.md`.
 2. **build\_usd.py.** Allow `--imaging` and `--usd-imaging` for `wasm` and `wasm64` targets, with GL, Vulkan, Metal, Embree, PTex, OpenVDB, OpenImageIO, OCIO and MaterialX off. OpenSubdiv already builds statically for WASM there.
@@ -136,7 +137,7 @@ Everything lives in the OpenUSD fork on the geospatial-web branch. Upstreamable 
 | `third_party/geospatial-web/module` | `geospatialRecord` (C3: the observer's output in the recorded format), `geospatialModule` (C4: embind module and final link) (like upstream's `wasmFetchResolver` sample), built from the root `CMakeLists.txt` behind an option, like `third_party/renderman` | No |
 | `third_party/geospatial-web/app` | The Maps SDK app, RenderNode, worker wrapper, `package.json`, Playwright harness | No |
 | `third_party/geospatial-web/testdata` and `/reference` | Test stages, control points, offline Python reference (option D) | No |
-| `third_party/geospatial-web/tools` | Local bootstrap, build, test and serve scripts, CMake presets, nginx config and Docker files. No GitHub workflows. | No |
+| `third_party/geospatial-web/tools` | `geo.py` driver, CMake presets, nginx config. No GitHub workflows. | No |
 | `third_party/geospatial-web/docs` | Plan, decisions, next steps and notes | No |
 
 **Commit rules.** Each commit touches either upstreamable paths or the app paths, never both. WASM imaging fixes are small, single-purpose commits, so each can be cherry-picked into an upstream PR.
@@ -145,8 +146,8 @@ Everything lives in the OpenUSD fork on the geospatial-web branch. Upstreamable 
 | --- | --- | --- |
 | Emscripten SDK | 5.0.7, the version upstream CI uses | All WASM builds |
 | CMake and Ninja | Versions required by OpenUSD v26.08 | All builds, including the example's embind link |
-| PROJ | Built from source at one pinned version for native and WASM, with SQLite, no curl or libtiff | usdGeospatialProj |
-| Python 3 with usd-core and pyproj | Pinned in a requirements file under the example's reference directory | Offline reference and fixture generation |
+| PROJ | Built from source at one pinned version for native and WASM, with SQLite and libtiff, no curl; pinned grids | usdGeospatialProj |
+| Python 3.12 with usd-core and pyproj | `venv-reference`, pyproj built against the workspace's PROJ (D19) | Offline reference and fixture generation |
 | Node.js LTS, npm, Vite | Vite dev server configured to send COOP/COEP headers | Web app and local serving |
 | `@arcgis/core` | Exact version in `package.json` | Maps SDK |
 | Playwright (Chromium) | Exact version in `package.json` | Browser test harness |
@@ -156,28 +157,12 @@ Everything lives in the OpenUSD fork on the geospatial-web branch. Upstreamable 
 
 ### Local workspace
 
-```
-~/usd-geo/
-  src/USD/              fork clone, branch geospatial-web
-  emsdk/                emsdk 5.0.7 (or the emscripten/emsdk:5.0.7 Docker image)
-  venv/                 Python for the native build (PySide6, PyOpenGL, Jinja2)
-  venv-reference/       usd-core + pyproj for the offline reference
-  deps/native/          oneTBB, OpenSubdiv, SQLite, PROJ, built once
-  deps/wasm32/          oneTBB, OpenSubdiv, PROJ, SQLite built with emscripten
-  build/native-debug/   CMake build trees, shared with CLion
-  build/native-release/
-  build/wasm32/
-  install/native-debug/ usdview, ctest (one install per preset)
-  install/native-release/
-  install/wasm32/       static libs and the example web app
-  install/upstream-native/, install/upstream-wasm32/   unmodified USD from build_usd.py, for comparison
-  cache/                downloads, sources, dep build trees, ccache, emscripten cache, logs
-  (CLAUDE.md and the handover docs live in the repo, see below)
-```
+The workspace layout, the driver's commands and the first-run sequence are in `tools/README.md`; the development
+section of `README.md` is the short version for collaborators. The principles:
 
-1. **One portable driver.** All steps go through `third_party/geospatial-web/tools/geo.py` (Python, like `build_usd.py`), with no shell-specific scripts. Its subcommands are `bootstrap`, `build <preset>`, `test <preset>`, `reference` and `serve dev|docker`. The workspace root comes from `USD_GEO_WS` (default `~/usd-geo`, or `%USERPROFILE%\usd-geo` on Windows), and all paths are built with `pathlib`.
-2. **Bootstrap once per target.** `geo.py bootstrap native` runs `build_usd.py` for the native dependencies. `geo.py bootstrap wasm32` activates emsdk 5.0.7 and runs `build_usd.py --build-target wasm` for oneTBB and OpenSubdiv. On every platform, both targets build PROJ and SQLite from source at the same pinned version, so native and browser results come from identical PROJ code (test T9).
-3. **Iterate with CMake presets.** A `CMakePresets.json` in `third_party/geospatial-web/tools` defines `native-debug`, `native-release` and `wasm32`, with per-OS conditions for the generator and compiler (Ninja with GCC or Clang, Ninja with MSVC on Windows). The driver and CLion use the same presets and build trees, so a build started from either is the same build.
+1. **One portable driver.** All steps go through `third_party/geospatial-web/tools/geo.py` (Python, like `build_usd.py`), with no shell-specific scripts, and all paths are built with `pathlib`. The workspace root comes from `USD_GEO_WS`, else two levels above the clone.
+2. **Bootstrap once per target.** `geo.py bootstrap native|wasm32` builds SQLite, libtiff, PROJ, the pinned grids and tinygltf from source at the same pinned versions for both targets, so native and browser results come from identical PROJ code (test T9), then runs `build_usd.py` for USD's own dependencies.
+3. **Iterate with CMake presets.** `tools/CMakePresets.json` defines `native-debug`, `native-release` and `wasm32`. The driver and CLion use the same presets and build trees, so a build started from either is the same build.
 
 ### Platforms
 
@@ -194,54 +179,31 @@ AlmaLinux 9 is the primary platform. It is also the Linux that Pixar tests v26.0
 
 Rules that keep the workspace portable:
 
-- The `emscripten/emsdk:5.0.7` image is the reference wasm32 build. Any machine with Docker or Podman produces the same WASM output, whatever its host OS.
-- No symlinks or hard-coded absolute paths in the repo. A `.gitattributes` keeps scripts and config files with LF line endings.
+- No symlinks or hard-coded absolute paths in the repo.
 - Keep the workspace on a short path on Windows, such as `C:\usd-geo`, because of USD's long paths, and enable long-path support in Git.
 - Platform differences live only in `geo.py` and the preset conditions, so a collaborator runs the same subcommands on any OS.
 
 ### JetBrains setup
 
-- **CLion** for all C++. Open `src/USD` and load the presets as CMake profiles, using Ninja and ccache. Exclude `build/`, `deps/` and unused backends (hdSt, hgiVulkan, hgiMetal, usdview Python) from indexing. Run usdGeospatial tests through CLion's CTest integration and debug natively with LLDB or GDB. For `wasm32`, either point the profile at emsdk directly or add a Docker toolchain on the `emscripten/emsdk:5.0.7` image.
+- **CLion** for all C++. Open `src/USD` and load the presets as CMake profiles, using Ninja and ccache. Exclude `build/`, `deps/` and unused backends (hdSt, hgiVulkan, hgiMetal, usdview Python) from indexing. Run usdGeospatial tests through CLion's CTest integration and debug natively with LLDB or GDB. The `wasm32` preset finds the workspace's emsdk and venv itself.
 - **WASM debugging** happens in Chrome, not CLion. Build `wasm32` with `-g` and use the C/C++ DevTools Support (DWARF) extension to step through C++ in the browser.
 - **WebStorm** for `third_party/geospatial-web/app`: npm scripts, Vite, Playwright run configurations, and the JS debugger attached to Chrome.
 - **PyCharm** for the offline reference: a virtualenv with usd-core and pyproj.
-- The bundled **Docker** plugin in each IDE manages the server container and the emsdk image.
 
 ### Working with Claude
 
-- **This project** stays the place for planning: the plan doc, decisions and memory.
-- **Claude Code on your machine** for hands-on build and debug sessions. Run it in CLion's terminal from `src/USD` with the Claude Code JetBrains plugin, so its edits show up as IDE diffs and it sees your open file and selection. Every command it runs happens in your terminal, where you can watch it. The repo's root `CLAUDE.md` and the handover docs in `third_party/geospatial-web/tools/docs` give every local session the same context.
-- **Alternative:** connect your computer to this project, so a thread here runs commands in your workspace with your approval. History stays in one place, but you see less of it inside the IDE.
+Claude Code runs in CLion's terminal from `src/USD`, so its edits show up as IDE diffs and every command it runs is visible. The root `CLAUDE.md` and the docs in `third_party/geospatial-web/docs` give every session the same context; `.claude/agents/` defines the `build-runner` and `wasm-porter` subagents.
 
 ### Serving the web app
 
 The page must be cross-origin isolated for `SharedArrayBuffer`, so every response needs `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` (or `credentialless`), and `.wasm` files need `application/wasm`. `localhost` counts as a secure context, so no TLS is needed locally.
 
 - **Development:** the Vite dev server in `third_party/geospatial-web/app`, with both headers set in `server.headers` and the `install/wasm32` module aliased in. You get hot reload for JS; rebuilding the C++ means re-running `geo.py build wasm32`.
-- **Production-like:** nginx in Docker serving the installed example, the same way a real deployment would:
-
-```
-docker run --rm -p 8080:80 \
-  -v ~/usd-geo/install/wasm32/share/geospatial-web:/usr/share/nginx/html:ro \
-  -v ~/usd-geo/src/USD/third_party/geospatial-web/tools/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
-  nginx:stable
-```
-
-```
-server {
-  listen 80;
-  root /usr/share/nginx/html;
-  add_header Cross-Origin-Opener-Policy same-origin always;
-  add_header Cross-Origin-Embedder-Policy require-corp always;
-  types { application/wasm wasm; }
-}
-```
-
-- **Optional:** a `docker-compose.yml` in `third_party/geospatial-web/tools` with two services, the nginx server and an emsdk builder, so `docker compose up` rebuilds the module and serves it. Playwright runs against either server.
+- **Production-like:** nginx in Podman or Docker serving the installed app with `tools/nginx.conf` (`geo.py serve docker`, see `tools/README.md`).
 
 ## Milestones
 
-Two tracks run in parallel and meet at I1. The WASM port (C2) is the long pole, and C2 can start alongside C0.
+Two tracks ran in parallel and met at I1. **Status:** W0 to W2, C0 to C4 and I1 are done, as well as the additions D23 (grids) and D24 (ArcGIS 3D object layers); I2 is next, E1 is a follow-on. `NEXT_STEPS.md` has the details per milestone.
 
 **Web track** (Maps SDK side, independent of the WASM port)
 
@@ -263,13 +225,13 @@ Two tracks run in parallel and meet at I1. The WASM port (C2) is the long pole, 
 7. **C3 Geospatial scene index and observer.** Placement evaluation F(x) with orientation and time samples; filtering scene index; observer.
    - Exit: natively, two 3DOLs in different CRSs come out correctly placed in usdview and in the observer's dump.
 8. **C4 Browser module.** usdGeospatial and the PROJ plugin in the WASM build (PROJ, SQLite and a trimmed proj.db built with emscripten), embind API, worker wrapper.
-   - Exit: the C1 cases pass in a headless browser, with the same results as native PROJ; grid cases report unsupported because no grids ship to the browser.
+   - Exit: the C1 cases pass in a headless browser, with the same results as native PROJ. (Grid cases were unsupported in the browser until D23.)
 
 **Integration**
 
 9. **I1 End to end.** The web app swaps the recorded data for the live WASM module. The harness runs the whole test plan in the browser.
    - Exit: browser results match the native PROJ results within 1 cm on every case both engines can do.
-10. **I2 Write-up.** Findings, numbers, and feedback to the proposal authors. Split the WASM imaging port into upstreamable PRs.
+10. **I2 Write-up.** Findings, numbers, and feedback to the proposal authors. Split the WASM imaging port into upstreamable PRs. Trim `proj.db` (D17) and measure download size.
 
 **Follow-on**
 
@@ -278,13 +240,13 @@ Two tracks run in parallel and meet at I1. The WASM port (C2) is the long pole, 
 
 ## Test plan
 
-The prototype passes when two 3DOLs in different spatial references land on their control points within tolerance, and every transform an engine cannot do (in the browser, any grid-based or vertical one) is reported as unsupported instead of drawn in the wrong place.
+The prototype passes when two 3DOLs in different spatial references land on their control points within tolerance, and every transform an engine cannot do (for example one needing a grid that is not served) is reported as unsupported instead of drawn in the wrong place.
 
 **Method.** Each 3DOL carries 4 to 6 control points as named prims with known coordinates in an independent survey or reference CRS. After placement, the harness reads each point's render position back with `fromRenderCoordinates()`, projects the reference coordinates into the same SR, and reports the 3D error. Each case gets one of three results: **pass**, **fail** (over tolerance), or **unsupported** (detected before placement, with the reason).
 
 **Proposed tolerances.** Client vs offline reference (option D): 1 cm, which tests the math. Client vs surveyed control points: 5 cm horizontal and 5 cm vertical, to be adjusted to the survey's stated accuracy.
 
-| Case | Setup | Expected: browser (PROJ, no grids) | Expected: native (PROJ) |
+| Case | Setup | Expected: browser (PROJ, grids on demand) | Expected: native (PROJ, pinned grids) |
 | --- | --- | --- | --- |
 | T1 Same datum | 3DOL A in a UTM zone (WGS84), 3DOL B in WGS84 geographic 3D | Pass | Pass |
 | T2 Equation-based datum shift | 3DOL A in a national CRS with a Helmert transform to WGS84, 3DOL B in WGS84 | Pass; operation logged | Pass; operation logged |
@@ -294,7 +256,7 @@ The prototype passes when two 3DOLs in different spatial references land on thei
 | T6 Precision | Global and local SceneView, camera 1 m from a control point | Under 1 px screen error | Not applicable |
 | T7 Broken binding | Direct binding to a missing CRS prim, or missing crs:position | Error data source, nothing drawn, no fallback to the parent CRS | Same, plus validator report |
 | T8 Orientation | 3DOL with heading 90, pitch and roll 0, and a time-sampled heading | Matches native result | Matches pyproj reference within 0.001 degrees |
-| T9 Browser vs native | Every case without grids | Under 1 mm from native | Reference |
+| T9 Browser vs native | Every case both can place (EGM2008 is not served to the browser) | Under 1 mm from native | Reference |
 | T10 WASM Hydra build | hd, hdsi and usdImaging ctests in the local wasm32 build | All pass | Not applicable |
 | T11 Engine plugins | Select a stub engine, then (after E1) the Esri engine, by `USDGEOSPATIAL_ENGINE` | Results name the engine used; Esri matches PROJ within 1 cm where it can transform, else reports unsupported | Same with the stub engine |
 
@@ -302,26 +264,22 @@ The browser harness runs with Playwright and writes a JSON and HTML report per r
 
 ## Open questions
 
+Settled during the work, with the decision that holds the answer: the RenderNode transform and render origin (D13),
+the transform provider (D4, D5), how the target CRS is chosen (D13), pthreads and COOP/COEP (W0), the share of the
+Autodesk diff needed (`WASM_GAP.md`), wasm32 vs wasm64 (D12), and binding by reference (proposal text, C1).
+
 | Question | Proposed answer | How to settle it |
 | --- | --- | --- |
-| What coordinate transform does RenderNode use, and how precise is the render origin? | **Settled (W0, D13).** Global render space is ECEF on a 6378137 m sphere, not EPSG:4978, so global views take EPSG:4979 anchors mapped in JS through the SDK's geographic-to-render mapping (W1: not `renderCoordinateTransformAt`, which is metric on the sphere); local views use the view SR. A float32-exact origin per mesh is steady at 1 m on a real GPU; naive float32 ECEF jitters. | Done. |
-| Who is the transform provider? | **Settled (D4, D5).** An engine plugin behind `UsdGeospatialCoordinateOperationEngine`: usdGeospatialProj everywhere first, usdGeospatialEsriPE as the alternative in E1. The proposal prescribes no callable interface, so the engine API is ours. | Done. Share the interface with Tamrat during C1 as a courtesy, not a blocker. |
-| How is the target CRS chosen? | **Settled (proposal, D13).** By the consumer, not authored: the app passes the output CRS (requirement 16). Without one, the CRS bound to `defaultPrim` is used, otherwise resolution fails. | Done. Session layers only override source bindings in tests. |
-| Can the Esri engine plugin call `projectOperator` synchronously from C++ in the worker? (E1) | The scene index needs synchronous answers. Load `projectOperator` inside the worker and call it through `EM_JS`. If the SDK won't load in a worker, pre-resolve all CRS pairs on the main thread before composing and pass the results in. | Spike at the start of E1. No longer on the critical path, since PROJ runs in the browser. |
-| Does the WASM need pthreads and `SharedArrayBuffer`? | **Settled (W0).** Yes: upstream's WASM build uses `-pthread`. COOP/COEP `require-corp` works once the SDK assets are self-hosted (the CDN worker script has no CORP header); `credentialless` is not needed. | Done. Fonts are untested because W0 draws no labels; check when text appears. |
-| How much of the Autodesk diff is needed? | **Settled (sized 2026-11-21, `WASM_GAP.md`).** Of 403 files and about 26.5k added lines, a few hundred lines are candidates: `build_usd.py` imaging and OpenSubdiv for WASM, hio's CMake, static plugin registration in `cmake/macros`, and a handful of `ARCH_OS_WASM_VM` guards ported only when a build hits them. The rest is WebGPU/Storm, JS bindings, wasm64, Windows or third-party builds. | Done. |
-| wasm32 or wasm64? | **Settled (D12).** wasm32 first: 4 GB memory limit, better browser support. Switch to wasm64 only if large stages run out of memory (see Risks). | Done; peak memory is measured in C4 anyway. |
-| How is binding by reference represented in C++? | **Settled (proposal text).** The anchor prim applies `GeospatialCRSBindingAPI` and composes in a `GeospatialCRS` prim through an ordinary USD reference (or an inherit, or any Core arc), from the stage or a library layer. Resolution reads the composed `crs:wkt` on the anchor itself; there is no relationship. A direct binding is the API applied on the composed prim, regardless of which layer authored the arc; a direct binding without a valid `crs:wkt` is an error, never a fallback to the parent. | Done. |
+| Can the Esri engine plugin call `projectOperator` synchronously from C++ in the worker? (E1) | The scene index needs synchronous answers. Load `projectOperator` inside the worker and call it through `EM_JS`. If the SDK won't load in a worker, pre-resolve all CRS pairs on the main thread before composing and pass the results in. | Spike at the start of E1. |
 | Where does the C++ work go upstream? | Keep it on geospatial-web until the proposal is accepted. Offer the WASM imaging fixes upstream sooner, as separate PRs, since they are useful on their own. | Discuss with the proposal authors and Pixar at I2. |
 
 ## Risks
 
-- **WASM port of Hydra takes longer than expected.** Fallback: W1 and the native C3 work continue on recorded data, so only I1 slips.
 - **Proposal still moving.** Placement, orientation and chart conventions are under review. Fallback: pin to a PR commit, and keep field names in one tokens file so renames are cheap.
-- **Static registration gaps.** Scene index or adapter plugins silently missing in the static WASM link. Fallback: an explicit registration call from the embind module init, plus a startup self-check that lists the registered adapters.
-- **PROJ in WASM adds size.** PROJ, SQLite and `proj.db` add several MB. Fallback: trim `proj.db` to the demo CRSs and load it lazily into the in-memory file system.
+- **Static registration gaps.** Plugins silently missing in the static WASM link; this happened (usdGeospatialProj, the glTF plugin) and is handled by whole-archive linking. Any new plugin needs the same, plus a check that it registers.
+- **PROJ in WASM adds size.** PROJ, SQLite and `proj.db` add several MB; `proj.db` is compressed now and trimmed at I2 (D17).
 - **Download size.** OpenUSD with Hydra in WASM will be large. Acceptable for a prototype; record the number and try `-Oz` and wasm-opt in I2.
-- **COEP breaks third-party assets.** Fallback: `credentialless`, or self-host the blocked assets.
+- **COEP breaks third-party assets.** The SDK's assets are self-hosted; ArcGIS services answer with CORS. A service without CORS would need a proxy or `credentialless`.
 
 ## Sources
 
