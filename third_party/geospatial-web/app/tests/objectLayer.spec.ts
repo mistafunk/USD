@@ -109,8 +109,13 @@ test("object layer zurich-egm96 global", async ({ page }) => {
   expect([crs.type, crs.id, crs.horizontal?.id, crs.vertical?.id])
     .toEqual(["compound", "EPSG:9707", "EPSG:4326", "EPSG:5773"]);
   await expect(page.locator("#anchorList .anchor")).toHaveCount(live.anchors.length);
-  await expect(page.locator("#outCode")).toHaveText("EPSG:4326+5773");
+  await expect(page.locator("#outSummary")).toHaveText(/\(EPSG:4326\+5773\)$/);
+  // Defined by the app (an EPSG code, so no WKT shown).
+  await expect(page.locator("#outBody")).toContainText("compounddefined bythe app, from the global view (WGS 84) and the scene's height model (terrain: EGM96 heights)");
+  await expect(page.locator("#outBody details")).toHaveCount(0);
   await expect(page.locator("#outHeights")).toHaveText(/EGM96/);
+  // Input CRS, like the output: the layer's compound, from its spatial reference.
+  await expect(page.locator("#inSummary")).toHaveText("WGS 84 + EGM96 height (EPSG:4326+5773)");
   // Selecting and zooming to an anchor: no errors, the camera moves.
   await page.evaluate(() => (globalThis as unknown as { __app: { select(p: string): void } })
     .__app.select("/ObjectLayer/Feature_2"));
@@ -244,3 +249,30 @@ for (const view of ["global", "local"]) {
     await expect.poll(async () => (await clip()).mode).toBe("auto");
   });
 }
+
+// A translation as large as a position (seen in an Urban3DOL layer: the
+// absolute coordinates in both origin and translation fields) is flagged,
+// and still placed as the layer says.
+test("absolute translation flagged", async ({ page }) => {
+  await page.goto("/?view=global&data=w0&terrain=0&buildings=0");
+  const result = await page.evaluate(async () => {
+    // The dev server's module, imported in the page (not resolved by tsc).
+    const module = "/src/arcgis/objectLayer.ts";
+    const { buildWrapper } = await import(/* @vite-ignore */ module);
+    const roles = { originX: "OX", originY: "OY", originZ: "OZ", translationX: "TX", translationY: "TY",
+                    translationZ: "TZ", globalID: "GlobalID" };
+    const feature = (oid: number, gid: string, t: number[]) => ({ attributes: {
+      OBJECTID: oid, GlobalID: gid, OX: 148902.1, OY: 6568810.9, OZ: 29.95, TX: t[0], TY: t[1], TZ: t[2] } });
+    const w = buildWrapper({
+      url: "test", format: "3D_glb",
+      layer: { spatialReference: { wkid: 3011 }, infoFor3D: { transformFieldRoles: roles } },
+      features: [feature(1, "a", [148926.3, 28.7, -6568783.6]), feature(2, "b", [1.5, 0, -2])],
+      assetMaps: ["a", "b"].map((g) => ({ parentGlobalId: g, assetType: "3D_glb", assetHash: g,
+                                          assetURL: `https://example.invalid/${g}`, assetName: "m.glb" })),
+    }, "WKT");
+    return { suspicious: w.suspicious, translate: /xformOp:translate = \(148926\.3, 28\.7, -6568783\.6\)/.test(w.usda) };
+  });
+  expect(Object.keys(result.suspicious)).toEqual(["/ObjectLayer/Feature_1"]);
+  expect(result.suspicious["/ObjectLayer/Feature_1"]).toContain("probably absolute coordinates");
+  expect(result.translate).toBe(true);
+});

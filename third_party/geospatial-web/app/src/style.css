@@ -364,3 +364,47 @@ details.disclose > summary::before {
   transition: transform .12s; }
 details.disclose[open] > summary::before { content: ""; transform: rotate(90deg); }
 .anchor .dup { color: var(--warn); }
+.loaded-extra { font-weight: 400; font-size: var(--fs-small); color: var(--muted); }
+.loaded-extra a { color: inherit; }
+/* Feature rows on one line: path with its mesh count, accuracy, buttons;
+   a failure reason below. */
+.anchor .expander, .anchor .acc, .anchor .actions { grid-row: 1; }
+.anchor .path .meshcount { font: 400 var(--fs-small) var(--font); color: var(--muted); }
+.anchor .expander { grid-column: 1; }
+.anchor .path { grid-column: 2; grid-row: 1; }
+.anchor .acc { grid-column: 3; }
+.anchor .actions { grid-column: 4; }
+.anchor .reason { grid-row: 2; }
+/* No accuracy in the row (it is in the Placement details): three columns. */
+.anchor > summary { grid-template-columns: 16px 1fr auto; }
+.anchor .actions { grid-column: 3; }
+.anchor .reason { grid-column: 2 / 4; }
+/* CRS section titles as large as the CRS label next to them. */
+details.card.output > summary .section-title { font-size: var(--fs-small); }
+details.card.output > summary .section-title { white-space: nowrap; flex: none; }
+#inSummary, #outSummary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* CRS sections: code, name and "?" on one line; a long name is shortened. */
+.crs-head { align-items: center; gap: 6px; }
+.crs-head .code { flex: none; white-space: nowrap; }
+.crs-head .name { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crs-head .help { flex: none; }
+/* CRS card title lines: the CRS a bit smaller than the title; the "?" popover below the line. */
+details.card.output > summary { position: relative; }
+#inSummary, #outSummary { font-size: 10.5px; }
+details.card.output > summary .why { display: inline-flex; flex: none; }
+details.card.output > summary .pop { left: 0; right: 0; width: auto; top: 24px; bottom: auto; font: 400 var(--fs-small) var(--font);
+  letter-spacing: normal; text-transform: none; }
+/* Feature warning: "!" after the path, the text at the top of the card. */
+.anchor .warnicon { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px;
+  margin-left: 6px; border-radius: 50%; background: var(--warn); color: #fff; font: 700 10px var(--font); vertical-align: 1px; }
+.anchor .warnbox { margin: 2px 0 8px; padding: 6px 8px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: var(--fs-small); }
+/* Field help in feature cards: the popover spans the card below the label. */
+.anchor .body { position: relative; }
+.anchor .body dt { white-space: nowrap; }
+.anchor .body dt .help { vertical-align: 1px; }
+.anchor .body .pop { left: 0; right: 0; width: auto; top: auto; bottom: auto; margin-top: 4px; font-weight: 400; }
+.pop.floating { position: fixed; right: auto; bottom: auto; margin: 0; z-index: 1000; display: block; }
+.pop.floating[hidden] { display: none; }
+/* Feature cards: a label column wide enough for "coord. operations". */
+.anchor .body dl.kv { grid-template-columns: 108px 1fr; }

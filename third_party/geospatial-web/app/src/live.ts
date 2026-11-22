@@ -5,7 +5,7 @@
 // the view's spatial reference for a local one.
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import {
-  buildWrapper, crsDefinition, fetchObjectLayer, resolveObjectLayerUrl,
+  buildWrapper, crsDefinition, fetchObjectLayer, resolveObjectLayerUrl, type SpatialReferenceJson,
 } from "./arcgis/objectLayer";
 import { formatBytes, LoadStatus } from "./loadStatus";
 import { placeScene, toLonLatH, type RecordedAnchor } from "./recorded";
@@ -84,9 +84,15 @@ export interface LiveData {
   grids: string[];
   /** 3D object layers: the CRS used, the generated wrapper and skipped features. */
   objectLayer?: { title: string; url: string; features: number; crs: string; wrapper: string;
+                  /** The layer's spatial reference, as served. */
+                  spatialReference: SpatialReferenceJson;
+                  /** Heights assumed for a layer without a vertical CRS (D28). */
+                  assumed?: string;
                   skipped: string[];
                   /** Exact duplicates: anchor path -> the first with the same model and transform. */
-                  duplicates: Record<string, string> };
+                  duplicates: Record<string, string>;
+                  /** Translations as large as a position: anchor path -> warning. */
+                  suspicious: Record<string, string> };
 }
 
 interface SceneIndex {
@@ -139,6 +145,7 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     for (const [dup, of] of Object.entries(wrapper.duplicates)) {
       status.add("warn", `${dup} is an exact duplicate of ${of} (same model and transform)`);
     }
+    for (const [path, warning] of Object.entries(wrapper.suspicious)) status.add("warn", `${path}: ${warning}`);
     if (!wrapper.models.length) throw new Error(`no feature has a ${data.format} model`);
     status.step(`downloading ${wrapper.models.length} model(s)`);
     wrapper.models.forEach((m) => log(`model ${m.path} from ${m.url}`));
@@ -150,8 +157,10 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     status.step(`opening the wrapper layer (reads the ${data.format.slice(3)} models)`);
     await timed("load", () => usd.open("/arcgis/layer.usda"));
     objectLayer = { title, url, features: data.features.length,
+                    spatialReference: data.layer.spatialReference, assumed,
                     crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
-                    skipped: wrapper.skipped, duplicates: wrapper.duplicates };
+                    skipped: wrapper.skipped, duplicates: wrapper.duplicates,
+                    suspicious: wrapper.suspicious };
     const first = data.features[0]?.attributes;
     const roles = data.layer.infoFor3D.transformFieldRoles;
     if (first && (data.layer.spatialReference.latestWkid ?? data.layer.spatialReference.wkid) === 4326) {

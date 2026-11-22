@@ -214,7 +214,14 @@ export interface Wrapper {
   /** Exact duplicates: anchor path -> the first anchor with the same model
    *  (asset hash) and the same transform fields. */
   duplicates: Record<string, string>;
+  /** Translations as large as a position (anchor path -> warning): probably
+   *  absolute coordinates, so origin plus translation counts the position
+   *  twice. Placed as the layer says anyway. */
+  suspicious: Record<string, string>;
 }
+
+/** A translation longer than this (field units) is not a model offset. */
+export const SUSPICIOUS_TRANSLATION = 10_000;
 
 /**
  * The wrapper layer for a 3D object layer: one GeospatialCRS from the layer's
@@ -232,6 +239,7 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
   };
   const models: Wrapper["models"] = [];
   const duplicates: Wrapper["duplicates"] = {};
+  const suspicious: Wrapper["suspicious"] = {};
   const firstOf = new Map<string, string>();
   const skipped: string[] = [];
   const prims: string[] = [];
@@ -260,6 +268,11 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
     // The fields are in the model's glTF frame (x east, y up, z south), which
     // is the wrapper's Y-up frame: used as they are (see the header).
     const t = [num(a, "translationX", 0), num(a, "translationY", 0), num(a, "translationZ", 0)];
+    if (Math.hypot(t[0], t[1], t[2]) > SUSPICIOUS_TRANSLATION) {
+      suspicious[anchor] = `translation (${t.map((v) => v.toFixed(1)).join(", ")}) is as large as a ` +
+        `position: probably absolute coordinates, which the origin (${origin.map((v) => v.toFixed(1)).join(", ")}) ` +
+        "already gives, so the model lands far off; placed as the layer says";
+    }
     const s = [num(a, "scaleX", 1), num(a, "scaleY", 1), num(a, "scaleZ", 1)];
     const axis = [num(a, "rotationX", 0), num(a, "rotationY", 1), num(a, "rotationZ", 0)];
     const q = quaternion(axis, num(a, "rotationDeg", 0));
@@ -300,7 +313,7 @@ def Xform "ObjectLayer"
 ${prims.join("\n")}
 }
 `;
-  return { usda, models, skipped, duplicates };
+  return { usda, models, skipped, duplicates, suspicious };
 }
 
 /** Unit quaternion (w, x, y, z) of a right-handed rotation about `axis`. */

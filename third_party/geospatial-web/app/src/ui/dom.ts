@@ -24,10 +24,12 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-/** Key-value rows for a <dl class="kv">; entries with an undefined value are skipped. */
-export function kv(rows: [string, Child | Child[] | undefined][]): HTMLDListElement {
+/** Key-value rows for a <dl class="kv">; entries with an undefined value are
+ *  skipped. A key may carry nodes, e.g. a "?" help after the label. */
+export function kv(rows: [string | Child[], Child | Child[] | undefined][]): HTMLDListElement {
   return h("dl", { class: "kv" }, rows.filter(([, v]) => v !== undefined)
-    .flatMap(([k, v]) => [h("dt", null, k), h("dd", null, ...(Array.isArray(v) ? v : [v]))]));
+    .flatMap(([k, v]) => [h("dt", null, ...(Array.isArray(k) ? k : [k])),
+                          h("dd", null, ...(Array.isArray(v) ? v : [v]))]));
 }
 
 /** A <pre class="wkt"> with a copy button. */

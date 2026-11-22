@@ -42,6 +42,7 @@ export class FeaturesTab {
   render(data: FeaturesData) {
     this.data = data;
     this.renderHeader(data);
+    this.renderInput(data);
     this.renderOutput(data);
     this.renderAnchors(data);
   }
@@ -84,25 +85,73 @@ export class FeaturesTab {
   private renderHeader({ scene, live }: FeaturesData) {
     const layer = live?.objectLayer;
     const title = $("loadedTitle");
-    const sub = $("loadedSub");
+    // Feature count and layer link in parentheses after the name; the CRS is
+    // in the Input CRS section.
+    const extra = (...parts: (Node | string)[]) =>
+      h("span", { class: "loaded-extra" }, " (", ...parts, ")");
     if (layer) {
-      title.textContent = layer.title;
+      const n = `${layer.features} feature${layer.features === 1 ? "" : "s"}`;
       title.title = layer.url;
-      const link = /^https?:/.test(layer.url)
-        ? h("a", { href: layer.url, target: "_blank", rel: "noopener" }, "layer") : null;
-      sub.replaceChildren(`${layer.features} feature${layer.features === 1 ? "" : "s"} · `,
-        ...epsgLinks(layer.crs.replace(" (3D)", ""), ""), layer.crs.endsWith("(3D)") ? " (z ellipsoidal)" : "",
-        ...(link ? [" · ", link] : []));
+      title.replaceChildren(layer.title, /^https?:/.test(layer.url)
+        ? extra(`${n}, `, h("a", { href: layer.url, target: "_blank", rel: "noopener" }, "layer"))
+        : extra(n));
     } else if (!scene) {
-      title.textContent = "loading…";
-      sub.textContent = "";
+      title.replaceChildren("loading…");
     } else if (scene.details) {
-      title.textContent = live ? "Test scene" : "Test scene (recorded)";
-      sub.textContent = live ? "sites in several CRSs, with control points and expected outcomes"
-                             : scene.name;
+      const n = scene.details.anchors.length;
+      title.title = scene.name;
+      title.replaceChildren(live ? "Test scene" : "Test scene, recorded", extra(`${n} feature${n === 1 ? "" : "s"}`));
     } else {
-      title.textContent = "Spike meshes";
-      sub.textContent = "hard-coded meshes placed in JavaScript";
+      title.replaceChildren("Spike meshes", extra("hard-coded"));
+    }
+  }
+
+  /**
+   * The layer CRS: the source CRS of the loaded content, like the output CRS
+   * below it. A 3D object layer has one; the test scene's features several,
+   * each listed with how many features use it.
+   */
+  private renderInput({ scene, live }: FeaturesData) {
+    const body = $("inBody");
+    const summary = $("inSummary");
+    const layer = live?.objectLayer;
+    const groups = new Map<string, { crs: CrsDescription; n: number }>();
+    for (const c of Object.values(live?.crs.anchors ?? {})) {
+      if (c.error) continue;
+      const key = c.wkt ?? c.name ?? "";
+      const g = groups.get(key);
+      if (g) g.n++; else groups.set(key, { crs: c, n: 1 });
+    }
+    const all = [...groups.values()];
+    if (!live) {
+      // Recorded data: the source CRS names of the manifest.
+      const names = new Map<string, number>();
+      for (const a of scene?.details?.anchors ?? []) {
+        if (a.sourceCrs) names.set(a.sourceCrs, (names.get(a.sourceCrs) ?? 0) + 1);
+      }
+      summary.textContent = names.size === 1 ? [...names.keys()][0] : names.size ? `${names.size} CRSs` : "";
+      $("inWhy").replaceChildren();
+      body.replaceChildren(kv([...names].map(([n, k]): [string, string] => [`${k} feature${k === 1 ? "" : "s"}`, n])));
+      return;
+    }
+    if (all.length === 1) {
+      const c = all[0].crs;
+      summary.replaceChildren(...nameWithCode(c.name, crsCode(c)));
+      summary.title = summary.textContent ?? "";
+      const why = layer
+        ? `From the layer's spatial reference (wkid ${layer.spatialReference.latestWkid ?? layer.spatialReference.wkid}` +
+          `${layer.spatialReference.vcsWkid ? `, vcsWkid ${layer.spatialReference.latestVcsWkid ?? layer.spatialReference.vcsWkid}` : ""}).` +
+          (layer.assumed ? ` It names no vertical CRS, so its z is in ${layer.assumed}, as the Maps SDK draws it.` : "")
+        : "From the features' binding: the composed crs:wkt, resolved in OpenUSD.";
+      $("inWhy").replaceChildren(...whyHelp(why));
+      body.replaceChildren(crsBlock(c, { assumed: layer?.assumed, ids: "in" }));
+    } else {
+      summary.textContent = all.length ? `${all.length} CRSs` : "";
+      $("inWhy").replaceChildren();
+      body.replaceChildren(...all.map(({ crs: c, n }) => h("div", { class: "sub" },
+        h("h4", null, ...nameWithCode(c.name, crsCode(c)), " ", h("span", { class: "muted small", style: "font-weight: 400" },
+                                           `${n} feature${n === 1 ? "" : "s"}`)),
+        crsBlock(c))));
     }
   }
 
@@ -110,29 +159,37 @@ export class FeaturesTab {
     const details = scene?.details;
     const crs = live?.output.crs ?? details?.output.crs ?? "";
     const frame = live?.output.frame ?? details?.output.frame;
-    $("outCode").replaceChildren(...(crs ? epsgLinks(crs, "") : ["none"]));
-    $("outName").textContent = live?.crs.output.name ?? "";
-    $("outSummary").textContent = [crs, live?.crs.output.name].filter(Boolean).join(" ");
-    const frameEl = $("outFrame");
-    frameEl.hidden = !frame;
-    frameEl.textContent = frame === "enu" ? "frame: ENU metres" : "frame: CRS units";
-    $("outWhy").textContent = global
+    // Heights follow the scene's height model (D28).
+    const gravity = crs.endsWith(`+${GRAVITY_VCS.slice(5)}`);
+    const why = (global
       ? "The global view's render space is ECEF on a 6378137 m sphere, not EPSG:4978. Anchors are " +
         "placed in geographic 3D WGS 84 with an east-north-up frame in metres, and the app maps them " +
         "through the SDK's own geographic-to-render function."
       : "A local view renders in its own spatial reference, so anchors are placed directly in it, " +
         "with 3D heights. Web Mercator is not metric: placement includes its scale, about " +
-        "1/cos(latitude).";
-    // Heights follow the scene's height model (D28).
-    const gravity = crs.endsWith(`+${GRAVITY_VCS.slice(5)}`);
-    $("outWhy").textContent += gravity
+        "1/cos(latitude).") + (gravity
       ? " Heights are EGM96 (gravity-related), like the terrain's, which the view draws as they are."
-      : " Heights are ellipsoidal: without terrain the view's ground is the ellipsoid.";
-    $("outHeights").textContent = gravity ? "EGM96, gravity-related (terrain)" : "ellipsoidal";
-    const wkt = live?.output.wkt || live?.crs.output.wkt || "";
-    const wktBox = $("outWktBox") as HTMLDetailsElement;
-    wktBox.hidden = !wkt;
-    $("outWkt").replaceWith(Object.assign(copyablePre(wkt), { id: "outWkt" }));
+      : " Heights are ellipsoidal: without terrain the view's ground is the ellipsoid.");
+    // Recorded data has no description: the code alone.
+    const c: CrsDescription = { ...(live?.crs.output ?? { error: "" }),
+                                wkt: live?.output.wkt || live?.crs.output.wkt };
+    if (!c.id) c.id = crs;
+    $("outSummary").replaceChildren(...nameWithCode(c.name, crsCode(c)));
+    $("outSummary").title = $("outSummary").textContent ?? "";
+    $("outWhy").replaceChildren(...whyHelp(why + (frame
+      ? ` Each anchor's frame: ${frame === "enu" ? "east-north-up, in metres" : "the CRS's axes and units"}.` : "")));
+    // Where the output CRS is defined: today by the app (live, from the view
+    // and the height model) or the recording, always as an EPSG code; a
+    // definition in USD would come as WKT, which is then shown.
+    const horizontal = crs.split("+")[0];
+    const definedBy = live
+      ? `the app, from the ${global ? "global view (WGS 84)" : `local view's spatial reference (${horizontal})`}` +
+        ` and the scene's height model (${gravity ? "terrain: EGM96 heights" : "no terrain: ellipsoidal"})`
+      : details ? `the recording (geospatialRecord), for the ${global ? "global" : "local"} view` : undefined;
+    $("outBody").replaceChildren(crsBlock(c, {
+      ids: "out", heights: gravity ? undefined : "ellipsoidal", definedBy,
+      wkt: !!crs && !/^EPSG:\d+(\+\d+)?$/.test(crs),
+    }));
   }
 
   private renderAnchors({ global, scene, live, report }: FeaturesData) {
@@ -156,11 +213,13 @@ export class FeaturesTab {
   private anchorRow(a: RecordedAnchor, global: boolean, scene: Scene | null,
                     live: LiveData | null, report: HarnessReport | null): HTMLElement {
     const details = scene?.details;
+    // A suspicious transform (e.g. an absolute translation): "!" in the row,
+    // the text in the card.
+    const warning = live?.objectLayer?.suspicious[a.path];
     const meshes = live
       ? live.meshes.filter((m) => m.anchor === a.path && m.status === "ok")
       : [...(details?.meshAnchor ?? new Map())].filter(([, anchor]) => anchor === a.path)
         .map(([path]) => ({ path, triangles: undefined, linearizationError: null }));
-    const crs = live?.crs.anchors[a.path];
     const placed = a.status === "ok";
     const zoom = h("button", {
       class: "btn sm zoom", type: "button", title: placed ? "Zoom to anchor" : "Not placed",
@@ -200,15 +259,17 @@ export class FeaturesTab {
     }, h("span", { class: "tri" }));
     const summary = h("summary", null,
       expander,
-      h("span", { class: "path", title: a.path }, a.path),
-      h("span", { class: "acc" }, placed ? accuracyText(a.accuracy, "±") : "n/a"),
+      // One line: the path, then mesh count (and duplicate) in parentheses, a
+      // "!" for a warning (its text in the card);
+      // the source CRS is in the Input CRS section and the details.
+      h("span", { class: "path", title: a.path }, a.path,
+        h("span", { class: "meshcount" }, ` (${meshes.length} mesh${meshes.length === 1 ? "" : "es"}`,
+          live?.objectLayer?.duplicates[a.path]
+            ? [", ", h("span", { class: "dup", title: "Same model and transform: drawn at the same place" },
+                       `duplicate of ${live.objectLayer.duplicates[a.path].split("/").pop()}`)]
+            : null, ")"),
+        warning ? h("span", { class: "warnicon", title: warning }, "!") : null),
       h("span", { class: "actions" }, solo, mute, zoom),
-      h("span", { class: "meta" }, `${crs?.name || a.sourceCrs || "no source CRS"} · ` +
-        `${meshes.length} mesh${meshes.length === 1 ? "" : "es"}`,
-        live?.objectLayer?.duplicates[a.path]
-          ? [" · ", h("span", { class: "dup", title: "Same model and transform: drawn at the same place" },
-                      `duplicate of ${live.objectLayer.duplicates[a.path].split("/").pop()}`)]
-          : null),
       // Two lines here (CSS); the full reason is in the Placement section.
       !placed && a.reason ? h("span", { class: "reason", title: a.reason }, a.reason) : null);
     const row = h("details", {
@@ -216,9 +277,9 @@ export class FeaturesTab {
              `${this.soloed === a.path ? " soloed" : ""}${this.muted.has(a.path) ? " muted" : ""}`,
       "data-path": a.path, "data-status": a.status, open: this.open.has(a.path),
     }, summary, h("div", { class: "body" },
-      sourceSection(a, crs),
-      placementSection(a, live),
+      warning ? h("div", { class: "warnbox" }, warning) : null,
       placed && a.origin ? positionSection(a.origin, global, live?.output.crs ?? details?.output.crs) : null,
+      placementSection(a, live),
       meshesSection(meshes),
       testSection(a.path, details?.testCases ?? live?.testCases ?? [], report, !!live)));
     row.addEventListener("toggle", () => {
@@ -244,8 +305,25 @@ function accuracyText(accuracy: number | null | undefined, prefix = ""): string 
   return accuracy === null || accuracy === undefined ? "unknown" : `${prefix}${accuracy} m`;
 }
 
+/**
+ * A CRS as everywhere in the CRS cards: "<name> (<id>)", in one font, the id
+ * linked to epsg.io; a promoted CRS as "<name> (<id>, 3D)".
+ */
+function nameWithCode(name: string | undefined, code: string): (Node | string)[] {
+  const id = code.replace(" (3D)", "");
+  const links = id ? [...epsgLinks(id, ""), code.endsWith(" (3D)") ? ", 3D" : ""] : [];
+  if (!name) return links.length ? links : ["none"];
+  return links.length ? [name, " (", ...links, ")"] : [name];
+}
+
 function part(p: { name: string; id: string } | undefined) {
-  return p ? [p.name, " ", ...epsgLinks(p.id, "mono muted")] : undefined;
+  return p ? nameWithCode(p.name, p.id) : undefined;
+}
+
+/** A field label with a "?" popover. */
+function labelHelp(label: string, help: string): (Node | string)[] {
+  return [label, " ", h("button", { class: "help", type: "button", title: `About ${label}` }, "?"),
+          h("span", { class: "pop" }, help)];
 }
 
 function sub(title: string, badges: (HTMLElement | null)[], ...body: (Node | null)[]): HTMLElement {
@@ -256,45 +334,20 @@ function badge(text: string, cls = ""): HTMLElement {
   return h("span", { class: `badge ${cls}`.trim() }, text);
 }
 
-function sourceSection(a: RecordedAnchor, crs: CrsDescription | undefined): HTMLElement {
-  if (!crs) {
-    return sub("Source CRS", [], kv([["name", a.sourceCrs ?? (a.status === "ok" ? "" : "none")]]));
-  }
-  if (crs.error) {
-    return sub("Source CRS", [badge("error", "err")], kv([["binding", crs.error]]));
-  }
-  const badges = [
-    crs.type ? badge(crs.type) : null,
-    crs.dimension === 2 ? badge("2D") : null,
-    crs.defaultHeight ? badge("EGM2008 default", "warn") : null,
-  ];
-  const vertical = crs.vertical ? part(crs.vertical)
-    : crs.defaultHeight ? ["EGM2008 height ", ...epsgLinks(crs.defaultHeight, "mono muted"),
-                           " (default for 2D)"] : undefined;
-  return sub("Source CRS", badges,
-    kv([
-      ["name", crs.name],
-      ["id", crs.id ? h("span", null, ...epsgLinks(crs.id))
-        : h("span", { class: "muted" }, ...(crs.horizontal?.id && crs.dimension === 3
-          ? ["none (3D form of ", ...epsgLinks(crs.horizontal.id), ")"] : ["none"]))],
-      ["horizontal", part(crs.horizontal)],
-      ["vertical", vertical],
-      ["area of use", crs.areaOfUse?.name || undefined],
-    ]),
-    crs.wkt ? h("details", { class: "disclose", style: "margin-top: 3px" },
-                h("summary", null, "WKT"), copyablePre(crs.wkt)) : null);
-}
-
 function placementSection(a: RecordedAnchor, live: LiveData | null): HTMLElement {
   const steps = (a.operation ?? "").split(/; then | \+ /).filter(Boolean);
   const missing = live?.anchors.find((x) => x.path === a.path)?.missingGrids ?? [];
   const skipped = a.skippedOperations ?? [];
-  return sub("Placement", [a.engine ? badge(`engine: ${a.engine}`) : null],
-    steps.length ? h("ol", { class: "oplist" }, steps.map((s) => h("li", null, s))) : null,
+  return sub("Placement", [],
     kv([
+      // The coordinate operations from the layer CRS to the output CRS, in order.
+      ["coord. operations", steps.length ? h("ol", { class: "oplist" }, steps.map((s) => h("li", null, s))) : undefined],
       ["status", a.status === "ok" ? undefined : h("span", { class: `t-${a.status === "error" ? "err" : "warn"}` },
                                                      a.reason ?? a.status)],
-      ["accuracy", a.status === "ok" ? h("span", { class: "mono" }, accuracyText(a.accuracy)) : undefined],
+      [labelHelp("accuracy", "The accuracy the engine reports for each coordinate operation used (from the " +
+                 "EPSG dataset, e.g. a datum shift's), summed over the steps above. Not measured: conversions " +
+                 "such as map projections are exact (±0 m), and one step without a stated accuracy makes it unknown."),
+       a.status === "ok" ? h("span", { class: "mono" }, accuracyText(a.accuracy)) : undefined],
       ["skipped", skipped.length ? h("ul", { class: "oplist" }, skipped.map((s) => h("li", null, s)))
                                  : a.status === "ok" ? h("span", { class: "muted" }, "none") : undefined],
       ["grids", missing.length ? h("span", { class: "chips" }, missing.map((g) => {
@@ -323,7 +376,10 @@ function meshesSection(meshes: { triangles?: number; linearizationError: number 
   return sub("Meshes", [], kv([
     ["count", h("span", { class: "mono" }, meshes.length)],
     ["triangles", triangles === undefined ? undefined : h("span", { class: "mono" }, triangles.toLocaleString("en"))],
-    ["max lin. error", errors.length
+    [labelHelp("max lin. error", "Each mesh is drawn with one matrix: the coordinate operation linearized " +
+               "at the anchor. This is the largest distance, over all of the meshes' vertices, between where " +
+               "that matrix puts a vertex and where the full coordinate operation (F(x) per vertex) puts it, " +
+               "in the anchor's frame (metres for an east-north-up frame)."), errors.length
       ? h("span", { class: "mono" }, `${(Math.max(...errors) * 1000).toFixed(3)} mm`) : undefined],
   ]));
 }
@@ -344,4 +400,60 @@ function testSection(path: string, cases: { anchor: string; description: string;
       ? [badge(result.result, cls), " ", h("span", { class: "small muted" }, result.detail)]
       : undefined],
   ]));
+}
+
+/**
+ * A CRS's id for headings: a compound as "<horizontal>+<vertical>" (e.g.
+ * EPSG:4326+5773, as the output CRS is written, rather than EPSG:9707), else
+ * its own id, else "<horizontal id> (3D)" for a promoted CRS.
+ */
+function crsCode(c: CrsDescription): string {
+  const hid = c.horizontal?.id ?? "", vid = c.vertical?.id ?? "";
+  if (c.type === "compound" && hid.startsWith("EPSG:") && vid.startsWith("EPSG:")) {
+    return `${hid}+${vid.slice(5)}`;
+  }
+  return c.id || (hid ? `${hid}${c.dimension === 3 ? " (3D)" : ""}` : "");
+}
+
+interface CrsBlockOptions {
+  /** Heights assumed (a layer without a vertical CRS). */
+  assumed?: string;
+  /** Vertical text instead of the vertical part's. */
+  heights?: string;
+  /** Id prefix for the vertical element (specs). */
+  ids?: string;
+  /** Show the WKT (default); the output CRS card only for a WKT definition. */
+  wkt?: boolean;
+  /** Where the CRS is defined (output CRS card). */
+  definedBy?: string;
+}
+
+/** The "?" popover on a CRS card's title line: where the CRS comes from. */
+function whyHelp(why: string): HTMLElement[] {
+  return [h("button", { class: "help", type: "button", title: "Where this CRS comes from" }, "?"),
+          h("span", { class: "pop" }, why)];
+}
+
+/**
+ * One CRS, the same for the layer and the output CRS cards (code and name are
+ * on the card's title line): horizontal, vertical, CRS type, where it is
+ * defined (output), WKT (output: only when defined as WKT).
+ */
+function crsBlock(c: CrsDescription, o: CrsBlockOptions = {}): HTMLElement {
+  const heights: (Node | string)[] = o.heights ? [o.heights]
+    : c.vertical?.id ? nameWithCode(c.vertical.name, c.vertical.id)
+    : c.vertical ? [c.vertical.name]
+    : c.dimension === 3 || /^geographic 3D|geocentric/.test(c.type ?? "") ? ["ellipsoidal"]
+    : c.defaultHeight ? [...nameWithCode("EGM2008 height", c.defaultHeight), ", default for 2D"]
+    : ["none"];
+  return h("div", null,
+    kv([
+      ["horizontal", part(c.horizontal)],
+      ["vertical", [h("span", { id: o.ids ? `${o.ids}Heights` : undefined }, ...heights),
+                    o.assumed ? h("span", { class: "muted" }, " (assumed)") : null]],
+      ["CRS type", c.type || undefined],
+      ["defined by", o.definedBy],
+    ]),
+    c.wkt && o.wkt !== false ? h("details", { class: "disclose", style: "margin-top: 3px" },
+              h("summary", null, "WKT"), copyablePre(c.wkt)) : null);
 }

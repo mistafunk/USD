@@ -46,19 +46,15 @@
         <section class="tab active" id="tab-features">
           <div class="loaded-head">
             <div class="loaded-title" id="loadedTitle">loading…</div>
-            <div class="small muted" id="loadedSub"></div>
           </div>
           <div class="anchors" id="anchorList"><div class="empty muted small">loading…</div></div>
+          <details class="card output" id="inputCard">
+            <summary><span class="section-title">Layer CRS</span> <span class="small" id="inSummary"></span><span class="why" id="inWhy"></span></summary>
+            <div id="inBody"></div>
+          </details>
           <details class="card output" id="outputCard">
-            <summary><span class="section-title">Output CRS</span> <span class="mono small" id="outSummary"></span></summary>
-            <div class="crs-head"><span class="code" id="outCode">…</span><span class="name"><span id="outName"></span>
-              <button class="help" type="button" title="Why this output CRS?">?</button><span class="pop" id="outWhy"></span></span><span class="badge" id="outFrame" hidden></span></div>
-            <details class="disclose" id="outWktBox" hidden><summary>WKT</summary>
-              <pre class="wkt" id="outWkt"></pre>
-            </details>
-            <dl class="kv" style="margin-top: 7px">
-              <dt>heights</dt><dd id="outHeights"></dd>
-            </dl>
+            <summary><span class="section-title">Output CRS</span> <span class="small" id="outSummary"></span><span class="why" id="outWhy"></span></summary>
+            <div id="outBody"></div>
           </details>
         </section>
 

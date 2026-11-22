@@ -32,20 +32,47 @@ export function initPanel() {
   // Help popovers: the "?" button toggles the popover after it.
   const closeAll = () => {
     document.querySelectorAll(".pop.show").forEach((p) => p.classList.remove("show"));
+    floating.hidden = true;
     document.querySelectorAll(".help.open").forEach((b) => b.classList.remove("open"));
   };
-  document.querySelectorAll<HTMLButtonElement>(".help").forEach((b) => {
-    b.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const pop = b.nextElementSibling!;
-      const show = !pop.classList.contains("show");
-      closeAll();
-      pop.classList.toggle("show", show);
-      b.classList.toggle("open", show);
-    });
+  // One listener for all "?" buttons, also those rendered later (e.g. the
+  // Input CRS section's).
+  document.addEventListener("click", (e) => {
+    const b = (e.target as Element | null)?.closest?.(".help");
+    if (!b) return closeAll();
+    e.preventDefault();
+    e.stopPropagation();
+    const pop = b.nextElementSibling as HTMLElement;
+    const show = !b.classList.contains("open");
+    closeAll();
+    b.classList.toggle("open", show);
+    // In the scrolling tab area a popover would be clipped: show a copy
+    // above the panel instead.
+    if (show && b.closest(".tabbody")) showFloating(pop, b);
+    else pop.classList.toggle("show", show);
   });
-  document.addEventListener("click", closeAll);
+  // Fixed popovers do not follow the scrolled tab: close them.
+  document.querySelector(".tabbody")?.addEventListener("scroll", closeAll, true);
+}
+
+/**
+ * The popover of the scrolling tab area, a child of <body>: the panel's
+ * backdrop-filter makes it the containing block of fixed descendants, so a
+ * popover inside the panel stays clipped by the tab's scrolling.
+ */
+const floating = h("div", { class: "pop floating", hidden: true });
+document.body.append(floating);
+
+/** Shows a copy of `pop` as wide as its card, below `button` (above without room). */
+function showFloating(pop: HTMLElement, button: Element) {
+  floating.replaceChildren(...[...pop.childNodes].map((n) => n.cloneNode(true)));
+  floating.hidden = false;
+  const card = (button.closest(".anchor, .card, .tab") ?? button).getBoundingClientRect();
+  const b = button.getBoundingClientRect();
+  Object.assign(floating.style, { left: `${card.left + 8}px`, width: `${card.width - 16}px`, top: "0px" });
+  const height = floating.getBoundingClientRect().height;
+  const below = b.bottom + 4;
+  floating.style.top = `${below + height <= window.innerHeight - 8 ? below : Math.max(8, b.top - 4 - height)}px`;
 }
 
 /** Status bar and Log tab, following a LoadStatus. */
