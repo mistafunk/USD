@@ -29,6 +29,14 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   Upload_Model_Non_IFC_Geolocate OID 1) have footprints hundreds to thousands of km away while their fields are normal
   and our 30 to 70 m models sit at the origin: the server's footprint is wrong. 7 others are continent-sized models
   (mis-scaled uploads), where one drawing matrix per mesh deviates by its linearization.
+- **Short-circuit when source and output CRS are the same.** A WGS84 layer in a global view (EPSG:4979 to EPSG:4979,
+  or EPSG:4326+5773 to itself with terrain) still runs the full path in `UsdGeospatialPlacementQuery::Resolve` and
+  `_ToOutput`: engine operations, ECEF round trip, central differences. With terrain it applies the geoid in both
+  directions, so it needs the EGM96 grid although the two cancel. When the source CRS is equivalent to the output
+  (an engine query, e.g. PROJ `proj_is_equivalent_to`; the source is a WKT, the output an EPSG code), take the origin
+  as `crs:position` and the frame as the source ENU columns, with operation "identity" and accuracy 0. The results
+  should not change (T9 and the C1 cases as checks); it saves the grid fetch and the per-vertex engine calls in
+  exact mode.
 - **Projected layers in non-metre units** (e.g. US feet): is the model in grid units (feet)? Needs a layer to measure;
   the wrapper keeps metres. Vertical grid scale: assumed 1.
 - **Switch the panel to Calcite components** (D27 follow-up): `@esri/calcite-components` as a direct pinned
