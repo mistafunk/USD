@@ -143,6 +143,17 @@ CityEngine exports: glTF Y-up, metres, x east, y up, z south, centred on the ori
   origins in both views; EGM96 mock reported unsupported, naming the missing grid; a rotated, scaled, translated
   model matches R(S p) + T. All 17 browser specs pass.
 
+**Update 2026-11-22, D23 grids (Claude Code):** vertical CRSs and grid-based shifts work natively and in the browser.
+`geo.py` builds libtiff 4.7.2 and PROJ with TIFF for both targets and pins six grids (EGM96, NADCON CONUS, HPGN
+California south, GEOID99, NADCON5 HARN, EGM2008). The engine reports `missingGrids` (results, placement, Hydra schema,
+observer, module) and the registry can `ResetEngines()`; the browser worker fetches the served grids a placement
+reports missing and places again. 2D source CRSs take the proposal's EGM2008 default height
+(`MakeCompoundCrs` + EPSG:3855), in C++ and in the reference. Test sites: D (2D, EGM2008) and H (NAVD88) now pass with
+control points; G uses NADCON. Native: 8 ctests pass (`UsdGeospatial|Gltf`), `reference -- compare` 66 ok. Browser:
+all 17 specs pass; T9 browser vs native 0.000 mm on 9 placed anchors including the grid-based G and H (D not comparable:
+EGM2008 not served); the EGM96 mock layer is placed 47.4 m higher (ellipsoidal 474.56 m at the first origin, as
+native `cs2cs`). WASM ctests (no grids under Node) treat results missing a grid the reference used as not comparable.
+
 Findings for later milestones:
 - emscripten 5.0.7 needs Python >= 3.10; `geo.py` sets `EMSDK_PYTHON` (AlmaLinux: `python3.12`).
 - USD's WASM build uses `-fexceptions`; PROJ and SQLite must too, or PROJ's internal throws abort.
@@ -287,3 +298,12 @@ Open questions to raise with Simon (or the proposal authors) are listed in PLAN.
   in the browser), then the live Zurich layer at its correct height. Its glb are 126 MB and 63 MB.
 - (3DOL, glTF) USD whole-archives only its own libraries; a plugin built outside `pxr/` lost its file format
   registration in the static WASM link until the module whole-archived it (same class as the C2 plugin fix).
+- (D23) PROJ's `USE_ONLY_EMBEDDED_RESOURCE_FILES` compiles out all file access, so grids can never load; WASM PROJ now
+  embeds proj.db without it (falls back to the embedded copy).
+- (D23) libtiff 4.7's CMake config links `ZLIB::ZLIB` without finding zlib, and its configure picks up a broken system
+  libjpeg-turbo CMake package even with JPEG off: geo.py disables all codec package lookups and injects
+  `tools/cmake/zlib-target.cmake`.
+- (D23) Grid-aware comparisons: the reference records `gridsUsed`; a C++ or browser result is "not comparable" only
+  if it reports one of those grids missing (a missing grid of a better, unused operation does not count: EGM2008's
+  1' grid `Und_min1x1_egm2008...` is not on the PROJ CDN).
+- (D23) Operation choice changes with grids: the C1 California zone 5 case uses HPGN (`NAD83 to WGS 84 (54)`).

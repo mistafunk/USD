@@ -30,11 +30,11 @@ Test scene (`testdata/scene`), one test case per 3DOL, expected outcome in `geot
 | A | building + wing in 3D UTM 11N, heading 30, 6 control points | pass |
 | B | mast in EPSG:4979 on Site A's NE corner, 4 control points | pass |
 | C | box in UTM 11N, control point NE has a planted 5 cm reference error | fail (harness self-test) |
-| D | box bound to a 2D CRS (NAD83 / California zone 5, ftUS) | unsupported (EGM2008 height) |
+| D | box bound to a 2D CRS (NAD83 / California zone 5, ftUS) | pass: heights from the proposal's EGM2008 default (native grid); browser: not served, `geotest:expectBrowser` unsupported |
 | E | direct binding to a missing CRS prim | unsupported (reported error, T7) |
 | F | box in WGS 72 (geographic 3D): Helmert shift to WGS 84 | pass; operation logged (T2) |
-| G | box in NAD27 (geographic 3D): NADCON grids missing | pass with the 7 m equation-based operation; skipped grid operations reported (T3, D22) |
-| H | box in California zone 5 + NAVD88 (compound) | unsupported (geoid grid, T4) |
+| G | box in NAD27 (geographic 3D) | pass with NADCON (grids, D23); without grids the 7 m equation-based operation, skipped ones reported (D22) |
+| H | box in California zone 5 + NAVD88 (compound) | pass (GEOID99 and NADCON5 grids, T4) |
 | I | 1 km runway in UTM 11N | pass; in a local Web Mercator view with matrix placement fail (`geotest:expectLocal`, T5) |
 | J | box in geographic 3D, heading 90 | pass (T8) |
 | K | box with orientation (0, 0, 0) at 0 and (90, 30, 0) at 10 | pass at the scene time 5, slerped (T8) |

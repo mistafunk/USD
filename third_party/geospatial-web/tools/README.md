@@ -82,6 +82,17 @@ usdImaging, the placement scene index and the PROJ engine) and the test fixtures
 (workspace from `USD_GEO_WS`, else five levels above `app/`), as nginx serves it in the container.
 `geo.py test web -- c4` runs the C4 browser check (`app/c4.html`).
 
+## Grids (D23)
+
+`geo.py bootstrap <target> --steps tiff,proj,grids`: libtiff 4.7.2 (static, zlib only, no system codec packages),
+PROJ with TIFF, and the pinned grids from cdn.proj.org: natively all six in `deps/native/share/proj` (PROJ's data
+directory, also used by the reference's pyproj), for wasm32 the five browser grids in `deps/wasm32/share/proj-grids`
+(not EGM2008, 77 MB). The module install serves those at `/usd/grids` with an `index.json`; the worker fetches the
+grids a placement reports missing (`missingGrids`) into `/proj` (PROJ_DATA), resets the engines and places again.
+WASM PROJ keeps file access (no `USE_ONLY_EMBEDDED_RESOURCE_FILES`, which compiles it out); `proj.db` stays embedded.
+libtiff's CMake config links `ZLIB::ZLIB` without finding zlib: `tools/cmake/zlib-target.cmake` provides it
+(`CMAKE_PROJECT_INCLUDE` in the dependency builds and the wasm32 preset, with emscripten's zlib port).
+
 ## glTF plugin
 
 `third_party/adobe-usd-gltf` (D24) needs tinygltf's headers: `geo.py bootstrap native|wasm32 --steps tinygltf` (pinned

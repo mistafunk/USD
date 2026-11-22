@@ -10,9 +10,10 @@ def Xform "SiteD" (
     prepend references = @./crs_library.usda@</CRS/NAD83_CA5_ftUS_2D>
 )
 {
-    double3 crs:position = (6804981.05, 1843915.87, 0)
-    custom string geotest:description = "T4-like: 2D CRS (California zone 5, ftUS) needs EGM2008 height"
-    custom token geotest:expect = "unsupported"
+    double3 crs:position = (6804980.83, 1843915.84, 0)
+    custom string geotest:description = "2D CRS (California zone 5, ftUS): heights from the EGM2008 default"
+    custom token geotest:expect = "pass"
+    custom token geotest:expectBrowser = "unsupported"
 
     def Mesh "Box"
     {
@@ -26,11 +27,43 @@ def Xform "SiteD" (
 
     def Xform "ControlPoints"
     {
-        def Xform "Origin"
+        def Xform "SW"
         {
             custom token geotest:referenceCrs = "EPSG:4979"
-            custom double3 geotest:referencePosition = (-117.19669999999999, 34.05649999999999, 9.313225746154785e-10)
-            double3 xformOp:translate = (0, 0, 0)
+            custom double3 geotest:referencePosition = (-117.19673249048063, 34.0564729602193, -32.71053896471858)
+            double3 xformOp:translate = (-3, -3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "SE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.196667501351, 34.056472960270305, -32.71053896471858)
+            double3 xformOp:translate = (3, -3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "NE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19666750115675, 34.0565270519305, -32.71053896378726)
+            double3 xformOp:translate = (3, 3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "NW"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.1967324903277, 34.05652705187954, -32.71053896378726)
+            double3 xformOp:translate = (-3, 3, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "TopNE"
+        {
+            custom token geotest:referenceCrs = "EPSG:4979"
+            custom double3 geotest:referencePosition = (-117.19666750117203, 34.05652705191773, -29.710538961924613)
+            double3 xformOp:translate = (3, 3, 3)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
     }

@@ -2,7 +2,8 @@
 // Test data on a stage (reference/README.md): control points (prims with
 // geotest:referencePosition, geotest:referenceCrs), test cases (anchors with
 // geotest:expect, geotest:description and optionally geotest:expectLocal, the
-// outcome in a local view with matrix placement) and the evaluation time
+// outcome in a local view with matrix placement, and geotest:expectBrowser,
+// the outcome placed live in the browser) and the evaluation time
 // (root layer customLayerData geotest:time). Not proposal schema; read by
 // geospatialRecord and geospatialModule like the offline reference reads it.
 //
@@ -42,6 +43,8 @@ struct GeospatialWebTestCase
     std::string description;
     /// Outcome in a local view with matrix placement, if it differs.
     std::string expectLocal;
+    /// Outcome placed live in the browser, if it differs (grids, D23).
+    std::string expectBrowser;
 };
 
 struct GeospatialWebTestData
@@ -116,7 +119,8 @@ GeospatialWebReadTestData(const UsdStageRefPtr& stage)
         }
         data.testCases.push_back({prim.GetPath().GetString(), expect,
                                   GetString(prim, "geotest:description"),
-                                  GetString(prim, "geotest:expectLocal")});
+                                  GetString(prim, "geotest:expectLocal"),
+                                  GetString(prim, "geotest:expectBrowser")});
     }
     return data;
 }

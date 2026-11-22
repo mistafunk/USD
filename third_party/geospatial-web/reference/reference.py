@@ -70,7 +70,10 @@ ATTR_CP_CRS = "geotest:referenceCrs"             # token, e.g. "EPSG:4979"
 ATTR_EXPECT = "geotest:expect"                   # token on an anchor
 ATTR_DESCRIPTION = "geotest:description"
 # Outcome in a local view with the matrix shortcut, where it differs (T5).
-ATTR_EXPECT_LOCAL = "geotest:expectLocal"         # string on an anchor
+ATTR_EXPECT_LOCAL = "geotest:expectLocal"
+# Outcome when placed live in the browser, where it differs: grids are
+# fetched on demand there, but EGM2008 is not served (D23).
+ATTR_EXPECT_BROWSER = "geotest:expectBrowser"         # string on an anchor
 CP_TOLERANCE = 0.01  # client vs reference (test plan)
 
 OUTPUTS = {
@@ -261,9 +264,7 @@ def check_source_crs(crs):
     or other Cartesian, e.g. a topocentric derived CRS) or geocentric X/Y/Z."""
     dirs = [a.direction for a in crs.axis_info]
     if len(dirs) != 3:
-        raise Unsupported(
-            "2D CRS: height needs the EGM2008 default vertical reference, "
-            "which needs a geoid grid this reference does not ship")
+        raise Unsupported("CRS with {} axes; placement needs 3".format(len(dirs)))
     if sorted(dirs) not in (sorted(SUPPORTED_DIRECTIONS["projected"]),
                             sorted(SUPPORTED_DIRECTIONS["geocentric"])):
         raise Unsupported("unsupported axis directions {}".format(dirs))
@@ -299,6 +300,18 @@ def area_at(lon, lat):
     from pyproj.aoi import AreaOfInterest
     d = 1e-6
     return AreaOfInterest(lon - d, lat - d, lon + d, lat + d)
+
+
+def grids_used(transformer):
+    """Short names of the grid files a transformer's operations use."""
+    if isinstance(transformer, _Chain):
+        return grids_used(transformer.first) + grids_used(transformer.second)
+    names = []
+    for op in transformer.operations or []:
+        for g in getattr(op, "grids", []):
+            if g.short_name not in names:
+                names.append(g.short_name)
+    return names
 
 
 class _Chain:
@@ -362,6 +375,11 @@ class Placement:
         except pyproj.exceptions.CRSError as e:
             raise Invalid("crs:wkt does not parse: {}".format(e))
         self.src_name = self.src.name
+        if len(self.src.axis_info) == 2:
+            # The proposal's default: a 2D CRS's heights are relative to
+            # EGM2008 (EPSG:3855).
+            self.src = CompoundCRS("{} + EGM2008 height".format(self.src.name),
+                                   [self.src, CRS("EPSG:3855")])
         check_source_crs(self.src)
 
         pos_attr = anchor.GetAttribute(ATTR_POSITION)
@@ -391,6 +409,7 @@ class Placement:
         if not all(math.isfinite(c) for c in (lon, lat, h)):
             raise Unsupported("position cannot be converted to geographic 3D")
         self.to_geo_operation = to_geo.description
+        self.to_geo = to_geo
         if kind_is_geocentric_pole(self.src, self.position):
             raise Unsupported("model attitude undefined at geocentric X = Y = 0")
         self.anchor_geo = (lon, lat, h)
@@ -557,6 +576,9 @@ def test_cases(stage):
             local = anchor.GetAttribute(ATTR_EXPECT_LOCAL)
             if local and local.HasAuthoredValue():
                 case["expectLocal"] = str(local.Get())
+            browser = anchor.GetAttribute(ATTR_EXPECT_BROWSER)
+            if browser and browser.HasAuthoredValue():
+                case["expectBrowser"] = str(browser.Get())
             cases.append(case)
     return cases
 
@@ -652,7 +674,9 @@ def resolve_anchor(anchor, mpu, up, out_crs, frame, time=Usd.TimeCode.Default())
         return {**rec, "status": "error", "reason": str(e)}
     except Unsupported as e:
         return {**rec, "status": "unsupported", "reason": str(e)}
+    grids = [g for g in grids_used(pl.to_geo) + grids_used(pl.to_out)]
     return {**rec, "status": "ok", "sourceCrs": pl.src_name,
+            "gridsUsed": list(dict.fromkeys(grids)),
             "position": pl.position, "orientation": pl.orientation,
             "origin": [float(c) for c in pl.origin_out],
             "matrix": list(jacobian4(pl).T.reshape(-1)),
@@ -853,18 +877,29 @@ def fixtures():
             bias={"NE": SITE_C_BIAS})
     site("C", site_c)
 
-    # Site D: 2D CRS. Height would come from the EGM2008 default vertical
-    # reference, which needs a geoid grid: unsupported, reported.
-    e_d, n_d = Transformer.from_crs("EPSG:4326", ca5_ftus, always_xy=True).transform(
-        SITE_A_LONLAT[0] - SITE_D_WEST, SITE_A_LONLAT[1])
+    nad83_3d = CRS("EPSG:4269").to_3d()
+
+    def datum_position(crs, position, lonlat):
+        """A position in a (compound) CRS in its datum's geographic 3D CRS,
+        with the engine's policy (grids included)."""
+        return best_transformer(crs, nad83_3d, area_at(*lonlat)).transform(*position)
+
+    # Site D: 2D CRS. Its heights are relative to EGM2008, the proposal's
+    # default (EGM2008 grid: natively only; unsupported in the browser).
+    lonlat_d = (SITE_A_LONLAT[0] - SITE_D_WEST, SITE_A_LONLAT[1])
+    e_d, n_d = Transformer.from_crs("EPSG:4326", ca5_ftus, always_xy=True).transform(*lonlat_d)
+    pos_d = (round(e_d, 2), round(n_d, 2), 0.0)
+    ca5_egm08 = CompoundCRS("{} + EGM2008 height".format(ca5_ftus.name),
+                            [ca5_ftus, CRS("EPSG:3855")])
+    box_d = (6.0, 6.0, 3.0)
 
     def site_d(stage, d):
-        bind(d, "/CRS/NAD83_CA5_ftUS_2D", (round(e_d, 2), round(n_d, 2), 0.0))
-        expect(d, "unsupported", "T4-like: 2D CRS (California zone 5, ftUS) needs EGM2008 height")
-        box_mesh(stage, "/SiteD/Box", (6.0, 6.0, 3.0), (0.5, 0.8, 0.4))
-        add_control_points(stage, "/SiteD", (SITE_A_LONLAT[0] - SITE_D_WEST,
-                                             SITE_A_LONLAT[1], 0.0), np.eye(3),
-                           {"Origin": (0, 0, 0)})
+        bind(d, "/CRS/NAD83_CA5_ftUS_2D", pos_d)
+        expect(d, "pass", "2D CRS (California zone 5, ftUS): heights from the EGM2008 default")
+        d.CreateAttribute(ATTR_EXPECT_BROWSER, Sdf.ValueTypeNames.Token).Set("unsupported")
+        box_mesh(stage, "/SiteD/Box", box_d, (0.5, 0.8, 0.4))
+        add_control_points(stage, "/SiteD", datum_position(ca5_egm08, pos_d, lonlat_d),
+                           np.eye(3), box_points(box_d), source=nad83_3d)
     site("D", site_d)
 
     # Site E: direct binding whose CRS prim does not exist. An error, with no
@@ -900,14 +935,18 @@ def fixtures():
         add_control_points(stage, "/SiteG", geo_g, np.eye(3), box_points(box_g), source=nad27)
     site("G", site_g)
 
-    # Site H (T4): compound CRS with NAVD88 heights, which need a geoid grid.
-    e_h, n_h = Transformer.from_crs("EPSG:4326", ca5_ftus, always_xy=True).transform(
-        SITE_A_LONLAT[0] + SITE_H_EAST, SITE_A_LONLAT[1])
+    # Site H (T4): compound CRS with NAVD88 heights (GEOID99 grid, NADCON5).
+    lonlat_h = (SITE_A_LONLAT[0] + SITE_H_EAST, SITE_A_LONLAT[1])
+    e_h, n_h = Transformer.from_crs("EPSG:4326", ca5_ftus, always_xy=True).transform(*lonlat_h)
+    pos_h = (round(e_h, 2), round(n_h, 2), 1200.0)
+    box_h = (6.0, 6.0, 3.0)
 
     def site_h(stage, h):
-        bind(h, "/CRS/CA5_NAVD88_ftUS", (round(e_h, 2), round(n_h, 2), 1200.0))
-        expect(h, "unsupported", "T4: California zone 5 + NAVD88 heights need a geoid grid")
-        box_mesh(stage, "/SiteH/Box", (6.0, 6.0, 3.0), (0.9, 0.85, 0.3))
+        bind(h, "/CRS/CA5_NAVD88_ftUS", pos_h)
+        expect(h, "pass", "T4: California zone 5 + NAVD88 heights (geoid grid)")
+        box_mesh(stage, "/SiteH/Box", box_h, (0.9, 0.85, 0.3))
+        add_control_points(stage, "/SiteH", datum_position(ca5_navd88, pos_h, lonlat_h),
+                           np.eye(3), box_points(box_h), source=nad83_3d)
     site("H", site_h)
 
     # Site I (T5): a 1 km runway in UTM 11N, where the matrix shortcut and the
@@ -1017,9 +1056,12 @@ def proj_expected():
          (30.0, 0.0, 0.0), _box_points(40, 20, 12)),
         ("Ca5ftUS3d", "NAD83_CA5_ftUS_3D", tuple(round(c, 3) for c in ca5_pos),
          (-45.0, 2.0, 1.0), _box_points(30, 30, 10)),
-        ("Utm2d", "WGS84_UTM11N", (round(e, 3), round(n, 3), 0.0), None, None),
+        # 2D: heights from the EGM2008 default (D23; native grids only).
+        ("Utm2d", "WGS84_UTM11N", (round(e, 3), round(n, 3), 0.0), None,
+         _box_points(10, 10, 5)),
+        # NAVD88 heights: GEOID99 and NADCON5 grids.
         ("Ca5Navd88", "CA5_NAVD88_ftUS",
-         (round(ca5_pos[0], 3), round(ca5_pos[1], 3), 1200.0), None, None),
+         (round(ca5_pos[0], 3), round(ca5_pos[1], 3), 1200.0), None, _box_points(10, 10, 5)),
     ]
     for name, crs_name, pos, ori, _ in anchors:
         prim = UsdGeom.Xform.Define(zup, "/World/" + name).GetPrim()
@@ -1064,6 +1106,7 @@ def proj_expected():
         else:
             ecef = Placement(anchor, mpu, up, "EPSG:4978", "crs")
             rec["origin4979"] = geo["origin"]
+            rec["gridsUsed"] = geo["gridsUsed"]
             rec["operation"] = geo["operation"]
             rec["points"] = [list(p) for p in points]
             rec["points4978"] = [list(map(float, ecef.origin_out + ecef.exact(p)))

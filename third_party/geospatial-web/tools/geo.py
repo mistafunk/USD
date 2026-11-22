@@ -54,6 +54,32 @@ SQLITE = dict(
     name="sqlite-amalgamation-3540100",
     url="https://sqlite.org/2026/sqlite-amalgamation-3540100.zip",
     sha256="0a9c8e34352dad46006aa82836d5383bff9dc6bc9ce5a60553c05aa30e6ad1f9")
+# GeoTIFF grid support in PROJ (D23).
+TIFF = dict(
+    name="tiff-4.7.2",
+    url="https://download.osgeo.org/libtiff/tiff-4.7.2.tar.gz",
+    sha256="672bd7d10aee4606171afb864f3570b83340f6a33e2c186dc0512f7145ffdf6a")
+# PROJ grids the tests and the first real data need (D23), from PROJ's CDN.
+# "browser": also served to the web app, which fetches them on demand.
+GRIDS = [
+    # EGM96 heights: ArcGIS 3D object layers with vcsWkid 5773 (Zurich).
+    dict(name="us_nga_egm96_15.tif", browser=True,
+         sha256="db493027562c9b004d7220fa881f5603adada4e1c5029b933fa7de4547b0e78d"),
+    # NAD27 -> NAD83 (NADCON) and NAD83 -> WGS 84 in California (HPGN): T3.
+    dict(name="us_noaa_conus.tif", browser=True,
+         sha256="44611d823c48e5347500ee6afe40ff33d2b88cf817bf59f705ed4a4c3bd687d7"),
+    dict(name="us_noaa_cshpgn.tif", browser=True,
+         sha256="d54183c832e0366fc558147961bd8ae7d0dd3b5ae945069afd6a37a5a5c604c9"),
+    # NAVD88 heights (GEOID99) and NAD83 -> NAD83(HARN) (NADCON5): T4.
+    dict(name="us_noaa_g1999u05.tif", browser=True,
+         sha256="3b9325111c21b42e4e254ff1455db825587abc530188a94f9628321969797139"),
+    dict(name="us_noaa_nadcon5_nad83_1986_nad83_harn_conus.tif", browser=True,
+         sha256="e12ac2e886edafe616e0994c610ad3daa01db17c00d0e9938145d956f249fc2f"),
+    # EGM2008, the proposal's default height for 2D CRSs: native only (77 MB).
+    dict(name="us_nga_egm08_25.tif", browser=False,
+         sha256="4191d471eefebf24091b56dbc604353cb3b8cf8cc70e448bb9ae56a272bef17a"),
+]
+GRID_URL = "https://cdn.proj.org/"
 # Header-only, for the Adobe glTF file format plugin (third_party/adobe-usd-gltf).
 TINYGLTF = dict(
     name="tinygltf-2.9.7",
@@ -245,8 +271,8 @@ def emscripten_toolchain():
 # --------------------------------------------------------------------------
 # Downloads
 
-def fetch(pkg):
-    """Downloads and unpacks a pinned archive; returns the source directory."""
+def download(pkg):
+    """Downloads a pinned file once and checks it; returns its path."""
     DOWNLOADS.mkdir(parents=True, exist_ok=True)
     archive = DOWNLOADS / pkg["url"].rsplit("/", 1)[1]
     if not archive.exists():
@@ -259,7 +285,12 @@ def fetch(pkg):
     if digest != pkg["sha256"]:
         archive.unlink()
         fail("checksum mismatch for {} (got {})".format(archive.name, digest))
+    return archive
 
+
+def fetch(pkg):
+    """Downloads and unpacks a pinned archive; returns the source directory."""
+    archive = download(pkg)
     src_root = CACHE / "src"
     src = src_root / pkg["name"]
     if not src.exists():
@@ -306,7 +337,9 @@ def cmake_dep(log, target, name, src, args, jobs):
            "-DCMAKE_BUILD_TYPE=Release",
            "-DCMAKE_INSTALL_PREFIX={}".format(prefix),
            "-DCMAKE_PREFIX_PATH={}".format(prefix),
-           "-DCMAKE_INSTALL_LIBDIR=lib"]
+           "-DCMAKE_INSTALL_LIBDIR=lib",
+           # ZLIB::ZLIB for libtiff's CMake config (see the file).
+           "-DCMAKE_PROJECT_INCLUDE={}".format(SCRIPT_DIR / "cmake" / "zlib-target.cmake")]
     if target == "wasm32":
         cmd += ["-DCMAKE_TOOLCHAIN_FILE={}".format(emscripten_toolchain()),
                 "-DCMAKE_FIND_ROOT_PATH={}".format(prefix),
@@ -397,6 +430,51 @@ def step_tinygltf(log, target, args):
     log.write("[geo] tinygltf headers in {}\n".format(dst))
 
 
+def emscripten_zlib(log):
+    """zlib from emscripten's ports (built into the emscripten cache)."""
+    env = emsdk_env()
+    run([exe("embuilder") if is_windows() else "embuilder", "build", "zlib"], log, env=env)
+    sysroot = Path(env["EM_CACHE"]) / "sysroot"
+    return ["-DZLIB_INCLUDE_DIR={}".format(sysroot / "include"),
+            "-DZLIB_LIBRARY={}".format(sysroot / "lib" / "wasm32-emscripten" / "libz.a")]
+
+
+def step_tiff(log, target, args):
+    """Static libtiff with zlib only (PROJ's GeoTIFF grids), for PROJ."""
+    src = fetch(TIFF)
+    opts = ["-DBUILD_SHARED_LIBS=OFF", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
+            "-Dtiff-tools=OFF", "-Dtiff-tests=OFF", "-Dtiff-contrib=OFF",
+            "-Dtiff-docs=OFF", "-Dcxx=OFF", "-Dzlib=ON", "-Dlibdeflate=OFF",
+            "-Djpeg=OFF", "-Dold-jpeg=OFF", "-Djbig=OFF", "-Dlerc=OFF",
+            "-Dlzma=OFF", "-Dzstd=OFF", "-Dwebp=OFF", "-Dpixarlog=OFF"]
+    # Do not look for the codecs at all: system packages are not part of the
+    # pinned build (and AlmaLinux's libjpeg-turbo CMake package can be broken).
+    opts += ["-DCMAKE_DISABLE_FIND_PACKAGE_{}=ON".format(pkg) for pkg in
+             ("JPEG", "libjpeg-turbo", "Deflate", "LibLZMA", "ZSTD", "WebP",
+              "JBIG", "LERC",
+              "OpenGL", "GLUT")]
+    if target == "wasm32":
+        opts += emscripten_zlib(log)
+    cmake_dep(log, target, "tiff", src, opts, args.jobs)
+
+
+def step_grids(log, target, args):
+    """Pinned PROJ grids: natively into PROJ's data directory (found without
+    configuration, also by the reference's pyproj); for wasm32 the browser
+    set into share/proj-grids, which the module install serves."""
+    if target == "native":
+        dst = deps_dir(target) / "share" / "proj"
+        grids = GRIDS
+    else:
+        dst = deps_dir(target) / "share" / "proj-grids"
+        grids = [g for g in GRIDS if g["browser"]]
+    dst.mkdir(parents=True, exist_ok=True)
+    for g in grids:
+        path = download(dict(g, url=GRID_URL + g["name"]))
+        shutil.copy2(path, dst / g["name"])
+        log.write("[geo] {} -> {}\n".format(g["name"], dst))
+
+
 def step_proj(log, target, args):
     src = fetch(PROJ)
     prefix = deps_dir(target)
@@ -406,7 +484,7 @@ def step_proj(log, target, args):
         "-DSQLite3_INCLUDE_DIR={}".format(prefix / "include"),
         "-DSQLite3_LIBRARY={}".format(lib),
         "-DEXE_SQLITE3={}".format(host_sqlite3()),
-        "-DENABLE_TIFF=OFF",
+        "-DENABLE_TIFF=ON",
         "-DENABLE_CURL=OFF",
         "-DBUILD_TESTING=OFF",
     ]
@@ -416,11 +494,13 @@ def step_proj(log, target, args):
         extra = ["-DBUILD_SHARED_LIBS=ON", "-DBUILD_APPS=ON",
                  "-DBUILD_PROJSYNC=OFF"]
     else:
-        # Static, with proj.db embedded in the library (no file system
-        # lookup). C4 replaces it with a database trimmed to the demo CRSs.
+        # Static, with proj.db embedded in the library. File access stays on
+        # (no USE_ONLY_EMBEDDED_RESOURCE_FILES, which compiles it out): grids
+        # are files the worker fetches on demand (D23); proj.db comes from
+        # the embedded copy when no file has it.
         extra = ["-DBUILD_SHARED_LIBS=OFF", "-DBUILD_APPS=OFF",
                  "-DEMBED_RESOURCE_FILES=ON",
-                 "-DUSE_ONLY_EMBEDDED_RESOURCE_FILES=ON"]
+                 "-DUSE_ONLY_EMBEDDED_RESOURCE_FILES=OFF"] + emscripten_zlib(log)
     cmake_dep(log, target, "proj", src, common + extra, args.jobs)
 
 
@@ -458,15 +538,16 @@ def step_usd_deps(log, target, args):
 
 
 # Build trees under cache/deps-build/<target> that each step owns.
-STEP_BUILD_DIRS = {"sqlite": "sqlite3", "proj": "proj", "usd-deps": "build_usd"}
+STEP_BUILD_DIRS = {"sqlite": "sqlite3", "tiff": "tiff", "proj": "proj",
+                   "usd-deps": "build_usd"}
 
 BOOTSTRAP_STEPS = {
-    "native": [("venv", step_venv), ("sqlite", step_sqlite),
-               ("proj", step_proj), ("tinygltf", step_tinygltf),
-               ("usd-deps", step_usd_deps)],
-    "wasm32": [("emsdk", step_emsdk), ("sqlite", step_sqlite),
-               ("proj", step_proj), ("tinygltf", step_tinygltf),
-               ("usd-deps", step_usd_deps)],
+    "native": [("venv", step_venv), ("sqlite", step_sqlite), ("tiff", step_tiff),
+               ("proj", step_proj), ("grids", step_grids),
+               ("tinygltf", step_tinygltf), ("usd-deps", step_usd_deps)],
+    "wasm32": [("emsdk", step_emsdk), ("sqlite", step_sqlite), ("tiff", step_tiff),
+               ("proj", step_proj), ("grids", step_grids),
+               ("tinygltf", step_tinygltf), ("usd-deps", step_usd_deps)],
 }
 
 

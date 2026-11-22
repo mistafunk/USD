@@ -115,6 +115,30 @@ install(
     DESTINATION ${webDir}/fixtures/arcgis
 )
 
+# PROJ grids for the browser (geo.py bootstrap wasm32 --steps grids), fetched
+# on demand by the worker, with an index of what is served.
+set(GEOSPATIAL_WEB_GRID_DIR "" CACHE PATH
+    "PROJ grids served to the browser (the wasm32 preset sets it)")
+set(grids "")
+if (GEOSPATIAL_WEB_GRID_DIR)
+    file(REAL_PATH "${GEOSPATIAL_WEB_GRID_DIR}" gridDir)
+    file(GLOB grids CONFIGURE_DEPENDS ${gridDir}/*.tif)
+endif()
+set(gridNames "")
+foreach(grid ${grids})
+    get_filename_component(name ${grid} NAME)
+    list(APPEND gridNames "\"${name}\"")
+endforeach()
+list(SORT gridNames)
+list(JOIN gridNames ", " gridList)
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/grids-index.json "{ \"grids\": [${gridList}] }\n")
+install(FILES ${grids} DESTINATION ${webDir}/grids)
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/grids-index.json
+    DESTINATION ${webDir}/grids
+    RENAME index.json
+)
+
 # The scene's files, so the app's worker knows what to fetch.
 set(sceneDir ${CMAKE_CURRENT_SOURCE_DIR}/../testdata/scene)
 file(GLOB sceneFiles CONFIGURE_DEPENDS RELATIVE ${sceneDir} ${sceneDir}/*.usda)

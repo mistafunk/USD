@@ -140,6 +140,9 @@ _WriteTestData(JsWriter& w, const GeospatialWebTestData& data)
         if (!c.expectLocal.empty()) {
             w.WriteKeyValue("expectLocal", c.expectLocal);
         }
+        if (!c.expectBrowser.empty()) {
+            w.WriteKeyValue("expectBrowser", c.expectBrowser);
+        }
         w.EndObject();
     }
     w.EndArray();

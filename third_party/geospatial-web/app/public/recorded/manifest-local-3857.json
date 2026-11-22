@@ -22,6 +22,7 @@
    "path": "/World/SiteA",
    "status": "ok",
    "sourceCrs": "WGS 84 / UTM zone 11N",
+   "gridsUsed": [],
    "position": [
     481957.95,
     3768437.85,
@@ -62,6 +63,7 @@
    "path": "/World/SiteB",
    "status": "ok",
    "sourceCrs": "WGS 84",
+   "gridsUsed": [],
    "position": [
     -117.19525820912393,
     34.05648790373001,
@@ -102,6 +104,7 @@
    "path": "/World/SiteC",
    "status": "ok",
    "sourceCrs": "WGS 84 / UTM zone 11N",
+   "gridsUsed": [],
    "position": [
     481957.95,
     3768497.85,
@@ -140,8 +143,47 @@
   },
   {
    "path": "/World/SiteD",
-   "status": "unsupported",
-   "reason": "2D CRS: height needs the EGM2008 default vertical reference, which needs a geoid grid this reference does not ship"
+   "status": "ok",
+   "sourceCrs": "NAD83 / California zone 5 (ftUS)",
+   "gridsUsed": [
+    "us_nga_egm08_25.tif",
+    "us_noaa_cshpgn.tif"
+   ],
+   "position": [
+    6804980.83,
+    1843915.84,
+    0.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -13046276.966187732,
+    4036391.121949151,
+    -32.71054037567228
+   ],
+   "matrix": [
+    1.2057598512619734,
+    1.1422671377658844e-06,
+    0.0,
+    0.0,
+    3.2205134630203247e-06,
+    1.2113376972265542,
+    0.0,
+    0.0,
+    0.0,
+    -4.656612873077393e-10,
+    1.0000000004656613,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "operation": "NAD83 to WGS 84 (54) (with axis order normalized for visualization); then Null geographic offset from WGS 84 (geog3D) to WGS 84 (geog2D) + unknown (with axis order normalized for visualization)",
+   "accuracy": 2.0
   },
   {
    "path": "/World/SiteE",
@@ -152,6 +194,7 @@
    "path": "/World/SiteF",
    "status": "ok",
    "sourceCrs": "WGS 72",
+   "gridsUsed": [],
    "position": [
     -117.194,
     34.0565,
@@ -192,6 +235,10 @@
    "path": "/World/SiteG",
    "status": "ok",
    "sourceCrs": "NAD27",
+   "gridsUsed": [
+    "us_noaa_conus.tif",
+    "us_noaa_cshpgn.tif"
+   ],
    "position": [
     -117.1925,
     34.0565,
@@ -203,21 +250,21 @@
     0.0
    ],
    "origin": [
-    -13045905.615172692,
-    4036393.120724064,
-    -21.178682463243604
+    -13045906.40565717,
+    4036392.968943009,
+    0.0
    ],
    "matrix": [
-    1.205757886171341,
-    1.0230578482151031e-05,
-    -1.2495554983615875e-05,
+    1.2057819971814752,
+    -3.40375117957592e-06,
+    -4.656612873077393e-10,
     0.0,
-    -1.0184012353420258e-05,
-    1.2113356357440352,
-    2.5890767574310303e-07,
+    -1.0639429092407227e-05,
+    1.2113203241024166,
     0.0,
-    1.5064142644405365e-05,
-    -3.1478703022003174e-07,
+    0.0,
+    0.0,
+    0.0,
     0.9999999995343387,
     0.0,
     0.0,
@@ -225,18 +272,59 @@
     0.0,
     1.0
    ],
-   "operation": "NAD27 to WGS 84 (6) (with axis order normalized for visualization); then Null geographic offset from WGS 84 (geog3D) to WGS 84 (geog2D) + unknown (with axis order normalized for visualization)",
-   "accuracy": 7.0
+   "operation": "NAD27 to NAD83 (1) + NAD83 to WGS 84 (54) (with axis order normalized for visualization); then Null geographic offset from WGS 84 (geog3D) to WGS 84 (geog2D) + unknown (with axis order normalized for visualization)",
+   "accuracy": 2.15
   },
   {
    "path": "/World/SiteH",
-   "status": "unsupported",
-   "reason": "position cannot be converted to geographic 3D: no coordinate operation from 'NAD83 / California zone 5 (ftUS) + NAVD88 height (ftUS)' to 'NAD83'"
+   "status": "ok",
+   "sourceCrs": "NAD83 / California zone 5 (ftUS) + NAVD88 height (ftUS)",
+   "gridsUsed": [
+    "us_noaa_g1999u05.tif",
+    "us_noaa_nadcon5_nad83_1986_nad83_harn_conus.tif",
+    "us_noaa_cshpgn.tif"
+   ],
+   "position": [
+    6806707.28,
+    1843929.68,
+    1200.0
+   ],
+   "orientation": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "origin": [
+    -13045642.447335048,
+    4036391.1201494313,
+    333.2066490640864
+   ],
+   "matrix": [
+    1.2056907527148724,
+    1.1418014764785767e-06,
+    0.0,
+    0.0,
+    3.2242387533187866e-06,
+    1.2112678594421595,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0000000004656613,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "operation": "NAD83 to WGS 84 (54) (with axis order normalized for visualization); then Null geographic offset from WGS 84 (geog3D) to WGS 84 (geog2D) + unknown (with axis order normalized for visualization)",
+   "accuracy": 2.0
   },
   {
    "path": "/World/SiteI",
    "status": "ok",
    "sourceCrs": "WGS 84 / UTM zone 11N",
+   "gridsUsed": [],
    "position": [
     481957.95,
     3768237.85,
@@ -277,6 +365,7 @@
    "path": "/World/SiteJ",
    "status": "ok",
    "sourceCrs": "WGS 84",
+   "gridsUsed": [],
    "position": [
     -117.1985,
     34.0565,
@@ -317,6 +406,7 @@
    "path": "/World/SiteK",
    "status": "ok",
    "sourceCrs": "WGS 84",
+   "gridsUsed": [],
    "position": [
     -117.19999999999999,
     34.0565,
@@ -522,7 +612,7 @@
   {
    "path": "/World/SiteD/Box",
    "anchor": "/World/SiteD",
-   "status": "unsupported",
+   "status": "ok",
    "color": [
     0.5,
     0.800000011920929,
@@ -539,7 +629,26 @@
    "indices": {
     "byteOffset": 4896,
     "count": 36
-   }
+   },
+   "matrix": [
+    1.2057598512619734,
+    1.1422671377658844e-06,
+    0.0,
+    0.0,
+    3.2205134630203247e-06,
+    1.2113376972265542,
+    0.0,
+    0.0,
+    0.0,
+    -4.656612873077393e-10,
+    1.0000000004656613,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 3.609799150893282e-06
   },
   {
    "path": "/World/SiteE/Box",
@@ -626,16 +735,16 @@
     "count": 36
    },
    "matrix": [
-    1.205757886171341,
-    1.0230578482151031e-05,
-    -1.2495554983615875e-05,
+    1.2057819971814752,
+    -3.40375117957592e-06,
+    -4.656612873077393e-10,
     0.0,
-    -1.0184012353420258e-05,
-    1.2113356357440352,
-    2.5890767574310303e-07,
+    -1.0639429092407227e-05,
+    1.2113203241024166,
     0.0,
-    1.5064142644405365e-05,
-    -3.1478703022003174e-07,
+    0.0,
+    0.0,
+    0.0,
     0.9999999995343387,
     0.0,
     0.0,
@@ -643,12 +752,12 @@
     0.0,
     1.0
    ],
-   "linearizationError": 7.389528100139818e-06
+   "linearizationError": 7.38332076085894e-06
   },
   {
    "path": "/World/SiteH/Box",
    "anchor": "/World/SiteH",
-   "status": "unsupported",
+   "status": "ok",
    "color": [
     0.8999999761581421,
     0.8500000238418579,
@@ -665,7 +774,26 @@
    "indices": {
     "byteOffset": 8928,
     "count": 36
-   }
+   },
+   "matrix": [
+    1.2056907527148724,
+    1.1418014764785767e-06,
+    0.0,
+    0.0,
+    3.2242387533187866e-06,
+    1.2112678594421595,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0000000004656613,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "linearizationError": 3.6076921608541177e-06
   },
   {
    "path": "/World/SiteI/Runway",
@@ -1031,19 +1159,87 @@
    }
   },
   {
-   "path": "/World/SiteD/ControlPoints/Origin",
+   "path": "/World/SiteD/ControlPoints/SW",
    "anchor": "/World/SiteD",
    "local": [
-    0.0,
-    0.0,
+    -3.0,
+    -3.0,
     0.0
    ],
    "reference": {
     "crs": "EPSG:4979",
     "position": [
-     -117.19669999999999,
-     34.05649999999999,
-     9.313225746154785e-10
+     -117.19673249048063,
+     34.0564729602193,
+     -32.71053896471858
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteD/ControlPoints/SE",
+   "anchor": "/World/SiteD",
+   "local": [
+    3.0,
+    -3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.196667501351,
+     34.056472960270305,
+     -32.71053896471858
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteD/ControlPoints/NE",
+   "anchor": "/World/SiteD",
+   "local": [
+    3.0,
+    3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19666750115675,
+     34.0565270519305,
+     -32.71053896378726
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteD/ControlPoints/NW",
+   "anchor": "/World/SiteD",
+   "local": [
+    -3.0,
+    3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.1967324903277,
+     34.05652705187954,
+     -32.71053896378726
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteD/ControlPoints/TopNE",
+   "anchor": "/World/SiteD",
+   "local": [
+    3.0,
+    3.0,
+    3.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19666750117203,
+     34.05652705191773,
+     -29.710538961924613
     ]
    }
   },
@@ -1143,9 +1339,9 @@
    "reference": {
     "crs": "EPSG:4979",
     "position": [
-     -117.19340741854845,
-     34.05647882043703,
-     -21.178631011396646
+     -117.19341452044142,
+     34.05647769168105,
+     2.5099143385887146e-06
     ]
    }
   },
@@ -1160,9 +1356,9 @@
    "reference": {
     "crs": "EPSG:4979",
     "position": [
-     -117.19332076652603,
-     34.05647882104615,
-     -21.178730969317257
+     -117.19332786668608,
+     34.05647769147833,
+     2.508983016014099e-06
     ]
    }
   },
@@ -1177,9 +1373,9 @@
    "reference": {
     "crs": "EPSG:4979",
     "position": [
-     -117.19332076722115,
-     34.056550943124435,
-     -21.178728888742626
+     -117.19332786741437,
+     34.056549812645954,
+     2.5117769837379456e-06
     ]
    }
   },
@@ -1194,9 +1390,9 @@
    "reference": {
     "crs": "EPSG:4979",
     "position": [
-     -117.19340741931697,
-     34.056550942515315,
-     -21.17862893268466
+     -117.19341452124237,
+     34.056549812848566,
+     2.5117769837379456e-06
     ]
    }
   },
@@ -1211,9 +1407,94 @@
    "reference": {
     "crs": "EPSG:4979",
     "position": [
-     -117.19332076657842,
-     34.056550943084375,
-     -16.178728888742626
+     -117.19332786744832,
+     34.0565498126176,
+     5.000002511776984
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteH/ControlPoints/SW",
+   "anchor": "/World/SiteH",
+   "local": [
+    -3.0,
+    -3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.1910325087843,
+     34.05647294838429,
+     333.20665047876537
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteH/ControlPoints/SE",
+   "anchor": "/World/SiteH",
+   "local": [
+    3.0,
+    -3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19096752337902,
+     34.0564729484353,
+     333.20665047783405
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteH/ControlPoints/NE",
+   "anchor": "/World/SiteH",
+   "local": [
+    3.0,
+    3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19096752318455,
+     34.056527036976995,
+     333.20665047876537
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteH/ControlPoints/NW",
+   "anchor": "/World/SiteH",
+   "local": [
+    -3.0,
+    3.0,
+    0.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.1910325086311,
+     34.056527036926035,
+     333.20665047876537
+    ]
+   }
+  },
+  {
+   "path": "/World/SiteH/ControlPoints/TopNE",
+   "anchor": "/World/SiteH",
+   "local": [
+    3.0,
+    3.0,
+    3.0
+   ],
+   "reference": {
+    "crs": "EPSG:4979",
+    "position": [
+     -117.19096752319979,
+     34.05652703696423,
+     336.20665047783405
     ]
    }
   },
@@ -1474,8 +1755,9 @@
   },
   {
    "anchor": "/World/SiteD",
-   "expect": "unsupported",
-   "description": "T4-like: 2D CRS (California zone 5, ftUS) needs EGM2008 height"
+   "expect": "pass",
+   "description": "2D CRS (California zone 5, ftUS): heights from the EGM2008 default",
+   "expectBrowser": "unsupported"
   },
   {
    "anchor": "/World/SiteE",
@@ -1494,8 +1776,8 @@
   },
   {
    "anchor": "/World/SiteH",
-   "expect": "unsupported",
-   "description": "T4: California zone 5 + NAVD88 heights need a geoid grid"
+   "expect": "pass",
+   "description": "T4: California zone 5 + NAVD88 heights (geoid grid)"
   },
   {
    "anchor": "/World/SiteI",

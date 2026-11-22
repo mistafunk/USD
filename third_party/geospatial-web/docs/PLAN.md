@@ -288,8 +288,8 @@ The prototype passes when two 3DOLs in different spatial references land on thei
 | --- | --- | --- | --- |
 | T1 Same datum | 3DOL A in a UTM zone (WGS84), 3DOL B in WGS84 geographic 3D | Pass | Pass |
 | T2 Equation-based datum shift | 3DOL A in a national CRS with a Helmert transform to WGS84, 3DOL B in WGS84 | Pass; operation logged | Pass; operation logged |
-| T3 Grid-based datum shift | A CRS whose best transform is grid-based (NAD27 at Redlands: NADCON5) | Placed with the best equation-based operation, its accuracy reported, the skipped grid operations named (D22) | Same without grids (D18) |
-| T4 Vertical CRS mismatch | The proposal's California zone 5 + NAVD88 compound example vs ellipsoidal heights | Unsupported, reported (no geoid grid) | Pass with geoid grid; unsupported without |
+| T3 Grid-based datum shift | NAD27 at Redlands: best operation NADCON (`us_noaa_conus.tif`, `us_noaa_cshpgn.tif`) | Pass: the worker fetches the grids on demand (D23) | Pass (pinned grids) |
+| T4 Vertical CRS mismatch | The proposal's California zone 5 + NAVD88 compound example vs ellipsoidal heights | Pass: GEOID99 and NADCON5 grids fetched on demand (D23) | Pass (pinned grids) |
 | T5 Matrix vs full point map | T1 and T2 data, placement matrix vs F(x) per vertex | Under 1 cm difference for 3DOLs up to 1 km | Same |
 | T6 Precision | Global and local SceneView, camera 1 m from a control point | Under 1 px screen error | Not applicable |
 | T7 Broken binding | Direct binding to a missing CRS prim, or missing crs:position | Error data source, nothing drawn, no fallback to the parent CRS | Same, plus validator report |

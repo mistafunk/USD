@@ -231,6 +231,11 @@ public:
                 skipped.call<void>("push", s);
             }
             o.set("skippedOperations", skipped);
+            val grids = val::array();
+            for (const std::string& g : a.missingGrids) {
+                grids.call<void>("push", g);
+            }
+            o.set("missingGrids", grids);
             o.set("sourceCrs", a.sourceCrs);
             o.set("position", _Vec3(a.position));
             o.set("orientation", _Vec3(a.orientation));
@@ -309,6 +314,9 @@ public:
             if (!c.expectLocal.empty()) {
                 tc.set("expectLocal", c.expectLocal);
             }
+            if (!c.expectBrowser.empty()) {
+                tc.set("expectBrowser", c.expectBrowser);
+            }
             cases.call<void>("push", tc);
         }
         o.set("controlPoints", points);
@@ -342,6 +350,11 @@ public:
             : "error"));
         o.set("reason", placement.GetReason());
         o.set("engine", placement.GetEngine());
+        val grids = val::array();
+        for (const std::string& g : placement.GetMissingGrids()) {
+            grids.call<void>("push", g);
+        }
+        o.set("missingGrids", grids);
         if (!placement.IsOk()) {
             return o;
         }
@@ -419,6 +432,14 @@ CrsWkt(const std::string& definition, bool promote3D)
     return o;
 }
 
+/// New engine instances, which see grid files added to PROJ's search path
+/// (PROJ_DATA, e.g. /proj) since; call setOutput again afterwards.
+void
+ResetEngines()
+{
+    UsdGeospatialEngineRegistry::GetInstance().ResetEngines();
+}
+
 /// Caps USD's work threads, e.g. to the module's pthread pool.
 void
 SetThreadLimit(int n)
@@ -445,5 +466,6 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
         .function("testData", &GeospatialScene::TestData);
     emscripten::function("info", &GetInfo);
     emscripten::function("crsWkt", &CrsWkt);
+    emscripten::function("resetEngines", &ResetEngines);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

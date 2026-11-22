@@ -29,7 +29,7 @@ def Xform "SiteG" (
         def Xform "SW"
         {
             custom token geotest:referenceCrs = "EPSG:4979"
-            custom double3 geotest:referencePosition = (-117.19340741854845, 34.05647882043703, -21.178631011396646)
+            custom double3 geotest:referencePosition = (-117.19341452044142, 34.05647769168105, 0.0000025099143385887146)
             double3 xformOp:translate = (-4, -4, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
@@ -37,7 +37,7 @@ def Xform "SiteG" (
         def Xform "SE"
         {
             custom token geotest:referenceCrs = "EPSG:4979"
-            custom double3 geotest:referencePosition = (-117.19332076652603, 34.05647882104615, -21.178730969317257)
+            custom double3 geotest:referencePosition = (-117.19332786668608, 34.05647769147833, 0.000002508983016014099)
             double3 xformOp:translate = (4, -4, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
@@ -45,7 +45,7 @@ def Xform "SiteG" (
         def Xform "NE"
         {
             custom token geotest:referenceCrs = "EPSG:4979"
-            custom double3 geotest:referencePosition = (-117.19332076722115, 34.056550943124435, -21.178728888742626)
+            custom double3 geotest:referencePosition = (-117.19332786741437, 34.056549812645954, 0.0000025117769837379456)
             double3 xformOp:translate = (4, 4, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
@@ -53,7 +53,7 @@ def Xform "SiteG" (
         def Xform "NW"
         {
             custom token geotest:referenceCrs = "EPSG:4979"
-            custom double3 geotest:referencePosition = (-117.19340741931697, 34.056550942515315, -21.17862893268466)
+            custom double3 geotest:referencePosition = (-117.19341452124237, 34.056549812848566, 0.0000025117769837379456)
             double3 xformOp:translate = (-4, 4, 0)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }
@@ -61,7 +61,7 @@ def Xform "SiteG" (
         def Xform "TopNE"
         {
             custom token geotest:referenceCrs = "EPSG:4979"
-            custom double3 geotest:referencePosition = (-117.19332076657842, 34.056550943084375, -16.178728888742626)
+            custom double3 geotest:referencePosition = (-117.19332786744832, 34.0565498126176, 5.000002511776984)
             double3 xformOp:translate = (4, 4, 5)
             uniform token[] xformOpOrder = ["xformOp:translate"]
         }

@@ -70,6 +70,10 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
   `customLayerData`).
 - **`anchors[].skippedOperations`** (optional): more accurate operations the engine skipped because their grids are
   missing (T3, D22).
+- **`anchors[].gridsUsed`** (reference, optional): the grid files the chosen operations used. A build without one of
+  them (e.g. the browser for EGM2008) places the anchor differently: not comparable there (D23).
+- **`testCases[].expectBrowser`** (optional): the outcome placed live in the browser, where it differs (Site D:
+  EGM2008 is not served).
 - **`controlPoints`, `testCases`** are test data, read from the stage's `geotest:` attributes
   (`geotest:referencePosition`, `geotest:referenceCrs` on control point prims under an anchor; `geotest:expect`,
   `geotest:description` on the anchor). `local` is the control point in its anchor's model frame (stage units).
