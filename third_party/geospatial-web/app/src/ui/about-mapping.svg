@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 864 470" role="img" aria-label="How a 3D object layer's properties become USD attributes and transform operations">
+  <!-- The About dialog's second diagram: how a 3D object feature becomes the
+       geospatial CRS schema's attributes and the Model's transform ops (D29).
+       Inserted inline by src/ui/about.ts, so it uses the page's colour
+       variables; the fallbacks let it render on its own too. Highlighted
+       (.mp-new): the proposal's attributes; dashed (.mp-proj): projected
+       layers only. -->
+  <style>
+    .mp-col { font: 600 10.5px var(--font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif); fill: var(--faint, #8b929b); letter-spacing: .06em; }
+    .mp-t { font: 600 12px var(--font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif); fill: var(--text, #1f2328); }
+    .mp-s { font: 10.5px var(--font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif); fill: var(--muted, #5f6670); }
+    .mp-lbl { font: 10px var(--font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif); fill: var(--muted, #5f6670); }
+    .mp-mono { font: 11px var(--mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); fill: var(--text, #1f2328); }
+    .mp-box { fill: var(--surface-2, #f5f7f9); stroke: var(--line-strong, #cfd4da); }
+    .mp-prim { fill: var(--surface, #ffffff); stroke: var(--line-strong, #cfd4da); }
+    .mp-new { fill: var(--accent-bg, #e8f1fb); stroke: var(--accent, #0b63b6); }
+    .mp-new-t { fill: var(--accent, #0b63b6); }
+    .mp-proj { stroke-dasharray: 4 3; }
+    .mp-engine { fill: var(--ok-bg, #e5f4ec); stroke: var(--ok, #11734b); }
+    .mp-arrow { fill: none; stroke: var(--faint, #8b929b); stroke-width: 1.3; marker-end: url(#mp-ah); }
+    .mp-arrow.mp-accent { stroke: var(--accent, #0b63b6); marker-end: url(#mp-ahA); }
+    .mp-arrow.mp-ok { stroke: var(--ok, #11734b); marker-end: url(#mp-ahO); }
+    .mp-arrow.mp-dash { stroke-dasharray: 4 3; }
+  </style>
+  <defs>
+    <marker id="mp-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#8b929b"/></marker>
+    <marker id="mp-ahA" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#0b63b6"/></marker>
+    <marker id="mp-ahO" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#11734b"/></marker>
+  </defs>
+
+  <text class="mp-col" x="10" y="16">3D OBJECT LAYER</text>
+  <text class="mp-col" x="318" y="16">ENGINE</text>
+  <text class="mp-col" x="492" y="16">USD WRAPPER LAYER</text>
+
+  <!-- left: inputs -->
+  <rect class="mp-box" x="10" y="84" width="270" height="44" rx="5"/>
+  <text class="mp-t" x="20" y="101">Layer spatial reference</text>
+  <text class="mp-mono" x="20" y="119">wkid, vcsWkid → EPSG:h+v</text>
+
+  <rect class="mp-box mp-proj" x="10" y="138" width="270" height="34" rx="5"/>
+  <text class="mp-s" x="20" y="152">no vcsWkid: the scene's height model</text>
+  <text class="mp-mono" x="20" y="166">(terrain: EGM96, else ellipsoidal)</text>
+
+  <rect class="mp-box" x="10" y="182" width="270" height="40" rx="5"/>
+  <text class="mp-t" x="20" y="198">Feature origin</text>
+  <text class="mp-mono" x="20" y="214">ESRI3DO_OX, OY, OZ</text>
+
+  <rect class="mp-box" x="10" y="282" width="270" height="36" rx="5"/>
+  <text class="mp-t" x="20" y="297">Feature model</text>
+  <text class="mp-mono" x="20" y="312">query3D assetMaps → usdz (or glb)</text>
+
+  <rect class="mp-box" x="10" y="336" width="270" height="84" rx="5"/>
+  <text class="mp-t" x="20" y="352">Feature transform (glTF frame)</text>
+  <text class="mp-mono" x="20" y="372">ESRI3DO_TX, TY, TZ</text>
+  <text class="mp-mono" x="20" y="392">ESRI3DO_RX, RY, RZ, RDEG</text>
+  <text class="mp-mono" x="20" y="412">ESRI3DO_SX, SY, SZ</text>
+
+  <!-- middle: engine -->
+  <rect class="mp-engine mp-proj" x="300" y="212" width="172" height="70" rx="5"/>
+  <text class="mp-t" x="310" y="229">Projection factors</text>
+  <text class="mp-s" x="310" y="245">at the feature origin:</text>
+  <text class="mp-s" x="310" y="259">convergence, point scale k</text>
+  <text class="mp-s" x="310" y="273">(projected layers only)</text>
+
+  <!-- right: prim tree -->
+  <rect class="mp-prim" x="488" y="28" width="366" height="430" rx="6"/>
+  <text class="mp-t" x="498" y="46">def Xform "ObjectLayer"</text>
+  <text class="mp-s" x="668" y="46">Y-up, metres</text>
+
+  <rect class="mp-prim" x="500" y="62" width="338" height="58" rx="5"/>
+  <text class="mp-t" x="510" y="79">def GeospatialCRS "CRS"</text>
+  <rect class="mp-new" x="510" y="88" width="318" height="22" rx="3"/>
+  <text class="mp-mono mp-new-t" x="518" y="103">uniform token crs:wkt = "&lt;WKT2&gt;"</text>
+
+  <rect class="mp-prim" x="500" y="132" width="338" height="316" rx="5"/>
+  <text class="mp-t" x="510" y="149">def Xform "Feature_&lt;OBJECTID&gt;"</text>
+  <text class="mp-s" x="510" y="163">GeospatialCRSBindingAPI, references &lt;/ObjectLayer/CRS&gt;</text>
+  <rect class="mp-new" x="510" y="184" width="318" height="22" rx="3"/>
+  <text class="mp-mono mp-new-t" x="518" y="199">double3 crs:position = (x, y, z)</text>
+  <rect class="mp-new mp-proj" x="510" y="214" width="318" height="22" rx="3"/>
+  <text class="mp-mono mp-new-t" x="518" y="229">double3 crs:orientation = (convergence, 0, 0)</text>
+
+  <rect class="mp-prim" x="512" y="250" width="314" height="188" rx="5"/>
+  <text class="mp-t" x="522" y="267">def Xform "Model"</text>
+  <text class="mp-mono" x="522" y="287">references @assets/&lt;hash&gt;.usdz@</text>
+  <rect class="mp-box mp-proj" x="522" y="306" width="294" height="20" rx="3"/>
+  <text class="mp-mono" x="530" y="320">xformOp:scale:grid = (1/k, 1, 1/k)</text>
+  <text class="mp-mono" x="530" y="349">xformOp:translate = (TX, TY, TZ)</text>
+  <text class="mp-mono" x="530" y="373">xformOp:orient = q(axis, RDEG)</text>
+  <text class="mp-mono" x="530" y="397">xformOp:scale = (SX, SY, SZ)</text>
+  <text class="mp-s" x="530" y="424">xformOpOrder: scale:grid, translate, orient, scale</text>
+
+  <!-- arrows -->
+  <path class="mp-arrow mp-accent" d="M280,106 C380,106 420,99 508,99"/>
+  <path class="mp-arrow mp-accent mp-dash" d="M280,155 C360,155 420,104 508,102"/>
+
+  <path class="mp-arrow mp-accent" d="M280,202 C380,202 420,195 508,195"/>
+  <path class="mp-arrow mp-ok mp-dash" d="M200,222 C200,246 250,247 298,247"/>
+  <path class="mp-arrow mp-ok mp-dash" d="M472,232 C490,232 490,225 508,225"/>
+  <path class="mp-arrow mp-ok mp-dash" d="M472,262 C500,262 494,316 520,316"/>
+  <text class="mp-lbl" x="484" y="300">1/k</text>
+
+  <path class="mp-arrow" d="M280,300 C400,300 440,283 520,283"/>
+
+  <path class="mp-arrow" d="M280,368 C400,368 450,345 528,345"/>
+  <path class="mp-arrow" d="M280,388 C400,388 450,369 528,369"/>
+  <path class="mp-arrow" d="M280,408 C400,408 450,393 528,393"/>
+</svg>
