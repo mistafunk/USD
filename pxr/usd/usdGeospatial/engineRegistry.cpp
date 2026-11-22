@@ -180,4 +180,13 @@ UsdGeospatialEngineRegistry::GetEngine(const std::string& requested)
     return entry.engine;
 }
 
+void
+UsdGeospatialEngineRegistry::ResetEngines()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    for (auto& entry : _entries) {
+        entry.second.engine.reset();
+    }
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

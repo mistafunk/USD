@@ -18,6 +18,7 @@
 #include "pxr/base/gf/quatd.h"
 #include "pxr/base/tf/stringUtils.h"
 
+#include <algorithm>
 #include <cmath>
 #include <set>
 
@@ -401,19 +402,34 @@ UsdGeospatialPlacementQuery::Resolve(
     }
 
     // The source CRS and the anchor's geodetic position.
-    const std::string& wkt = inputs.wkt;
-    const UsdGeospatialCrsInfo source = _engine->DescribeCrs(wkt);
+    std::string wkt = inputs.wkt;
+    UsdGeospatialCrsInfo source = _engine->DescribeCrs(wkt);
     if (!source.valid) {
         return fail(Status::Error, TfStringPrintf(
             "<%s> crs:wkt cannot be used: %s", path, source.error.c_str()));
     }
+    // Reported as authored, also when composed with a default height below.
+    r._sourceCrs = source.name;
+    if (source.dimension == 2) {
+        // The proposal's default: a 2D CRS's heights are relative to
+        // EGM2008 (EPSG:3855).
+        const std::string compound =
+            _engine->MakeCompoundCrs(wkt, _defaultVerticalCrs);
+        const UsdGeospatialCrsInfo compoundInfo = compound.empty()
+            ? UsdGeospatialCrsInfo() : _engine->DescribeCrs(compound);
+        if (!compoundInfo.valid || compoundInfo.dimension != 3) {
+            return fail(Status::Unsupported, TfStringPrintf(
+                "<%s> CRS '%s' is 2D and the engine cannot add the default "
+                "EGM2008 height", path, source.name.c_str()));
+        }
+        wkt = compound;
+        source = compoundInfo;
+    }
     if (source.dimension != 3) {
         return fail(Status::Unsupported, TfStringPrintf(
-            "<%s> CRS '%s' is 2D: its height would come from the EGM2008 "
-            "default vertical reference, which is not supported yet",
-            path, source.name.c_str()));
+            "<%s> CRS '%s' has %d axes; placement needs 3",
+            path, source.name.c_str(), source.dimension));
     }
-    r._sourceCrs = source.name;
     const bool axesOk = source.isGeocentric
         ? _HasDirections(source.axisDirections,
                          {"geocentricX", "geocentricY", "geocentricZ"})
@@ -436,6 +452,7 @@ UsdGeospatialPlacementQuery::Resolve(
     const UsdGeospatialOperationResult toGeographic =
         _engine->Transform(wkt, source.geographic3D,
                            UsdGeospatialAreaOfInterest(), &geo);
+    r._missingGrids = toGeographic.missingGrids;
     if (!toGeographic) {
         return fail(Status::Unsupported, TfStringPrintf(
             "<%s> position cannot be converted to geographic 3D: %s",
@@ -468,6 +485,12 @@ UsdGeospatialPlacementQuery::Resolve(
         toOutput.accuracy =
             (toOutput.accuracy < 0.0 || toProjection.accuracy < 0.0)
             ? -1.0 : toOutput.accuracy + toProjection.accuracy;
+    }
+    for (const std::string& grid : toOutput.missingGrids) {
+        if (std::find(r._missingGrids.begin(), r._missingGrids.end(), grid) ==
+            r._missingGrids.end()) {
+            r._missingGrids.push_back(grid);
+        }
     }
     if (!toOutput) {
         return fail(Status::Unsupported, TfStringPrintf(

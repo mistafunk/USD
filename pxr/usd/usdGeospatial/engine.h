@@ -49,6 +49,12 @@ struct UsdGeospatialOperationResult
     /// with what is missing. Empty if the best known operation was used.
     std::vector<std::string> skippedOperations;
 
+    /// The data files (e.g. grid files, by name) that the skipped
+    /// operations, or the unavailable ones when the request failed, need.
+    /// A client that can provide them may retry with a new engine instance
+    /// (UsdGeospatialEngineRegistry::ResetEngines).
+    std::vector<std::string> missingGrids;
+
     explicit operator bool() const { return succeeded; }
 };
 
@@ -188,6 +194,14 @@ public:
         const std::string& source, const std::string& target,
         const UsdGeospatialAreaOfInterest& area,
         std::vector<GfVec3d>* points) = 0;
+
+    /// A compound CRS of the 2D \p horizontal CRS and the \p vertical CRS
+    /// (e.g. "EPSG:3855", EGM2008 height), as a definition the engine
+    /// accepts; empty if the engine cannot compose CRSs. Placement uses it
+    /// for the proposal's default height of 2D CRSs.
+    USDGEOSPATIAL_API
+    virtual std::string MakeCompoundCrs(const std::string& horizontal,
+                                        const std::string& vertical);
 
 protected:
     USDGEOSPATIAL_API

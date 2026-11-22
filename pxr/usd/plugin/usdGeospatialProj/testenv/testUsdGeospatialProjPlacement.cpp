@@ -20,6 +20,7 @@
 #include "pxr/base/tf/fileUtils.h"
 #include "pxr/base/tf/stringUtils.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -73,6 +74,23 @@ main()
                geo.IsOk() ? TfStringPrintf(" (accuracy %g m)",
                                            geo.GetAccuracy()).c_str() : "");
         TF_AXIOM(geo.GetEngine() == "proj");
+
+        // Builds without a grid the expected result used (e.g. WebAssembly)
+        // place it differently or not at all, and say which grids are
+        // missing: not comparable there.
+        bool usedGridMissing = false;
+        if (a.count("gridsUsed")) {
+            for (const JsValue& g : a.at("gridsUsed").GetJsArray()) {
+                const std::vector<std::string>& missing = geo.GetMissingGrids();
+                usedGridMissing |= std::find(missing.begin(), missing.end(),
+                                             g.GetString()) != missing.end();
+            }
+        }
+        if (status == "ok" && usedGridMissing) {
+            printf("  not comparable in this build, grids missing: %s\n",
+                   TfStringJoin(geo.GetMissingGrids(), ", ").c_str());
+            continue;
+        }
 
         if (status != "ok") {
             // Reported, not drawn: the engine must say why.

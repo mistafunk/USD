@@ -22,4 +22,11 @@ UsdGeospatialCoordinateOperationEngine::
 
 UsdGeospatialEngineFactoryBase::~UsdGeospatialEngineFactoryBase() = default;
 
+std::string
+UsdGeospatialCoordinateOperationEngine::MakeCompoundCrs(
+    const std::string&, const std::string&)
+{
+    return std::string();
+}
+
 PXR_NAMESPACE_CLOSE_SCOPE

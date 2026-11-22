@@ -24,8 +24,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 /// \class UsdGeospatialEngineRegistry
 ///
 /// Finds the coordinate operation engines declared by plugins and selects
-/// one. Engines are created on first use and kept for the lifetime of the
-/// process.
+/// one. Engines are created on first use and kept until ResetEngines().
 ///
 /// The active engine is, in order of precedence:
 /// - the engine set with SetActiveEngine(),
@@ -64,6 +63,12 @@ public:
     USDGEOSPATIAL_API
     UsdGeospatialCoordinateOperationEngineSharedPtr GetEngine(
         const std::string& name = std::string());
+
+    /// Drops the engine instances, so GetEngine() creates new ones, which
+    /// see data that became available since (e.g. grid files a result
+    /// reported missing). Clients holding an engine keep using it.
+    USDGEOSPATIAL_API
+    void ResetEngines();
 
 private:
     friend class TfSingleton<UsdGeospatialEngineRegistry>;

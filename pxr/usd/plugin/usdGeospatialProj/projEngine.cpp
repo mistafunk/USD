@@ -11,6 +11,7 @@
 
 #include <proj.h>
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -70,6 +71,9 @@ public:
         const UsdGeospatialAreaOfInterest& area,
         std::vector<GfVec3d>* points) override;
 
+    std::string MakeCompoundCrs(const std::string& horizontal,
+                                const std::string& vertical) override;
+
 private:
     struct _Operation {
         _PjPtr pj;
@@ -77,6 +81,7 @@ private:
         double accuracy = -1.0;
         std::string error;
         std::vector<std::string> skipped;
+        std::vector<std::string> missingGrids;
     };
 
     std::string _LastError() const;
@@ -92,7 +97,7 @@ private:
     double _Accuracy(const PJ* op) const;
     std::vector<std::string> _SkippedForMissingGrids(
         const PJ* src, const PJ* dst, const UsdGeospatialAreaOfInterest& area,
-        double usedAccuracy) const;
+        double usedAccuracy, std::vector<std::string>* missingGrids) const;
 
     // PROJ contexts are not thread safe; one context, one lock.
     mutable std::mutex _mutex;
@@ -101,6 +106,26 @@ private:
     std::map<std::tuple<std::string, std::string, std::string>, _Operation>
         _operations;
 };
+
+std::string
+UsdGeospatialProjEngine::MakeCompoundCrs(const std::string& horizontal,
+                                         const std::string& vertical)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    std::string error;
+    _PjPtr h = _Create(horizontal, &error);
+    _PjPtr v = h ? _Create(vertical, &error) : _PjPtr();
+    if (!v) {
+        return std::string();
+    }
+    const std::string name = std::string(proj_get_name(h.get())) + " + " +
+        proj_get_name(v.get());
+    _PjPtr compound(
+        proj_create_compound_crs(_ctx, name.c_str(), h.get(), v.get()));
+    const char* wkt = compound
+        ? proj_as_wkt(_ctx, compound.get(), PJ_WKT2_2019, nullptr) : nullptr;
+    return wkt ? std::string(wkt) : std::string();
+}
 
 USDGEOSPATIAL_DEFINE_ENGINE(UsdGeospatialProjEngine);
 
@@ -336,10 +361,11 @@ UsdGeospatialProjEngine::_GetOperation(const std::string& source,
         op.accuracy = _Accuracy(candidate.get());
         op.error.clear();
         op.skipped = _SkippedForMissingGrids(
-            src.get(), dst.get(), area, op.accuracy);
+            src.get(), dst.get(), area, op.accuracy, &op.missingGrids);
         return op;
     }
-    op.skipped = _SkippedForMissingGrids(src.get(), dst.get(), area, -1.0);
+    op.skipped = _SkippedForMissingGrids(src.get(), dst.get(), area, -1.0,
+                                         &op.missingGrids);
     op.error = TfStringPrintf(
         "no usable coordinate operation from '%s' to '%s' (approximate "
         "ballpark operations are disabled; operations needing unavailable "
@@ -352,11 +378,12 @@ UsdGeospatialProjEngine::_GetOperation(const std::string& source,
 
 // Operations from src to dst that need grids which are not available and
 // are more accurate than the one used (any known accuracy if none is used,
-// usedAccuracy < 0): "name (accuracy x m; grid a, b)".
+// usedAccuracy < 0): "name (accuracy x m; grid a, b)". Their grid files go
+// to missingGrids, each once.
 std::vector<std::string>
 UsdGeospatialProjEngine::_SkippedForMissingGrids(
     const PJ* src, const PJ* dst, const UsdGeospatialAreaOfInterest& area,
-    double usedAccuracy) const
+    double usedAccuracy, std::vector<std::string>* missingGrids) const
 {
     _FactoryPtr factory = _NewFactory(area, PROJ_GRID_AVAILABILITY_IGNORED);
 
@@ -384,6 +411,12 @@ UsdGeospatialProjEngine::_SkippedForMissingGrids(
         if (missing.empty() || accuracy < 0.0 ||
             (usedAccuracy >= 0.0 && accuracy >= usedAccuracy)) {
             continue;
+        }
+        for (const std::string& grid : missing) {
+            if (std::find(missingGrids->begin(), missingGrids->end(), grid) ==
+                missingGrids->end()) {
+                missingGrids->push_back(grid);
+            }
         }
         const char* name = proj_get_name(candidate.get());
         skipped.push_back(TfStringPrintf(
@@ -432,6 +465,7 @@ UsdGeospatialProjEngine::_Result(const _Operation& op) const
     result.accuracy = op.accuracy;
     result.error = op.error;
     result.skippedOperations = op.skipped;
+    result.missingGrids = op.missingGrids;
     result.succeeded = bool(op.pj);
     return result;
 }

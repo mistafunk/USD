@@ -147,6 +147,13 @@ public:
     const std::vector<std::string>& GetSkippedOperations() const {
         return _skippedOperations;
     }
+
+    /// Data files (grid files) that would allow a better placement, or any
+    /// placement for an Unsupported result; see
+    /// UsdGeospatialOperationResult::missingGrids.
+    const std::vector<std::string>& GetMissingGrids() const {
+        return _missingGrids;
+    }
     double GetAccuracy() const { return _accuracy; }
 
     /// The anchor (model origin) in the output CRS's semantic tuple.
@@ -191,6 +198,7 @@ private:
     std::string _engine;
     std::string _operation;
     std::vector<std::string> _skippedOperations;
+    std::vector<std::string> _missingGrids;
     double _accuracy = -1.0;
     GfVec3d _origin;
     bool _localFrame = false;
@@ -252,6 +260,8 @@ public:
 
 private:
     std::string _output;
+    // Heights of 2D source CRSs: EGM2008 height (the proposal's default).
+    const std::string _defaultVerticalCrs = "EPSG:3855";
     UsdGeospatialCoordinateOperationEngineSharedPtr _engine;
     UsdGeospatialCrsInfo _outputInfo;
     std::string _error;
