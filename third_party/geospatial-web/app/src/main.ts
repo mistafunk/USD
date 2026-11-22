@@ -108,6 +108,10 @@ interface AppState {
   mute?: (path: string | null, on?: boolean) => void;
   /** Panel: zooms to an anchor's meshes. */
   zoom?: (path: string) => Promise<unknown>;
+  /** The view's clip distances now (specs). */
+  clip?: () => { mode: string; near: number; far: number };
+  /** Moves the camera (specs: navigating away from the content). */
+  camera?: (lon: number, lat: number, z: number, tilt: number) => Promise<unknown>;
   showTab?: (name: string) => void;
 }
 
@@ -215,26 +219,61 @@ function cameraFor(s: Scene, p: CameraPreset): Camera {
 }
 
 /**
- * Moves the camera. The SDK picks near/far clip distances from the scene it
- * knows about, which excludes RenderNode geometry, so close to our meshes it
- * clips them; close-up presets use a fixed 10 cm near plane.
+ * Clip distances for a camera `distance` metres from the content. The SDK
+ * picks near/far from the scene it knows about, which excludes RenderNode
+ * geometry, so close to our meshes it clips them: within CLOSE a fixed 10 cm
+ * near plane (and 50 km far), else the SDK's automatic distances. Applied
+ * before each camera move of the app and again whenever the camera comes to
+ * rest, so navigating away (also after switching between global and local,
+ * which reloads the page) never keeps the close-up's 50 km far plane.
  */
+const CLOSE = 300;
+function setClip(distance: number) {
+  const clip = view.constraints.clipDistance;
+  if (distance < CLOSE) {
+    if (clip.mode !== "manual" || clip.near !== 0.1 || clip.far !== 50_000) {
+      clip.near = 0.1;
+      clip.far = 50_000;
+    }
+  } else if (clip.mode !== "auto") {
+    clip.mode = "auto";
+  }
+}
+
+/** What the camera last went to (preset target or zoomed meshes): lon, lat, h. */
+let focus: number[] | null = null;
+
+/** Metres from the camera to the focus (Infinity without one). */
+function cameraDistance(): number {
+  const p = view.camera?.position;
+  if (!focus || !p || p.longitude == null || p.latitude == null) return Infinity;
+  const [lon, lat, h] = focus;
+  const east = (p.longitude - lon) * M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180);
+  const north = (p.latitude - lat) * M_PER_DEG_LAT;
+  return Math.hypot(east, north, (p.z ?? 0) - h);
+}
+
+/** Moves the camera to a preset. */
 function goto(name: string, animate: boolean): Promise<unknown> {
   if (!scene) return Promise.resolve();
   const preset = scene.presets[name];
   if (!preset) return Promise.reject(new Error("unknown preset " + name));
-  const clip = view.constraints.clipDistance;
-  if (preset.near) {
-    clip.near = 0.1;
-    clip.far = 50_000;
-  } else {
-    clip.mode = "auto";
-  }
+  focus = scene.target;
+  setClip(preset.near ? 0 : Infinity);
   return view.goTo(cameraFor(scene, preset), { animate });
 }
 
 watch(() => view.updating, (updating) => { state.updating = updating; },
       { initial: true });
+// Clip distances follow the camera's distance to the content once it rests.
+watch(() => view.stationary, (stationary) => { if (stationary) setClip(cameraDistance()); });
+state.clip = () => {
+  const c = view.constraints.clipDistance;
+  return { mode: c.mode, near: c.near, far: c.far };
+};
+state.camera = (longitude, latitude, z, tilt) =>
+  view.goTo(new Camera({ position: { longitude, latitude, z, spatialReference: SpatialReference.WGS84 },
+                         heading: 0, tilt }), { animate: false });
 
 const pass = new MeshPass(view);
 state.stats = pass.stats;
@@ -417,13 +456,8 @@ function zoomTo(path: string, animate: boolean): Promise<unknown> {
   const geo = fromRenderCoordinates(view, centre, 0, new Array(3), 0, SpatialReference.WGS84, 1);
   if (!geo) return Promise.resolve();
   const d = Math.max(4 * radius, 20);
-  const clip = view.constraints.clipDistance;
-  if (d < 300) {
-    clip.near = 0.1;
-    clip.far = 50_000;
-  } else {
-    clip.mode = "auto";
-  }
+  focus = [geo[0], geo[1], geo[2]];
+  setClip(d);
   return view.goTo(new Camera({
     position: { longitude: geo[0], latitude: geo[1] - (0.8 * d) / M_PER_DEG_LAT, z: geo[2] + 0.6 * d,
                 spatialReference: SpatialReference.WGS84 },

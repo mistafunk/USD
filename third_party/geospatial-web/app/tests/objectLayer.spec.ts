@@ -228,3 +228,19 @@ test("layer combobox keeps found layers across loads", async ({ page }) => {
   expect(values[0]).toBe(found[0][0]);
   expect(values).toContain("/usd/fixtures/arcgis/transform");
 });
+
+// Close to the meshes the app fixes the clip distances (10 cm near, 50 km
+// far); once the camera rests far away they are the SDK's automatic ones
+// again, in both views (switching views reloads the page).
+for (const view of ["global", "local"]) {
+  test(`clip distances follow the camera (${view})`, async ({ page }) => {
+    await page.goto(`/?view=${view}&data=live&layer=/usd/fixtures/arcgis/zurich-egm96&buildings=0`);
+    await page.waitForFunction(() => (globalThis as any).__app?.ready, null, { timeout: 90_000 });
+    const clip = () => page.evaluate(() => (globalThis as any).__app.clip());
+    expect((await clip()).mode).toBe("auto");
+    await page.evaluate(() => (globalThis as any).__app.zoom("/ObjectLayer/Feature_1"));
+    await expect.poll(clip).toEqual({ mode: "manual", near: 0.1, far: 50_000 });
+    await page.evaluate(() => (globalThis as any).__app.camera(8.5, 46.6, 150_000, 60));
+    await expect.poll(async () => (await clip()).mode).toBe("auto");
+  });
+}
