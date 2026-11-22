@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module version="4">
+  <component name="FacetManager">
+    <facet type="Python" name="Python facet">
+      <configuration sdkName="~/esri/projects/usd-geospatial-web-prototype/venv" />
+    </facet>
+  </component>
   <component name="NewModuleRootManager">
+    <orderEntry type="jdk" jdkName="~/esri/projects/usd-geospatial-web-prototype/venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="~/esri/projects/usd-geospatial-web-prototype/venv interpreter library" level="application" />
   </component>
 </module>
