@@ -51,7 +51,13 @@ async function download(f: FileSpec): Promise<Uint8Array> {
     throw new Error(`${f.url}: ${String((e as Error)?.message ?? e)} (network, CORS or COEP)`);
   }
   if (!res.ok) throw new Error(`${f.url}: HTTP ${res.status}`);
-  const total = Number(res.headers.get("content-length") ?? 0);
+  // Progress total: the expected size if given, else Content-Length, which
+  // is the size on the wire: with Content-Encoding (gzip, br) the stream
+  // delivers more bytes than that, so the total is then unknown. Cross-origin
+  // responses may hide Content-Encoding; the loop below catches those.
+  const encoding = res.headers.get("content-encoding");
+  let total = f.size ?? (encoding && encoding !== "identity"
+    ? 0 : Number(res.headers.get("content-length") ?? 0));
   const label = f.path.slice(f.path.lastIndexOf("/") + 1);
   if (!res.body) {
     const data = new Uint8Array(await res.arrayBuffer());
@@ -67,6 +73,8 @@ async function download(f: FileSpec): Promise<Uint8Array> {
     if (done) break;
     chunks.push(value);
     loaded += value.length;
+    // More than announced: a compressed transfer; the total is unknown.
+    if (total && loaded > total) total = 0;
     if (loaded - last > 256 * 1024) {
       post({ progress: { label, loaded, total } });
       last = loaded;

@@ -228,6 +228,15 @@ export function placeScene(view: SceneView, input: PlaceInput): Scene {
     meshes,
     anchors: status,
     renderMatrices,
+    details: {
+      output: input.output,
+      engine: input.engine,
+      anchors: input.anchors,
+      meshAnchor: new Map(input.meshes.filter((m) => m.anchor && renderMatrices.has(m.path))
+        .map((m) => [m.path, m.anchor!])),
+      testCases: input.testCases,
+      displayOffsets: input.displayOffsets,
+    },
     score: () => score({
       view,
       output: input.output.name,

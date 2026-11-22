@@ -10,36 +10,139 @@
   </head>
   <body>
     <div id="viewDiv"></div>
-    <div id="panel">
-      <div class="row">
-        <a data-view="global" href="?view=global">Global</a>
-        <a data-view="local" href="?view=local">Local</a>
-        |
-        <a data-data="live" href="?data=live">Live</a>
-        <a data-data="recorded" href="?data=recorded">Recorded</a>
-        <a data-data="w0" href="?data=w0">W0</a>
-        <label><input id="exact" type="checkbox" /> exact points</label>
-        <label><input id="naive" type="checkbox" /> naive float32</label>
-        <label><input id="terrain" type="checkbox" /> terrain</label>
-        <label title="Display only: lower the drawn models by the EGM96 geoid height, to meet the terrain"><input id="geoid" type="checkbox" /> geoid</label>
-        <label><input id="buildings" type="checkbox" /> buildings</label>
+
+    <!-- Panel (D27): header with view and context layers, tabs, diagnostics and
+         development footers, status bar. Structure follows mockup.html; the ids
+         used by the Playwright specs are kept. -->
+    <aside id="panel">
+      <div class="header">
+        <div class="titlebar">
+          <h1 id="aboutTitle" title="About this demonstrator">Geospatial CRS in OpenUSD</h1>
+          <button class="info-btn" id="aboutOpen" type="button" title="About this demonstrator" aria-label="About">i</button>
+          <span class="grow"></span>
+          <span class="seg"><a data-view="global" href="?view=global">Global</a><a data-view="local" href="?view=local">Local</a></span>
+          <button class="iconbtn" id="collapse" title="Collapse panel">−</button>
+        </div>
+        <div class="view">
+          <div class="section-label">Context layers</div>
+          <div class="checks">
+            <span class="check"><label><input id="terrain" type="checkbox" /> Terrain</label><button class="help" type="button">?</button>
+              <span class="pop">Show Esri's World Elevation as the ground. Models keep their placed heights either way.</span></span>
+            <span class="check"><label><input id="buildings" type="checkbox" /> Buildings</label><button class="help" type="button">?</button>
+              <span class="pop">Show Esri's Open 3D Buildings layer (Overture Maps buildings: OpenStreetMap, Esri Community Maps, Microsoft and Google open buildings) for comparison with the placed models.</span></span>
+          </div>
+        </div>
       </div>
-      <form id="itemForm" class="row">
-        <input id="item" type="text" list="itemPresets" size="52" spellcheck="false"
-               placeholder="3D object layer: FeatureServer URL, item id or item page" />
-        <datalist id="itemPresets"></datalist>
-        <button type="submit">Load</button>
-        <button id="find" type="button"
-                title="List the organization's public 3D object layers with models (the portal in the field, else zurich.maps.arcgis.com)">Find</button>
-      </form>
-      <div id="loadbar">
-        <div id="phase"></div>
-        <progress id="progress"></progress>
-        <details id="logbox"><summary>log</summary><pre id="log"></pre></details>
+
+      <!-- USD content: the placed anchors and the layers to load (not collapsible). -->
+      <div class="content-head"><div class="section-label">USD Content</div></div>
+      <nav class="tabs" role="tablist">
+        <button type="button" data-tab="features" class="active" title="3D object layers placed now: output CRS and anchors">Loaded 3DOL</button>
+        <button type="button" data-tab="layers" title="3D object layers of an organization to load">Available 3DOL</button>
+      </nav>
+
+      <div class="tabbody" data-tab="features">
+        <!-- Features: output CRS and the placed anchors -->
+        <section class="tab active" id="tab-features">
+          <div class="loaded-head">
+            <div class="loaded-title" id="loadedTitle">loading…</div>
+            <div class="small muted" id="loadedSub"></div>
+          </div>
+          <div class="anchors" id="anchorList"><div class="empty muted small">loading…</div></div>
+          <details class="card output" id="outputCard">
+            <summary><span class="section-title">Output CRS</span> <span class="mono small" id="outSummary"></span></summary>
+            <div class="crs-head"><span class="code" id="outCode">…</span><span class="name"><span id="outName"></span>
+              <button class="help" type="button" title="Why this output CRS?">?</button><span class="pop" id="outWhy"></span></span><span class="badge" id="outFrame" hidden></span></div>
+            <details class="disclose" id="outWktBox" hidden><summary>WKT</summary>
+              <pre class="wkt" id="outWkt"></pre>
+            </details>
+            <dl class="kv" style="margin-top: 7px">
+              <dt>display</dt><dd><span class="check"><label><input id="geoid" type="checkbox" /> match terrain heights</label><button class="help" type="button">?</button>
+                <span class="pop">Display only: lowers drawn models by the EGM96 geoid height (EPSG:5773) so they meet the terrain, whose orthometric heights the view draws as ellipsoidal. Placements are unchanged.</span></span></dd>
+            </dl>
+          </details>
+        </section>
+
+        <!-- Layers: ArcGIS 3D object layers to load -->
+        <section class="tab" id="tab-layers">
+          <div class="row">
+            <input class="input mono" id="org" list="orgPresets" spellcheck="false" aria-label="Organization" placeholder="organization or arcgis.com" title="An organization (e.g. zurich.maps.arcgis.com), or arcgis.com for all public layers of ArcGIS Online" />
+            <datalist id="orgPresets">
+              <option value="arcgis.com" label="ArcGIS Online: all public layers, Living Atlas included"></option>
+              <option value="zurich.maps.arcgis.com" label="Esri R&amp;D Center Zurich"></option>
+            </datalist>
+            <button class="btn" id="find" type="button">Search</button>
+            <span class="check"><button class="help" type="button" aria-label="How Search finds layers">?</button>
+              <span class="pop right wide">Search finds public feature services tagged 3DObject in the organization, or across ArcGIS Online for arcgis.com. A layer is loadable when it allows queries and query3D returns models (USD when offered, else glb); others show the reason.</span></span>
+          </div>
+          <form class="row" id="itemForm">
+            <input class="input mono" id="item" list="itemPresets" spellcheck="false"
+                   placeholder="3D object layer: FeatureServer URL, item id or item page" />
+            <datalist id="itemPresets"></datalist>
+            <button class="btn" type="submit">Load</button>
+          </form>
+          <div class="row" style="margin-top: 10px">
+            <input class="input" id="layerFilter" placeholder="filter by title or owner" />
+            <span class="check switch"><label><input id="loadableOnly" type="checkbox" checked /> loadable</label><button class="help" type="button">?</button>
+              <span class="pop right">Show only layers the app can load: the feature layer allows queries and its query3D returns models, as USD when the layer offers it, else glb. Unchecked, the list also shows the others, dimmed, with the reason: Query switched off (e.g. Urban model layers), no features or no converted models, or a service that could not be read.</span></span>
+          </div>
+          <div class="row small"><span class="muted">Filter by format:</span>
+            <span class="filter" id="formatFilter"><button type="button" data-format="any" class="active">any</button><button type="button" data-format="gltf">glTF</button><button type="button" data-format="usd">USD</button></span>
+          </div>
+          <div class="row small"><span class="muted">Filter by vertical CRS:</span>
+            <span class="filter" id="vcsFilter"><button type="button" data-v="any" class="active">any</button><button type="button" data-v="5773">EGM96</button><button type="button" data-v="none">none</button></span>
+          </div>
+          <div id="layerCards"></div>
+        </section>
+
+        <!-- Log: load steps, USD messages, errors -->
       </div>
-      <div class="row"><span id="presets" class="row"></span><button id="score">Score</button></div>
-      <pre id="status"></pre>
-    </div>
+
+      <details class="footer logbox" id="logBox"><summary>Log <span class="count" id="logCount" hidden></span></summary>
+        <div class="row" style="justify-content: space-between; margin: 6px 0">
+          <span class="small muted" id="logSummary"></span>
+          <span class="row"><label class="switch"><input id="logUsd" type="checkbox" checked /> usd messages</label><button class="btn sm" id="logCopy" type="button">copy</button></span>
+        </div>
+        <pre class="log" id="log"></pre>
+      </details>
+      <details class="footer diag" id="diagBox"><summary>Diagnostics</summary>
+        <dl class="kv" id="diag"></dl>
+      </details>
+      <details class="footer dev"><summary>Development</summary>
+        <div class="cams">
+          <span class="label">Content</span>
+          <span class="seg"><a data-data="live" href="?data=live" title="The live OpenUSD module">Live</a><a data-data="recorded" href="?data=recorded" title="Recorded placement data">Recorded</a><a data-data="w0" href="?data=w0" title="Hard-coded spike meshes (W0)">Spike</a></span>
+        </div>
+        <div class="cams" id="devLayers"><span class="label">Test layers</span></div>
+        <div class="checks dev-checks">
+          <span class="check"><label><input id="exact" type="checkbox" /> exact points</label><button class="help" type="button">?</button>
+            <span class="pop">Live only: place every vertex with the full point map F(x) instead of one matrix per mesh (measurement mode).</span></span>
+          <span class="check"><label><input id="naive" type="checkbox" /> naive float32</label><button class="help" type="button">?</button>
+            <span class="pop">Spike only: upload vertices as absolute float32 render positions instead of relative to an origin, to show the jitter this avoids.</span></span>
+        </div>
+      </details>
+
+      <div class="statusbar">
+        <div class="status" id="phase">starting</div>
+        <div class="progress" id="progressBar"><div id="progress"></div></div>
+      </div>
+    </aside>
+    <!-- About (D27): opened by the header's i button, the title, or #about in the URL. -->
+    <dialog class="about" id="about" aria-labelledby="aboutHeading">
+      <div class="about-head">
+        <h2 id="aboutHeading">About this demonstrator</h2>
+        <button class="iconbtn" id="aboutClose" type="button" title="Close (Esc)">×</button>
+      </div>
+      <div class="about-body">
+        <p class="lead">This demonstrator tries out the proposed <a href="https://github.com/Tamrat-B/OpenUSD-proposals/pull/1" target="_blank" rel="noopener">geospatial coordinate reference system support for OpenUSD</a> with Esri products: ArcGIS 3D object layers and the ArcGIS Maps SDK for JavaScript. This page runs OpenUSD compiled to WebAssembly. It reads geo-referenced models whose prims carry a
+      coordinate reference system through the proposed <span class="mono">GeospatialCRSBindingAPI</span>, resolves each
+      anchor's CRS, transforms it with a coordinate operation engine plugin (also in WebAssembly) into the view's output CRS in a Hydra scene index, and
+      draws the result with a small WebGL2 pass inside the ArcGIS Maps SDK SceneView.</p>
+        <figure class="diagram"><div id="aboutDiagram"></div>
+          <figcaption>Highlighted: what the geospatial CRS proposal adds to OpenUSD, the binding schema and its Hydra placement. Dashed boxes are inputs fetched over the network.</figcaption>
+        </figure>
+      </div>
+    </dialog>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

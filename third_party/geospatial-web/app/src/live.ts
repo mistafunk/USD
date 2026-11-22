@@ -25,7 +25,9 @@ export interface LiveOptions {
   /** Progress and log for the panel. */
   status?: LoadStatus;
   /** Display only (D25): draw anchors lowered by the EGM96 geoid height, to
-   *  meet terrain with orthometric heights (World Elevation). */
+   *  meet terrain with orthometric heights (World Elevation). The heights
+   *  are looked up either way, so the app can switch this without the
+   *  module (LoadedLive.place). */
   geoid?: boolean;
 }
 
@@ -53,10 +55,12 @@ export interface LiveData {
   timings: Record<string, number>;
   /** Grids fetched for this placement (D23). */
   grids: string[];
-  /** Display correction (D25): geoid heights N per anchor path, metres. */
-  geoid?: { crs: string; operation: string; heights: Record<string, number> };
+  /** Display correction (D25): geoid heights N per anchor path, metres;
+   *  `applied` when the drawn anchors are lowered by them. */
+  geoid?: { crs: string; operation: string; heights: Record<string, number>; applied: boolean };
   /** 3D object layers: the CRS used, the generated wrapper and skipped features. */
-  objectLayer?: { crs: string; wrapper: string; skipped: string[] };
+  objectLayer?: { title: string; url: string; features: number; crs: string; wrapper: string;
+                  skipped: string[] };
 }
 
 interface SceneIndex {
@@ -64,9 +68,15 @@ interface SceneIndex {
   files: string[];
 }
 
-export async function loadLiveScene(
-  view: SceneView, options: LiveOptions,
-): Promise<{ scene: Scene; live: LiveData }> {
+export interface LoadedLive {
+  scene: Scene;
+  live: LiveData;
+  /** The same placement drawn with or without the geoid correction (D25),
+   *  without the module: a new scene, and live.geoid.applied updated. */
+  place(geoid: boolean): Scene;
+}
+
+export async function loadLiveScene(view: SceneView, options: LiveOptions): Promise<LoadedLive> {
   const timings: Record<string, number> = {};
   const timed = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
     const t0 = performance.now();
@@ -90,7 +100,7 @@ export async function loadLiveScene(
   if (options.layer) {
     // A 3D object layer: models fetched as they are, placed by a wrapper.
     status.step("reading the 3D object layer");
-    const url = await resolveObjectLayerUrl(options.layer, options.portal ?? DEFAULT_PORTAL, log);
+    const { url, title } = await resolveObjectLayerUrl(options.layer, options.portal ?? DEFAULT_PORTAL, log);
     const data = await timed("layer", () => fetchObjectLayer(url, log));
     const { definition, promote3D } = crsDefinition(data.layer.spatialReference);
     const crs = await usd.crsWkt(definition, promote3D);
@@ -102,13 +112,14 @@ export async function loadLiveScene(
     status.step(`downloading ${wrapper.models.length} model(s)`);
     wrapper.models.forEach((m) => log(`model ${m.path} from ${m.url}`));
     await timed("models", () => usd.fetchFiles(
-      wrapper.models.map((m) => ({ url: m.url, path: `/arcgis/${m.path}` }))));
+      wrapper.models.map((m) => ({ url: m.url, path: `/arcgis/${m.path}`, size: m.size }))));
     const d = status.downloads();
     log(`downloaded ${formatBytes(d.loaded)}`);
     await usd.writeText("/arcgis/layer.usda", wrapper.usda);
     status.step(`opening the wrapper layer (reads the ${data.format.slice(3)} models)`);
     await timed("load", () => usd.open("/arcgis/layer.usda"));
-    objectLayer = { crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
+    objectLayer = { title, url, features: data.features.length,
+                    crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
                     skipped: wrapper.skipped };
     const first = data.features[0]?.attributes;
     const roles = data.layer.infoFor3D.transformFieldRoles;
@@ -160,20 +171,21 @@ export async function loadLiveScene(
                meshes.length || a.status !== "ok" ? line : line + " (no geometry: see USD messages)");
   }
 
-  // Display correction (D25): geoid heights at the placed anchors.
+  // Display correction (D25): geoid heights at the placed anchors, looked up
+  // whether or not the correction is on, so it can be switched later.
   let geoid: LiveData["geoid"];
   let displayOffsets: Map<string, number> | undefined;
   const placed = state.anchors.filter((a) => a.status === "ok");
-  if (options.geoid && placed.length) {
+  if (placed.length) {
     status.step(`geoid heights (${DISPLAY_GEOID}) for the display`);
     const points = placed.map((a) => toLonLatH(state.frame, a.origin).slice(0, 2) as [number, number]);
     const r = await timed("geoid", () => usd.geoidHeights(points, DISPLAY_GEOID));
     if (r.heights.length) {
       displayOffsets = new Map(placed.map((a, i) => [a.path, r.heights[i]]));
       geoid = { crs: DISPLAY_GEOID, operation: r.operation,
-                heights: Object.fromEntries(displayOffsets) };
+                heights: Object.fromEntries(displayOffsets), applied: !!options.geoid };
       placed.forEach((a, i) => status.add("info",
-        `${a.path}: drawn ${r.heights[i].toFixed(2)} m lower (geoid height, ${r.operation})`));
+        `${a.path}: geoid height ${r.heights[i].toFixed(2)} m (${r.operation})`));
     } else {
       status.add("warn", `no geoid correction: ${r.error}` +
                  (r.missingGrids.length ? ` (grids not served: ${r.missingGrids.join(", ")})` : ""));
@@ -204,7 +216,7 @@ export async function loadLiveScene(
     ...a,
     reason: a.reason || undefined,
   }));
-  const scene = placeScene(view, {
+  const place = (applyGeoid: boolean) => placeScene(view, {
     name: `live ${outputName} (${engine} in the browser${options.exact ? ", exact points" : ""})`,
     output: { name: outputName, crs, frame: state.frame },
     engine: `${engine} (browser)`,
@@ -215,26 +227,31 @@ export async function loadLiveScene(
     exactPoints,
     fallbackTarget,
     live: true,
-    displayOffsets,
+    displayOffsets: applyGeoid ? displayOffsets : undefined,
   });
+  const live: LiveData = {
+    info,
+    output: { name: outputName, crs, wkt: state.outputWkt, frame: state.frame },
+    time: test.time,
+    exact: options.exact,
+    anchors: state.anchors,
+    meshes: state.meshes.map((m) => ({
+      path: m.path, anchor: m.anchor, status: m.status, matrix: m.matrix,
+      linearizationError: m.linearizationError, triangles: m.indices.length / 3,
+    })),
+    crs: crsInfo,
+    testCases: test.testCases,
+    timings,
+    objectLayer,
+    grids,
+    geoid,
+  };
   return {
-    scene,
-    live: {
-      info,
-      output: { name: outputName, crs, wkt: state.outputWkt, frame: state.frame },
-      time: test.time,
-      exact: options.exact,
-      anchors: state.anchors,
-      meshes: state.meshes.map((m) => ({
-        path: m.path, anchor: m.anchor, status: m.status, matrix: m.matrix,
-        linearizationError: m.linearizationError, triangles: m.indices.length / 3,
-      })),
-      crs: crsInfo,
-      testCases: test.testCases,
-      timings,
-      objectLayer,
-      grids,
-      geoid,
+    scene: place(!!options.geoid),
+    live,
+    place(applyGeoid) {
+      if (live.geoid) live.geoid.applied = applyGeoid;
+      return place(applyGeoid);
     },
   };
 }

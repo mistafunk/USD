@@ -18,11 +18,21 @@ export class LoadStatus {
   readonly log: LogEntry[] = [];
   /** Downloads in flight or done: label -> bytes loaded, total (0 if unknown). */
   readonly files = new Map<string, { loaded: number; total: number }>();
-  private readonly start = performance.now();
+  private start = performance.now();
   private readonly listeners: (() => void)[] = [];
 
   private elapsed(): number {
     return (performance.now() - this.start) / 1000;
+  }
+
+  /** A new load in the same page: phase, progress and timer start over; the
+   *  log keeps the earlier loads. */
+  restart(what: string) {
+    this.start = performance.now();
+    this.done = false;
+    this.failed = false;
+    this.files.clear();
+    this.step(what);
   }
 
   onChange(listener: () => void) {
@@ -53,6 +63,7 @@ export class LoadStatus {
 
   finish(summary: string) {
     this.done = true;
+    this.failed = false;
     this.phase = `${summary} (${this.elapsed().toFixed(1)} s)`;
     this.add("info", this.phase);
   }
@@ -65,15 +76,17 @@ export class LoadStatus {
     this.add("error", text);
   }
 
-  /** Overall download progress: loaded, total bytes (total 0 if unknown). */
+  /** Overall download progress: loaded, total bytes (total 0 if unknown:
+   *  while any file's size is unknown, the sum would understate it). */
   downloads(): { loaded: number; total: number; active: number } {
-    let loaded = 0, total = 0, active = 0;
+    let loaded = 0, total = 0, active = 0, unknown = false;
     for (const f of this.files.values()) {
       loaded += f.loaded;
       total += f.total;
+      if (!f.total) unknown = true;
       if (!f.total || f.loaded < f.total) active++;
     }
-    return { loaded, total, active };
+    return { loaded, total: unknown ? 0 : total, active };
   }
 }
 

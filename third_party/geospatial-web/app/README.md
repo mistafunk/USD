@@ -22,7 +22,10 @@ Pinned: `@arcgis/core` 5.2.7, Vite 8.3.8, TypeScript 7.0.2, Playwright 1.65.1 (e
 | `tests/i1.spec.ts` | I1: the whole browser test plan on live data (harness, T2, T3, T5, T6, T9, T11); report `reports/i1-*` |
 | `src/usd/` | OpenUSD in a Web Worker: `worker.ts` owns the module and stage, `client.ts` is the promise API, `types.ts` the data |
 | `c4.html`, `src/c4.ts` | C4 check page: C1 cases and the live scene chain in the browser vs pyproj (`tests/c4.spec.ts`) |
-| `src/main.ts` | SceneView (`?view=global` or `local`), content (`?data=recorded` or `w0`), camera presets, status panel, `window.__app` test hooks |
+| `src/main.ts` | SceneView (`?view=global` or `local`), content (`?data=recorded` or `w0`), camera presets, panel wiring, `window.__app` test hooks |
+| `src/ui/` | The panel (D27; layers load in place through `main.ts` `loadLayer`, `__app.loads` counts loads): `panel.ts` (tabs, collapse, help popovers, status bar, Log and Diagnostics sections), `features.ts` (output CRS and anchor list), `about.ts` + `about-diagram.svg` (About dialog; the diagram is a standalone SVG, inserted inline), `layers.ts` (organization search and layer cards, kept in local storage as `geospatial-web.discovery.v2`), `dom.ts` |
+| `mockup.html` | Static mockup the panel follows (open directly or at `/mockup.html`); tweak there first |
+| `tests/ui.spec.ts` | Panel: tabs, the About dialog, layer cards from a stored search, filters, in-place Load |
 | `src/recorded.ts` | Loads and places recorded data (D13); global frame from the SDK's own geographic-to-render mapping |
 | `src/w0Scene.ts`, `src/shapes.ts` | W0 test meshes in Zurich |
 | `src/harness.ts` | W2 harness: scores control points (pass, fail, unsupported) via `fromRenderCoordinates`; also the panel's Score button |

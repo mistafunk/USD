@@ -9,6 +9,8 @@
 //                        mode, T5) instead of matrices
 //   &naive=1             W0 only: bake absolute render coordinates into
 //                        float32 vertices (shows the jitter we avoid)
+//   &layer=<url|item>    live only: an ArcGIS 3D object layer instead of the
+//                        test scene; the panel loads others in place
 //   &terrain=1|0         Esri World Elevation as ground (default: on for
 //                        &layer=, off for the test scene, which is flat)
 //   &geoid=1|0           live only, display only (D25): lower drawn anchors by
@@ -16,7 +18,9 @@
 //                        orthometric heights the view draws as ellipsoidal
 //                        (default: as terrain)
 //   &buildings=1|0       Open 3D Buildings scene layer as visual reference
-//                        (default: on for &layer=; the panel toggles it live)
+//                        (default: on for &layer=)
+// Layers, terrain, geoid and buildings change in place (the URL follows);
+// view, content, exact and naive reload the page.
 
 import esriConfig from "@arcgis/core/config.js";
 import Basemap from "@arcgis/core/Basemap.js";
@@ -29,14 +33,18 @@ import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import TileLayer from "@arcgis/core/layers/TileLayer.js";
 import SceneView from "@arcgis/core/views/SceneView.js";
 import { watch } from "@arcgis/core/core/reactiveUtils.js";
+import { fromRenderCoordinates } from "@arcgis/core/views/3d/webgl.js";
 import type { HarnessReport } from "./harness";
 import { transformPoint } from "./mat4";
 import { MeshPass, type PassStats, type ScreenError } from "./meshPass";
-import { findObjectLayers } from "./arcgis/discover";
-import { DEFAULT_PORTAL, loadLiveScene, type LiveData } from "./live";
-import { formatBytes, LoadStatus } from "./loadStatus";
+import { DEFAULT_PORTAL, loadLiveScene, type LiveData, type LoadedLive } from "./live";
+import { LoadStatus } from "./loadStatus";
 import { loadRecordedScene } from "./recorded";
 import type { CameraPreset, Scene } from "./scene";
+import { initAbout } from "./ui/about";
+import { FeaturesTab } from "./ui/features";
+import { LayersTab, TEST_LAYERS } from "./ui/layers";
+import { bindDiagnostics, bindLoadStatus, initPanel, showTab } from "./ui/panel";
 import { w0Scene } from "./w0Scene";
 
 // Self-hosted SDK assets (see vite.config.ts); the CDN worker is blocked by COEP.
@@ -54,7 +62,8 @@ const exact = params.get("exact") === "1";
 // (.../home/item.html?id=...), an item id (on &portal=, default
 // zurich.maps.arcgis.com) or a mock directory such as
 // /usd/fixtures/arcgis/zurich-egm96.
-const objectLayer = params.get("layer") ?? undefined;
+// Loading another layer replaces it in place (loadLayer), without a reload.
+let objectLayer = params.get("layer") ?? undefined;
 const portal = params.get("portal") ?? undefined;
 const loadStatus = new LoadStatus();
 // Directory of recorded data under public/: the offline reference's export
@@ -89,6 +98,15 @@ interface AppState {
   report: HarnessReport | null;
   /** Live data: what the module returned (T9 checks). */
   live: LiveData | null;
+  /** Completed loads in this page (a layer loaded in place adds one). */
+  loads: number;
+  /** Loads a 3D object layer in place (no page reload). */
+  loadLayer?: (url: string) => Promise<void>;
+  /** Panel: selects an anchor row and highlights its meshes (null: none). */
+  select?: (path: string | null) => void;
+  /** Panel: zooms to an anchor's meshes. */
+  zoom?: (path: string) => Promise<unknown>;
+  showTab?: (name: string) => void;
 }
 
 const state: AppState = {
@@ -105,6 +123,7 @@ const state: AppState = {
   errors: [],
   report: null,
   live: null,
+  loads: 0,
 };
 (globalThis as unknown as { __app: AppState }).__app = state;
 addEventListener("error", (e) => state.errors.push(String(e.message)));
@@ -126,28 +145,54 @@ const basemap = new Basemap({
   })],
 });
 
-// Terrain: Esri's World Elevation (keyless). Its heights are taken as is by
-// the SceneView (no geoid applied), the test scene stays on flat ground.
-const terrainParam = new URLSearchParams(location.search).get("terrain");
-const terrain = terrainParam ? terrainParam === "1"
-  : new URLSearchParams(location.search).has("layer");
+/** A 1/0 URL parameter, defaulting to on when a 3D object layer is loaded. */
+function layerDefault(param: string, layer: string | undefined): boolean {
+  const v = new URLSearchParams(location.search).get(param);
+  return v ? v === "1" : !!layer;
+}
+
+/** Sets or clears URL parameters without reloading (the page keeps its state). */
+function setParams(values: Record<string, string | null>, push = false) {
+  const p = new URLSearchParams(location.search);
+  for (const [k, v] of Object.entries(values)) {
+    if (v === null) p.delete(k); else p.set(k, v);
+  }
+  if (push) history.pushState(null, "", "?" + p.toString());
+  else history.replaceState(null, "", "?" + p.toString());
+  setLinks();
+}
+
+// Terrain: Esri's World Elevation (keyless), added and removed in place. Its
+// heights are taken as is by the SceneView (no geoid applied); the test
+// scene stays on flat ground.
 const ground = new Ground({
-  layers: terrain ? [new ElevationLayer({
-    url: "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer",
-  })] : [],
   // Let the camera go down to street level (the default stay-above
   // constraint keeps it several metres up).
   navigationConstraint: { type: "none" },
 });
+let elevation: ElevationLayer | null = null;
+function setTerrain(on: boolean) {
+  if (on && !elevation) {
+    elevation = new ElevationLayer({
+      url: "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer",
+    });
+  }
+  if (!elevation) return;
+  if (on && !ground.layers.includes(elevation)) ground.layers.add(elevation);
+  if (!on) ground.layers.remove(elevation);
+}
+let terrain = layerDefault("terrain", objectLayer);
+setTerrain(terrain);
 
-const geoidParam = new URLSearchParams(location.search).get("geoid");
-const geoid = geoidParam ? geoidParam === "1" : terrain;
+const geoidDefault = () => {
+  const v = new URLSearchParams(location.search).get("geoid");
+  return v ? v === "1" : terrain;
+};
+let geoid = geoidDefault();
 
 // Visual reference: Esri's Open 3D Buildings (ArcGIS Online item).
 const OPEN_3D_BUILDINGS = "c444b24b184c4523a5dc96248bfea4e1";
-const buildingsParam = new URLSearchParams(location.search).get("buildings");
-const buildings = buildingsParam ? buildingsParam === "1"
-  : new URLSearchParams(location.search).has("layer");
+const buildings = layerDefault("buildings", objectLayer);
 
 const view = new SceneView({
   container: "viewDiv",
@@ -198,19 +243,50 @@ watch(() => view.updating, (updating) => { state.updating = updating; },
 const pass = new MeshPass(view);
 state.stats = pass.stats;
 
-view.when(async () => {
-  if (data === "live") {
-    const loaded = await loadLiveScene(view, { exact, layer: objectLayer, portal,
-                                               status: loadStatus, geoid });
-    scene = loaded.scene;
-    state.live = loaded.live;
-  } else {
-    scene = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, recordedDir);
+let loadedLive: LoadedLive | null = null;
+let loadSeq = 0;
+
+/** Shows a scene: meshes, test hooks and the panel. */
+function showScene(next: Scene) {
+  scene = next;
+  state.scene = next.name;
+  state.anchors = next.anchors;
+  pass.setMeshes(next.meshes);
+  renderPanel();
+}
+
+/**
+ * Loads the content (the live module with the current layer, recorded data
+ * or the W0 spike). Runs at start-up and again for a layer loaded in place;
+ * a newer load supersedes one still running.
+ */
+async function loadContent(): Promise<void> {
+  const seq = ++loadSeq;
+  state.ready = false;
+  state.report = null;
+  // Every load after the first starts the status over, also after a failed one.
+  if (seq > 1) loadStatus.restart(`loading ${objectLayer ?? "the test scene"}`);
+  features.select(null);
+  try {
+    let next: Scene;
+    if (data === "live") {
+      const loaded = await loadLiveScene(view, { exact, layer: objectLayer, portal,
+                                                 status: loadStatus, geoid });
+      if (seq !== loadSeq) return;
+      loadedLive = loaded;
+      state.live = loaded.live;
+      next = loaded.scene;
+    } else {
+      next = data === "w0" ? w0Scene(view, naive) : await loadRecordedScene(view, recordedDir);
+    }
+    showScene(next);
+  } catch (err) {
+    if (seq !== loadSeq) return;
+    state.errors.push("scene: " + String(err));
+    loadStatus.fail(err);
+    renderPanel();
+    return;
   }
-  state.scene = scene.name;
-  state.anchors = scene.anchors;
-  pass.setMeshes(scene.meshes);
-  buildPresetButtons(scene);
   await goto("overview", false);
   state.goto = (preset) => goto(preset, false);
   state.renderPoint = (mesh, p) => {
@@ -221,16 +297,134 @@ view.when(async () => {
   state.score = () => {
     const r = scene?.score?.() ?? null;
     if (r) r.renderer = state.renderer;
-    return (state.report = r);
+    state.report = r;
+    renderPanel();
+    return r;
   };
+  state.select = (path) => features.select(path);
+  state.zoom = (path) => zoomTo(path, false);
   state.ready = true;
-  loadStatus.finish(`ready: ${scene.meshes.length} mesh(es) drawn`);
-}).catch((err: unknown) => {
-  state.errors.push("scene: " + String(err));
+  state.loads++;
+  loadStatus.finish(`ready: ${scene!.meshes.length} mesh(es) drawn`);
+}
+
+/**
+ * Loads a 3D object layer in place: the view, map and context layers stay,
+ * the URL is updated (history entry) and the layer-dependent defaults of
+ * terrain, buildings and geoid apply unless the URL sets them. Recorded and
+ * spike content switch to live data with a reload.
+ */
+async function loadLayer(url: string): Promise<void> {
+  if (data !== "live") {
+    const p = new URLSearchParams(location.search);
+    p.set("data", "live");
+    if (url) p.set("layer", url); else p.delete("layer");
+    location.search = p.toString();
+    return;
+  }
+  objectLayer = url || undefined;
+  setParams({ layer: objectLayer ?? null }, true);
+  layers.setCurrent(objectLayer);
+  terrain = layerDefault("terrain", objectLayer);
+  setTerrain(terrain);
+  terrainBox.checked = terrain;
+  geoid = geoidDefault();
+  geoidBox.checked = geoid;
+  const b = layerDefault("buildings", objectLayer);
+  buildingsBox.checked = b;
+  showBuildings(b);
+  showTab("features");
+  await loadContent();
+}
+state.loadLayer = loadLayer;
+// Back and forward through loaded layers: the page state follows the URL.
+addEventListener("popstate", () => location.reload());
+
+view.when(loadContent).catch((err: unknown) => {
+  state.errors.push("view: " + String(err));
   loadStatus.fail(err);
 });
 
-// --- panel ---------------------------------------------------------------
+/** Meshes drawn for an anchor. */
+function anchorMeshes(path: string): string[] {
+  // (Map is the SDK's here.)
+  return [...(scene?.details?.meshAnchor.entries() ?? [])]
+    .filter(([, anchor]) => anchor === path).map(([mesh]) => mesh);
+}
+
+/**
+ * Looks at an anchor's meshes from the south, at a distance from their
+ * extent: a sample of vertices through the render matrices gives the centre
+ * and radius in render space, mapped back to lon/lat/h by the SDK.
+ */
+function zoomTo(path: string, animate: boolean): Promise<unknown> {
+  const names = new Set(anchorMeshes(path));
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (const m of scene?.meshes ?? []) {
+    const matrix = scene?.renderMatrices.get(m.name);
+    if (!names.has(m.name) || !matrix) continue;
+    const step = Math.max(3, 3 * Math.floor(m.positions.length / 3 / 2000));
+    for (let i = 0; i + 2 < m.positions.length; i += step) {
+      const p = transformPoint(matrix, [m.positions[i], m.positions[i + 1], m.positions[i + 2]]);
+      for (let k = 0; k < 3; k++) {
+        lo[k] = Math.min(lo[k], p[k]);
+        hi[k] = Math.max(hi[k], p[k]);
+      }
+    }
+  }
+  if (!Number.isFinite(lo[0])) return Promise.resolve();
+  const centre = lo.map((v, k) => (v + hi[k]) / 2);
+  const radius = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
+  const geo = fromRenderCoordinates(view, centre, 0, new Array(3), 0, SpatialReference.WGS84, 1);
+  if (!geo) return Promise.resolve();
+  const d = Math.max(4 * radius, 20);
+  const clip = view.constraints.clipDistance;
+  if (d < 300) {
+    clip.near = 0.1;
+    clip.far = 50_000;
+  } else {
+    clip.mode = "auto";
+  }
+  return view.goTo(new Camera({
+    position: { longitude: geo[0], latitude: geo[1] - (0.8 * d) / M_PER_DEG_LAT, z: geo[2] + 0.6 * d,
+                spatialReference: SpatialReference.WGS84 },
+    heading: 0, tilt: 53,
+  }), { animate });
+}
+
+// --- panel (D27) ---------------------------------------------------------
+
+initPanel();
+initAbout();
+state.showTab = showTab;
+bindLoadStatus(loadStatus);
+const features = new FeaturesTab({
+  select: (path) => pass.setHighlight(path ? new Set(anchorMeshes(path)) : null),
+  zoom: (path) => void zoomTo(path, true),
+});
+// Development: test layers (the Zurich office layer and the local mocks).
+document.getElementById("devLayers")!.append(...TEST_LAYERS.map((l) => {
+  const b = document.createElement("button");
+  b.className = "btn sm";
+  b.type = "button";
+  b.textContent = l.title;
+  b.title = `${l.url} (${l.features} features, ${l.crs})`;
+  b.dataset.url = l.url;
+  b.addEventListener("click", () => void loadLayer(l.url));
+  return b;
+}));
+
+const layers = new LayersTab({
+  current: objectLayer,
+  portal: portal ?? DEFAULT_PORTAL,
+  log: (level, text) => loadStatus.add(level, text),
+  load: (url) => void loadLayer(url),
+});
+
+function renderPanel() {
+  features.render({ global: viewingMode === "global", scene, live: state.live, report: state.report });
+}
 
 function setLinks() {
   document.querySelectorAll<HTMLAnchorElement>("a[data-view], a[data-data]").forEach((a) => {
@@ -243,21 +437,38 @@ function setLinks() {
 }
 setLinks();
 
-const exactBox = document.getElementById("exact") as HTMLInputElement;
-exactBox.checked = exact;
-exactBox.disabled = data !== "live";
-exactBox.addEventListener("change", () => {
-  const p = new URLSearchParams(location.search);
-  if (exactBox.checked) p.set("exact", "1"); else p.delete("exact");
-  location.search = p.toString();
-});
+/** A checkbox that reloads the page with a URL parameter. */
+function reloadingBox(id: string, checked: boolean, enabled: boolean, param: string,
+                      values: [string, string | null]) {
+  const box = document.getElementById(id) as HTMLInputElement;
+  box.checked = checked;
+  box.disabled = !enabled;
+  box.addEventListener("change", () => {
+    const p = new URLSearchParams(location.search);
+    const v = values[box.checked ? 0 : 1];
+    if (v === null) p.delete(param); else p.set(param, v);
+    location.search = p.toString();
+  });
+}
+reloadingBox("exact", exact, data === "live", "exact", ["1", null]);
+reloadingBox("naive", naive, data === "w0", "naive", ["1", null]);
 
+// Terrain and the geoid correction switch in place.
 const terrainBox = document.getElementById("terrain") as HTMLInputElement;
 terrainBox.checked = terrain;
 terrainBox.addEventListener("change", () => {
-  const p = new URLSearchParams(location.search);
-  p.set("terrain", terrainBox.checked ? "1" : "0");
-  location.search = p.toString();
+  terrain = terrainBox.checked;
+  setTerrain(terrain);
+  setParams({ terrain: terrain ? "1" : "0" });
+});
+const geoidBox = document.getElementById("geoid") as HTMLInputElement;
+geoidBox.checked = geoid;
+geoidBox.disabled = data !== "live";
+geoidBox.addEventListener("change", () => {
+  geoid = geoidBox.checked;
+  setParams({ geoid: geoid ? "1" : "0" });
+  // Re-placed from the loaded data with or without the offsets; no module.
+  if (loadedLive && state.ready) showScene(loadedLive.place(geoid));
 });
 
 // Open 3D Buildings: added on first use, then only shown or hidden (no
@@ -277,181 +488,31 @@ function showBuildings(on: boolean) {
   }
   if (buildingsLayer) buildingsLayer.visible = on;
 }
-const geoidBox = document.getElementById("geoid") as HTMLInputElement;
-geoidBox.checked = geoid;
-geoidBox.disabled = data !== "live";
-geoidBox.addEventListener("change", () => {
-  const p = new URLSearchParams(location.search);
-  p.set("geoid", geoidBox.checked ? "1" : "0");
-  location.search = p.toString();
-});
-
 const buildingsBox = document.getElementById("buildings") as HTMLInputElement;
 buildingsBox.checked = buildings;
 showBuildings(buildings);
 buildingsBox.addEventListener("change", () => {
   showBuildings(buildingsBox.checked);
-  const p = new URLSearchParams(location.search);
-  p.set("buildings", buildingsBox.checked ? "1" : "0");
-  history.replaceState(null, "", "?" + p.toString());
-  setLinks();
+  setParams({ buildings: buildingsBox.checked ? "1" : "0" });
 });
 
-const naiveBox = document.getElementById("naive") as HTMLInputElement;
-naiveBox.checked = naive;
-naiveBox.disabled = data !== "w0";
-naiveBox.addEventListener("change", () => {
-  const p = new URLSearchParams(location.search);
-  if (naiveBox.checked) p.set("naive", "1"); else p.delete("naive");
-  location.search = p.toString();
-});
-
-function buildPresetButtons(s: Scene) {
-  const row = document.getElementById("presets")!;
-  row.replaceChildren(...Object.entries(s.presets).map(([name, p]) => {
-    const b = document.createElement("button");
-    b.textContent = p.label;
-    b.addEventListener("click", () => goto(name, true));
-    return b;
-  }));
-}
-
-// Layer combobox: loads a 3D object layer live (sets the URL's layer); the
-// presets are suggestions, any URL, item id or item page can be typed.
-const LAYER_PRESETS: [string, string][] = [
-  ["https://services2.arcgis.com/cFEFS0EWrhfDeVw9/arcgis/rest/services/Zurich_Office_4th_Floor/FeatureServer/0",
-   "Zurich Office 4th Floor (EGM96 heights, about 180 MiB of models)"],
-  ["/usd/fixtures/arcgis/zurich-egm96", "mock: Zurich boxes, EGM96 heights"],
-  ["/usd/fixtures/arcgis/zurich-ellipsoidal", "mock: Zurich boxes, no vertical CRS"],
-  ["/usd/fixtures/arcgis/transform", "mock: feature transform"],
-];
-const itemForm = document.getElementById("itemForm") as HTMLFormElement;
-const itemInput = document.getElementById("item") as HTMLInputElement;
-const presetList = document.getElementById("itemPresets")!;
-function setPresets(presets: [string, string][]) {
-  presetList.replaceChildren(...presets.map(([value, label]) => {
-    const o = document.createElement("option");
-    o.value = value;
-    o.label = label;
-    return o;
-  }));
-}
-// Find results are kept in this browser across page loads (loading a layer
-// reloads the page); without storage only the built-in presets remain.
-const FOUND_KEY = "geospatial-web.foundLayers";
-function storedFound(): [string, string][] {
-  try {
-    const v = JSON.parse(localStorage.getItem(FOUND_KEY) ?? "[]");
-    return Array.isArray(v) ? v.filter((e) => Array.isArray(e) && e.length === 2) : [];
-  } catch {
-    return [];
-  }
-}
-function withBuiltIn(found: [string, string][]): [string, string][] {
-  return [...found, ...LAYER_PRESETS.filter(([v]) => !found.some(([f]) => f === v))];
-}
-setPresets(withBuiltIn(storedFound()));
-
-// Find: the organization's public 3D object layers with models, as presets.
-// Organization: a portal address typed in the field, else &portal=, else
-// DEFAULT_PORTAL (the Zurich org).
-const findButton = document.getElementById("find") as HTMLButtonElement;
-findButton.addEventListener("click", async () => {
-  const typed = /^https?:\/\/[^/?#]+(\/portal)?\/?$/.test(itemInput.value.trim())
-    ? itemInput.value.trim() : "";
-  const org = typed || portal || DEFAULT_PORTAL;
-  loadbar.style.display = "";
-  logBox.open = true;
-  findButton.disabled = true;
-  loadStatus.add("info", `finding 3D object layers on ${org}`);
-  try {
-    const found = await findObjectLayers(org, (t) => loadStatus.add("info", t),
-      (done, total) => { findButton.textContent = `Find ${done}/${total}`; });
-    const entries = found.map((f): [string, string] =>
-      [f.url, `${f.title} (${f.features} features, ${f.crs})`]);
-    setPresets(withBuiltIn(entries));
-    try {
-      localStorage.setItem(FOUND_KEY, JSON.stringify(entries));
-    } catch {
-      // Not kept across page loads, still listed now.
-    }
-    loadStatus.add("info", `found ${found.length} loadable layers on ${org}; pick one in the field`);
-    if (typed) itemInput.value = "";
-    itemInput.focus();
-  } catch (e) {
-    loadStatus.add("error", `find on ${org}: ${String((e as Error)?.message ?? e)}`);
-  } finally {
-    findButton.disabled = false;
-    findButton.textContent = "Find";
-  }
-});
-itemInput.value = objectLayer ?? "";
-itemForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const p = new URLSearchParams(location.search);
-  p.set("data", "live");
-  if (itemInput.value.trim()) p.set("layer", itemInput.value.trim()); else p.delete("layer");
-  location.search = p.toString();
-});
-
-// Load status: phase, download progress, log.
-const loadbar = document.getElementById("loadbar")!;
-const phaseEl = document.getElementById("phase")!;
-const progressEl = document.getElementById("progress") as HTMLProgressElement;
-const logEl = document.getElementById("log")!;
-const logBox = document.getElementById("logbox") as HTMLDetailsElement;
-loadbar.style.display = data === "live" ? "" : "none";
-let renderQueued = false;
-loadStatus.onChange(() => {
-  if (renderQueued) return;
-  renderQueued = true;
-  requestAnimationFrame(() => {
-    renderQueued = false;
-    const d = loadStatus.downloads();
-    const downloading = d.active > 0 && !loadStatus.done;
-    phaseEl.textContent = loadStatus.phase + (downloading
-      ? ` - ${formatBytes(d.loaded)}${d.total ? ` of ${formatBytes(d.total)}` : ""}` : "");
-    phaseEl.className = loadStatus.failed ? "failed" : loadStatus.done ? "done" : "";
-    loadbar.classList.toggle("done", loadStatus.done);
-    if (downloading && d.total) progressEl.value = d.loaded / d.total;
-    else progressEl.removeAttribute("value");  // indeterminate
-    if (loadStatus.failed) logBox.open = true;
-    logEl.replaceChildren(...loadStatus.log.map((e) => {
-      const line = document.createElement("div");
-      line.className = e.level;
-      line.textContent = `${e.t.toFixed(1).padStart(6)}s ${e.text}`;
-      return line;
-    }));
-    logEl.scrollTop = logEl.scrollHeight;
-  });
-});
-
-const scoreButton = document.getElementById("score") as HTMLButtonElement;
-scoreButton.addEventListener("click", () => state.score?.());
-
-function reportLines(r: HarnessReport | null): string[] {
-  if (!r) return [];
-  const s = r.summary;
-  return [
-    `score (tolerance ${r.tolerance} m): ${s.pass} pass, ${s.fail} fail, ` +
-      `${s.unsupported} unsupported, ${s.unexpected} unexpected`,
-    ...r.cases.map((c) => `${c.ok ? "  " : "! "}${c.result.padEnd(11)} ${c.anchor}` +
-      ` (expected ${c.expect}) ${c.detail}`),
-  ];
-}
-
-const statusEl = document.getElementById("status")!;
-setInterval(() => {
+bindDiagnostics(() => {
   const cam = view.camera;
-  statusEl.textContent = [
-    `${viewingMode}: ${state.scene || "loading"}`,
-    `crossOriginIsolated ${state.crossOriginIsolated}  SAB ${state.sharedArrayBuffer}`,
-    `WebGL ${state.renderer}`,
-    `frames ${pass.stats.frames}  meshes ${pass.stats.meshes}  tris ${pass.stats.triangles}`,
-    `near ${pass.stats.near.toFixed(2)} m (${view.constraints.clipDistance.mode})` +
-      `  camera z ${cam?.position.z?.toFixed(2) ?? "-"} m`,
-    ...state.anchors.map((a) => `${a.status.padEnd(11)} ${a.path}\n            ${a.detail}`),
-    ...reportLines(state.report),
-    state.errors.length ? `errors: ${state.errors.join("; ")}` : "",
-  ].filter(Boolean).join("\n");
-}, 250);
+  return [
+    ["crossOriginIsolated", String(state.crossOriginIsolated), state.crossOriginIsolated ? "t-ok" : "t-err"],
+    ["SharedArrayBuffer", String(state.sharedArrayBuffer), state.sharedArrayBuffer ? "t-ok" : "t-err"],
+    ["WebGL renderer", state.renderer],
+    ["content", state.scene || "loading"],
+    ["engine", state.live
+      ? `${state.live.anchors.find((a) => a.engine)?.engine ?? state.live.info.engine} in the browser ` +
+        `(engines: ${state.live.info.engines.join(", ")})`
+      : scene?.details?.engine ?? "none"],
+    ["grids fetched", state.live ? state.live.grids.join(", ") || "none needed" : "not applicable"],
+    ["frames", pass.stats.frames.toLocaleString("en")],
+    ["meshes / tris", `${pass.stats.meshes} / ${pass.stats.triangles.toLocaleString("en")}`],
+    ["near clip", `${pass.stats.near.toFixed(2)} m (${view.constraints.clipDistance.mode})`],
+    ["camera z", `${cam?.position.z?.toFixed(2) ?? "-"} m`],
+    ...(state.errors.length ? [["errors", state.errors.join("; "), "t-err"] as [string, string, string]] : []),
+  ];
+});
+renderPanel();

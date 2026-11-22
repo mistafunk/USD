@@ -10,6 +10,9 @@ import type ManagedFBO from "@arcgis/core/views/3d/webgl/ManagedFBO.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { type Mat4, multiply, normalMatrix3, translation } from "./mat4";
 
+/** Tint of highlighted meshes (setHighlight). */
+const HIGHLIGHT = [1.0, 0.72, 0.25];
+
 export interface PlacedMesh {
   name: string;
   /** Render-space origin; float32-exact. */
@@ -80,6 +83,7 @@ export class MeshPass {
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
+  private highlight: Set<string> | null = null;
   private pending: PlacedMesh[] = [];
   private gpu: GpuMesh[] = [];
 
@@ -130,6 +134,12 @@ export class MeshPass {
 
   setMeshes(meshes: PlacedMesh[]): void {
     this.pending = meshes;
+    this.node.requestRender();
+  }
+
+  /** Meshes to emphasize (tinted); the others are dimmed. null: none. */
+  setHighlight(names: Set<string> | null): void {
+    this.highlight = names;
     this.node.requestRender();
   }
 
@@ -187,7 +197,11 @@ export class MeshPass {
         new Float32Array(modelView));
       gl.uniformMatrix3fv(this.uniforms.uNormalMatrix, false,
         new Float32Array(normalMatrix3(modelView)));
-      gl.uniform3fv(this.uniforms.uColor, color);
+      gl.uniform3fv(this.uniforms.uColor, this.highlight
+        ? this.highlight.has(g.mesh.name)
+          ? color.map((c, i) => 0.5 * c + 0.5 * HIGHLIGHT[i])
+          : color.map((c) => 0.35 * c + 0.2)
+        : color);
       gl.bindVertexArray(g.vao);
       gl.drawElements(gl.TRIANGLES, g.count, gl.UNSIGNED_INT, 0);
       triangles += g.count / 3;

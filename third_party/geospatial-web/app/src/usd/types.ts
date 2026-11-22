@@ -88,6 +88,9 @@ export interface StageTestData {
 export interface FileSpec {
   url: string;
   path: string;
+  /** Expected size in bytes, if known (e.g. an ArcGIS asset map's size):
+   *  the progress total, also when the response is compressed in transit. */
+  size?: number;
 }
 
 /** A CRS part with its identifier, e.g. { name: "WGS 84", id: "EPSG:4326" }. */

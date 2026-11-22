@@ -20,6 +20,8 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   dev server (module 3.8 MB, `proj.db` 1.3 MB). Still to measure: the `wasm32-minsize` preset (all of USD at `-Oz`).
 
 **Open items**
+- **Switch the panel to Calcite components** (D27 follow-up): `@esri/calcite-components` as a direct pinned
+  dependency, its assets self-hosted (COEP), and the specs' checkbox handling for shadow DOM.
 - **Threads.** The module runs without a pre-started pthread pool and reports 24 work threads. With real models
   (the Zurich glb are 126 MB and 63 MB): measure, then pre-start a pool (`-sPTHREAD_POOL_SIZE`) and cap
   `setThreadLimit` to it.
@@ -71,6 +73,12 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   with Find (public 3D object layers of an org, default zurich.maps.arcgis.com, kept in local storage), World
   Elevation terrain and Open 3D Buildings as references, display geoid correction (module `geoidHeights`). The live
   Zurich office layer loads (14 loadable layers in the org).
+
+- **Panel (D27, 2026-11-22):** tabs Features and Layers, a collapsed Log section; About as a dialog with a diagram (`src/ui/about-diagram.svg`); CRS descriptions from the module (EPSG ids also
+  for promoted and compound CRSs), anchor zoom and highlight, organization layer cards with rejected layers and their
+  reasons. All 20 browser specs pass (new: `ui.spec.ts`, CRS checks in `i1` and `objectLayer`). Layers load in
+  place (no page reload; a fresh worker per load), terrain and the geoid correction switch in place (geoid heights
+  are looked up on every live load, the toggle re-places without the module).
 
 ## Findings
 

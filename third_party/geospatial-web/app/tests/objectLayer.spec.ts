@@ -103,12 +103,42 @@ test("object layer zurich-egm96 global", async ({ page }) => {
     expect(Math.abs(a.origin[2] - n - ZURICH[i][2])).toBeLessThan(1e-3);
   });
   expect(Math.abs(live.geoid!.heights["/ObjectLayer/Feature_1"] - 47.382)).toBeLessThan(1e-3);
+  // Features tab (D27): the module's CRS description, one row per anchor.
+  const crs = live.crs.anchors["/ObjectLayer/Feature_1"];
+  expect([crs.type, crs.id, crs.horizontal?.id, crs.vertical?.id])
+    .toEqual(["compound", "EPSG:9707", "EPSG:4326", "EPSG:5773"]);
+  await expect(page.locator("#anchorList .anchor")).toHaveCount(live.anchors.length);
+  await expect(page.locator("#outCode")).toHaveText("EPSG:4979");
+  // Selecting and zooming to an anchor: no errors, the camera moves.
+  await page.evaluate(() => (globalThis as unknown as { __app: { select(p: string): void } })
+    .__app.select("/ObjectLayer/Feature_2"));
+  await expect(page.locator('#anchorList .anchor.selected')).toHaveAttribute("data-path", "/ObjectLayer/Feature_2");
+  await page.locator('#anchorList .anchor[data-path="/ObjectLayer/Feature_2"] .zoom').click();
+  await page.waitForTimeout(1500);
+  const errors = await page.evaluate(() => (globalThis as unknown as { __app: App }).__app.errors);
+  expect(errors).toEqual([]);
 });
 
 test("object layer zurich-egm96 global without geoid correction", async ({ page }) => {
   const { live } = await open(page, "global", "zurich-egm96", "&geoid=0");
-  expect(live.geoid).toBeUndefined();
+  // Looked up either way, not applied.
+  expect(live.geoid!.applied).toBe(false);
+  // Switching it on re-places in place (no reload): the drawn model moves
+  // down by the geoid height, the placement stays.
+  await page.evaluate(() => { (globalThis as unknown as { marker: number }).marker = 1; });
+  const mesh = live.meshes[0].path;
+  const point = (p: typeof page) => p.evaluate((m) => (globalThis as unknown as
+    { __app: { renderPoint(m: string, q: number[]): number[] | null } }).__app.renderPoint(m, [0, 0, 0]), mesh);
+  const before = (await point(page))!;
   await expect(page.locator("#geoid")).not.toBeChecked();
+  // The display option is in the Output CRS section, collapsed by default.
+  await page.locator("#outputCard > summary").click();
+  await page.locator("#geoid").check();
+  const after = (await point(page))!;
+  const moved = Math.hypot(after[0] - before[0], after[1] - before[1], after[2] - before[2]);
+  expect(Math.abs(moved - live.geoid!.heights[live.meshes[0].anchor!])).toBeLessThan(0.01);
+  expect(page.url()).toContain("geoid=1");
+  expect(await page.evaluate(() => (globalThis as unknown as { marker?: number }).marker)).toBe(1);
 });
 
 test("object layer zurich-usd global", async ({ page }) => {
@@ -145,11 +175,12 @@ test("object layer transform global", async ({ page }) => {
 });
 
 test("layer combobox keeps found layers across loads", async ({ page }) => {
-  // As stored by the Find button; loading a layer reloads the page.
+  // As stored by the Find button, read at start-up.
   const found = [["https://example.invalid/FeatureServer/0", "Found layer (3 features, EPSG:4326)"]];
   await page.addInitScript((v) => localStorage.setItem("geospatial-web.foundLayers", v),
                            JSON.stringify(found));
   await open(page, "global", "transform");
+  await page.locator('.tabs button[data-tab="layers"]').click();
   await page.locator("#item").fill("/usd/fixtures/arcgis/zurich-ellipsoidal");
   await page.locator("#itemForm button[type=submit]").click();
   await page.waitForURL(/zurich-ellipsoidal/);

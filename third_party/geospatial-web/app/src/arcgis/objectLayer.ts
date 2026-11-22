@@ -43,6 +43,8 @@ export interface AssetMapJson {
   assetType: string;
   assetURL: string;
   conversionStatus?: string;
+  /** Size of the model in bytes (uncompressed). */
+  size?: number;
 }
 
 export interface ObjectLayerData {
@@ -76,13 +78,29 @@ export function modelFormat(queryFormats: string[] | undefined): string {
 export type Log = (text: string) => void;
 
 /**
+ * A layer's display title from its URL: the service name of a feature
+ * service ("Zurich_Office_4th_Floor" -> "Zurich Office 4th Floor"), else the
+ * last path segment (a mock directory's name).
+ */
+export function titleFromUrl(url: string): string {
+  const service = /\/services\/([^/]+)\/FeatureServer/.exec(url)?.[1];
+  const name = service ?? url.replace(/[?#].*$/, "").replace(/\/+$/, "").split("/").pop() ?? url;
+  return decodeURIComponent(name).replace(/_/g, " ");
+}
+
+/**
  * The 3D object feature layer URL for what a user entered: an ArcGIS item id
  * (32 hex characters, looked up on `portal`), a feature service URL (its
  * first layer with infoFor3D), a layer URL (.../FeatureServer/<id>) or a
- * mock directory (/usd/fixtures/arcgis/<name>).
+ * mock directory (/usd/fixtures/arcgis/<name>); with a title, the item's when
+ * there is one, else from the URL (titleFromUrl).
  */
 export async function resolveObjectLayerUrl(input: string, portal: string,
-                                            log: Log): Promise<string> {
+                                            log: Log): Promise<{ url: string; title: string }> {
+  const withTitle = async (url: string | Promise<string>, title?: string) => {
+    const u = await url;
+    return { url: u, title: title || titleFromUrl(u) };
+  };
   let s = input.trim();
   // An item page (https://<portal>/home/item.html?id=<id>): the item on
   // that portal.
@@ -93,7 +111,7 @@ export async function resolveObjectLayerUrl(input: string, portal: string,
   } else if (/^https?:\/\//.test(s) || s.startsWith("/")) {
     // Service URLs as copied from a browser: without ?f=json or a fragment.
     s = s.replace(/[?#].*$/, "").replace(/\/+$/, "");
-    return /\/FeatureServer$/.test(s) ? firstObjectLayer(s, log) : s;
+    return withTitle(/\/FeatureServer$/.test(s) ? firstObjectLayer(s, log) : s);
   }
   if (!/^[0-9a-f]{32}$/i.test(s)) {
     throw new Error(`"${s}" is neither an ArcGIS item id nor a layer URL`);
@@ -110,7 +128,7 @@ export async function resolveObjectLayerUrl(input: string, portal: string,
                     "3D object layers are read from their feature layer");
   }
   const url = item.url.replace(/\/+$/, "");
-  return /\/FeatureServer\/\d+$/.test(url) ? url : firstObjectLayer(url, log);
+  return withTitle(/\/FeatureServer\/\d+$/.test(url) ? url : firstObjectLayer(url, log), item.title);
 }
 
 async function firstObjectLayer(service: string, log: Log): Promise<string> {
@@ -184,7 +202,7 @@ export interface Wrapper {
   /** The wrapper layer (usda). */
   usda: string;
   /** Models to fetch: URL -> path relative to the wrapper. */
-  models: { url: string; path: string }[];
+  models: { url: string; path: string; size?: number }[];
   /** Features without a model in the layer's format (skipped). */
   skipped: string[];
 }
@@ -218,7 +236,7 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
       continue;
     }
     const path = `assets/${asset.assetHash}.${EXTENSION[data.format] ?? "glb"}`;
-    if (!models.some((m) => m.path === path)) models.push({ url: asset.assetURL, path });
+    if (!models.some((m) => m.path === path)) models.push({ url: asset.assetURL, path, size: asset.size });
 
     const origin = [num(a, "originX", 0), num(a, "originY", 0), num(a, "originZ", 0)];
     // The fields are in the model's glTF frame (x east, y up, z south), which
