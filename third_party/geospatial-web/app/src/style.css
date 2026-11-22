@@ -48,7 +48,9 @@ button, input { font: inherit; color: inherit; }
 /* ---------- panel ---------- */
 #panel {
   position: absolute; top: var(--panel-gap); right: var(--panel-gap); width: var(--panel-width);
-  max-height: calc(100vh - 2 * var(--panel-gap));
+  /* Symmetric gaps above and below, ending above the map's attribution bar
+     (--attribution-height, measured in main.ts). */
+  max-height: calc(100vh - 2 * var(--panel-gap) - var(--attribution-height, 16px));
   display: flex; flex-direction: column;
   background: rgba(255,255,255,var(--panel-opacity));
   border-radius: var(--radius); box-shadow: 0 2px 10px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.05);
@@ -324,3 +326,46 @@ details.card.output[open] > summary { margin-bottom: 6px; }
 .combo-item:hover, .combo-item.active { background: var(--accent-bg); }
 .combo-item.current .mono { font-weight: 600; }
 .pop.wide { width: 350px; }
+/* Available 3DOL: direct load on top, set apart from the search. */
+.load-direct { padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+#tab-layers .section-label { margin-bottom: 4px; }
+/* Per-feature solo: the active button, other rows dimmed while one is soloed. */
+.anchor .actions { grid-row: span 2; display: inline-flex; gap: 4px; }
+.btn.sm.solo, .btn.sm.mute { font: 600 10.5px var(--font); padding: 1px 0; width: 22px; }
+.btn.sm.solo.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Accuracy centred next to the solo and zoom buttons (both rows). */
+.anchor .acc { grid-row: span 2; align-self: center; }
+.anchor .meta { grid-column: 2 / 3; }
+.btn.sm.mute.active { background: var(--muted); border-color: var(--muted); color: #fff; }
+/* Not drawn: muted (M) or hidden by another feature's solo (S), one style. */
+.anchor.muted > summary .path, .anchor.muted > summary .meta,
+#anchorList.soloing .anchor:not(.soloed) > summary .path,
+#anchorList.soloing .anchor:not(.soloed) > summary .meta { text-decoration: line-through; color: var(--faint); }
+/* Feature rows: an expand arrow first; selecting is the rest of the row. */
+.anchor > summary { grid-template-columns: 16px 1fr auto auto; cursor: pointer; padding-left: 4px; }
+.anchor .expander { grid-row: span 2; align-self: center; width: 16px; height: 18px; border: 0; background: none; padding: 0;
+  color: var(--muted); cursor: pointer; font-size: 11px; line-height: 18px; }
+.anchor .expander:hover { color: var(--text); }
+.anchor .meta { grid-column: 2 / 3; }
+.anchor .reason { grid-column: 2 / 5; }
+.anchor .meta { white-space: normal; }
+.anchor .solo:disabled, .anchor .mute:disabled { opacity: .4; cursor: default; }
+/* Expand triangles: drawn with CSS (font glyphs sit at different heights in
+   different fonts), centred on their own line of text, turned down when open. */
+.anchor .expander { grid-row: 1; align-self: center; height: 16px; display: flex; align-items: center;
+  justify-content: center; font-size: 0; }
+.tri, .footer > summary::before, details.card.output > summary::before {
+  content: ""; display: inline-block; flex: none; width: 0; height: 0;
+  border-left: 6px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transition: transform .12s; }
+.anchor[open] .expander .tri, .footer[open] > summary::before, details.card.output[open] > summary::before {
+  transform: rotate(90deg); }
+.footer > summary, details.card.output > summary { display: flex; align-items: center; gap: 8px; }
+.footer > summary::before, details.card.output > summary::before { color: var(--faint); }
+/* WKT and other small disclosures: the same CSS triangle, smaller. */
+details.disclose > summary { display: inline-flex; align-items: center; gap: 5px; }
+details.disclose > summary::before {
+  content: ""; display: inline-block; flex: none; width: 0; height: 0;
+  border-left: 5px solid currentColor; border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+  transition: transform .12s; }
+details.disclose[open] > summary::before { content: ""; transform: rotate(90deg); }

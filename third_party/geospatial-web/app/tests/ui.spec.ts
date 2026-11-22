@@ -77,6 +77,30 @@ test("panel tabs and layer cards", async ({ page }) => {
   expect(await page.evaluate(() => (globalThis as unknown as { marker?: number }).marker)).toBe(1);
   await expect(page.locator("#anchorList .anchor")).toHaveCount(2);
   await expect(page.locator("#phase")).toHaveText(/^ready: 2 mesh/);
+  // Solo: only that feature's meshes are drawn; again, all of them.
+  const triangles = () => page.evaluate(() =>
+    (globalThis as unknown as { __app: { stats: { triangles: number } } }).__app.stats.triangles);
+  await page.waitForFunction(() =>
+    (globalThis as unknown as { __app: { stats: { triangles: number } } }).__app.stats.triangles === 24);
+  await page.locator('.tabs button[data-tab="features"]').click();
+  const solo = page.locator('#anchorList .anchor[data-path="/ObjectLayer/Feature_1"] .solo');
+  await solo.click();
+  await expect(solo).toHaveClass(/active/);
+  await page.waitForFunction(() =>
+    (globalThis as unknown as { __app: { stats: { triangles: number } } }).__app.stats.triangles === 12);
+  await solo.click();
+  await page.waitForFunction(() =>
+    (globalThis as unknown as { __app: { stats: { triangles: number } } }).__app.stats.triangles === 24);
+  expect(await triangles()).toBe(24);
+  // Mute: that feature is not drawn; unmuted, it is again.
+  const mute = page.locator('#anchorList .anchor[data-path="/ObjectLayer/Feature_2"] .mute');
+  await mute.click();
+  await expect(mute).toHaveClass(/active/);
+  await page.waitForFunction(() =>
+    (globalThis as unknown as { __app: { stats: { triangles: number } } }).__app.stats.triangles === 12);
+  await mute.click();
+  await page.waitForFunction(() =>
+    (globalThis as unknown as { __app: { stats: { triangles: number } } }).__app.stats.triangles === 24);
   // A failed load, then a successful one in place: the status bar is green again.
   await page.evaluate(() => (globalThis as unknown as { __app: { loadLayer(u: string): Promise<void> } })
     .__app.loadLayer("/usd/fixtures/arcgis/does-not-exist"));

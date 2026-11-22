@@ -104,6 +104,10 @@ interface AppState {
   loadLayer?: (url: string) => Promise<void>;
   /** Panel: selects an anchor row and highlights its meshes (null: none). */
   select?: (path: string | null) => void;
+  /** Panel: draws only an anchor's meshes (null: all). */
+  solo?: (path: string | null) => void;
+  /** Panel: mutes or unmutes an anchor (null: unmutes all). */
+  mute?: (path: string | null, on?: boolean) => void;
   /** Panel: zooms to an anchor's meshes. */
   zoom?: (path: string) => Promise<unknown>;
   showTab?: (name: string) => void;
@@ -267,6 +271,8 @@ async function loadContent(): Promise<void> {
   // Every load after the first starts the status over, also after a failed one.
   if (seq > 1) loadStatus.restart(`loading ${objectLayer ?? "the test scene"}`);
   features.select(null);
+  features.solo(null);
+  features.mute(null);
   try {
     let next: Scene;
     if (data === "live") {
@@ -302,6 +308,8 @@ async function loadContent(): Promise<void> {
     return r;
   };
   state.select = (path) => features.select(path);
+  state.solo = (path) => features.solo(path);
+  state.mute = (path, on) => features.mute(path, on);
   state.zoom = (path) => zoomTo(path, false);
   state.ready = true;
   state.loads++;
@@ -339,6 +347,20 @@ async function loadLayer(url: string): Promise<void> {
 state.loadLayer = loadLayer;
 // Back and forward through loaded layers: the page state follows the URL.
 addEventListener("popstate", () => location.reload());
+
+// The panel ends above the map's attribution bar, whose height changes when
+// a visitor expands it (style.css --attribution-height).
+view.when(() => {
+  const panel = document.getElementById("panel")!;
+  const track = () => {
+    const bar = view.container?.querySelector<HTMLElement>(".esri-attribution");
+    if (!bar) return void requestAnimationFrame(track);
+    const update = () => panel.style.setProperty("--attribution-height", `${bar.offsetHeight}px`);
+    new ResizeObserver(update).observe(bar);
+    update();
+  };
+  track();
+});
 
 view.when(loadContent).catch((err: unknown) => {
   state.errors.push("view: " + String(err));
@@ -401,6 +423,8 @@ state.showTab = showTab;
 bindLoadStatus(loadStatus);
 const features = new FeaturesTab({
   select: (path) => pass.setHighlight(path ? new Set(anchorMeshes(path)) : null),
+  solo: (path) => pass.setSolo(path ? new Set(anchorMeshes(path)) : null),
+  mute: (paths) => pass.setMuted(new Set([...paths].flatMap(anchorMeshes))),
   zoom: (path) => void zoomTo(path, true),
 });
 // Development: test layers (the Zurich office layer and the local mocks).

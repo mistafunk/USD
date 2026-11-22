@@ -84,6 +84,8 @@ export class MeshPass {
   private program: WebGLProgram | null = null;
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
   private highlight: Set<string> | null = null;
+  private solo: Set<string> | null = null;
+  private muted = new Set<string>();
   private pending: PlacedMesh[] = [];
   private gpu: GpuMesh[] = [];
 
@@ -137,7 +139,19 @@ export class MeshPass {
     this.node.requestRender();
   }
 
-  /** Meshes to emphasize (tinted); the others are dimmed. null: none. */
+  /** Draws only these meshes (a feature's "solo"). null: all. */
+  setSolo(names: Set<string> | null): void {
+    this.solo = names;
+    this.node.requestRender();
+  }
+
+  /** Meshes not drawn (muted features), on top of any solo. */
+  setMuted(names: Set<string>): void {
+    this.muted = names;
+    this.node.requestRender();
+  }
+
+  /** Meshes to emphasize (tinted); the others keep their colours. null: none. */
   setHighlight(names: Set<string> | null): void {
     this.highlight = names;
     this.node.requestRender();
@@ -190,6 +204,7 @@ export class MeshPass {
 
     let triangles = 0;
     for (const g of this.gpu) {
+      if ((this.solo && !this.solo.has(g.mesh.name)) || this.muted.has(g.mesh.name)) continue;
       const { origin, matrix, color } = g.mesh;
       // view * translate(origin) * matrix, all in Float64.
       const modelView = multiply(multiply(view, translation(origin)), matrix);
@@ -197,10 +212,8 @@ export class MeshPass {
         new Float32Array(modelView));
       gl.uniformMatrix3fv(this.uniforms.uNormalMatrix, false,
         new Float32Array(normalMatrix3(modelView)));
-      gl.uniform3fv(this.uniforms.uColor, this.highlight
-        ? this.highlight.has(g.mesh.name)
-          ? color.map((c, i) => 0.5 * c + 0.5 * HIGHLIGHT[i])
-          : color.map((c) => 0.35 * c + 0.2)
+      gl.uniform3fv(this.uniforms.uColor, this.highlight?.has(g.mesh.name)
+        ? color.map((c, i) => 0.5 * c + 0.5 * HIGHLIGHT[i])
         : color);
       gl.bindVertexArray(g.vao);
       gl.drawElements(gl.TRIANGLES, g.count, gl.UNSIGNED_INT, 0);

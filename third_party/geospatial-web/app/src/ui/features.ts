@@ -19,6 +19,10 @@ export interface FeaturesData {
 export interface FeaturesHooks {
   /** An anchor row was selected (null: none). */
   select(path: string | null): void;
+  /** Draw only this anchor's meshes (null: all). */
+  solo(path: string | null): void;
+  /** Do not draw these anchors' meshes. */
+  mute(paths: Set<string>): void;
   zoom(path: string): void;
 }
 
@@ -28,6 +32,8 @@ const $ = (id: string) => document.getElementById(id)!;
 
 export class FeaturesTab {
   private selected: string | null = null;
+  private soloed: string | null = null;
+  private readonly muted = new Set<string>();
   private readonly open = new Set<string>();
   private data: FeaturesData | null = null;
 
@@ -41,6 +47,32 @@ export class FeaturesTab {
   }
 
   /** Selects an anchor (row and highlight), e.g. from a test. */
+  /** Draws only this anchor (null: all anchors), e.g. from a test. */
+  solo(path: string | null) {
+    this.soloed = path;
+    const list = document.getElementById("anchorList")!;
+    list.classList.toggle("soloing", path !== null);
+    list.querySelectorAll<HTMLElement>(".anchor").forEach((a) => {
+      const on = a.dataset.path === path;
+      a.classList.toggle("soloed", on);
+      a.querySelector(".solo")?.classList.toggle("active", on);
+    });
+    this.hooks.solo(path);
+  }
+
+  /** Mutes or unmutes an anchor (its meshes are not drawn); null: unmutes all. */
+  mute(path: string | null, on = true) {
+    if (path === null) this.muted.clear();
+    else if (on) this.muted.add(path);
+    else this.muted.delete(path);
+    document.querySelectorAll<HTMLElement>("#anchorList .anchor").forEach((a) => {
+      const m = this.muted.has(a.dataset.path!);
+      a.classList.toggle("muted", m);
+      a.querySelector(".mute")?.classList.toggle("active", m);
+    });
+    this.hooks.mute(new Set(this.muted));
+  }
+
   select(path: string | null) {
     this.selected = path;
     document.querySelectorAll<HTMLElement>("#anchorList .anchor")
@@ -134,17 +166,44 @@ export class FeaturesTab {
         this.hooks.zoom(a.path);
       },
     }, "⌖");
+    const solo = h("button", {
+      class: `btn sm solo${this.soloed === a.path ? " active" : ""}`, type: "button",
+      title: placed ? "Solo: show only this feature (click again: all)" : "Not placed",
+      disabled: !placed || !meshes.length,
+      onclick: (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.solo(this.soloed === a.path ? null : a.path);
+      },
+    }, "S");
+    const mute = h("button", {
+      class: `btn sm mute${this.muted.has(a.path) ? " active" : ""}`, type: "button",
+      title: placed ? "Mute: hide this feature (click again: show)" : "Not placed",
+      disabled: !placed || !meshes.length,
+      onclick: (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.mute(a.path, !this.muted.has(a.path));
+      },
+    }, "M");
+    // The arrow expands and collapses the row; the rest of the row selects it.
+    const open = this.open.has(a.path);
+    const expander = h("button", {
+      class: "expander", type: "button", title: "Show details",
+      "aria-expanded": String(open), "aria-label": "Show details",
+    }, h("span", { class: "tri" }));
     const summary = h("summary", null,
-      h("span", { class: "sdot" }),
+      expander,
       h("span", { class: "path", title: a.path }, a.path),
       h("span", { class: "acc" }, placed ? accuracyText(a.accuracy, "±") : "n/a"),
-      zoom,
+      h("span", { class: "actions" }, solo, mute, zoom),
       h("span", { class: "meta" }, `${crs?.name || a.sourceCrs || "no source CRS"} · ` +
         `${meshes.length} mesh${meshes.length === 1 ? "" : "es"}`),
       // Two lines here (CSS); the full reason is in the Placement section.
       !placed && a.reason ? h("span", { class: "reason", title: a.reason }, a.reason) : null);
     const row = h("details", {
-      class: `anchor s-${a.status}${this.selected === a.path ? " selected" : ""}`,
+      class: `anchor s-${a.status}${this.selected === a.path ? " selected" : ""}` +
+             `${this.soloed === a.path ? " soloed" : ""}${this.muted.has(a.path) ? " muted" : ""}`,
       "data-path": a.path, "data-status": a.status, open: this.open.has(a.path),
     }, summary, h("div", { class: "body" },
       sourceSection(a, crs),
@@ -155,8 +214,19 @@ export class FeaturesTab {
       testSection(a.path, details?.testCases ?? live?.testCases ?? [], report, !!live)));
     row.addEventListener("toggle", () => {
       if (row.open) this.open.add(a.path); else this.open.delete(a.path);
+      expander.setAttribute("aria-expanded", String(row.open));
+      expander.title = row.open ? "Hide details" : "Show details";
     });
-    summary.addEventListener("click", () => this.select(this.selected === a.path && row.open ? null : a.path));
+    expander.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      row.open = !row.open;
+    });
+    // A click elsewhere in the row selects or deselects; it does not expand.
+    summary.addEventListener("click", (e) => {
+      e.preventDefault();
+      this.select(this.selected === a.path ? null : a.path);
+    });
     return row;
   }
 }

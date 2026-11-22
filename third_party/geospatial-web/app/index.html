@@ -65,6 +65,17 @@
 
         <!-- Layers: ArcGIS 3D object layers to load -->
         <section class="tab" id="tab-layers">
+          <!-- Direct load: a layer by URL, item id or item page. -->
+          <div class="load-direct">
+            <div class="section-label">Load a layer</div>
+            <form class="row" id="itemForm">
+              <input class="input mono" id="item" list="itemPresets" spellcheck="false"
+                     placeholder="3D object layer: FeatureServer URL, item id or item page" />
+              <datalist id="itemPresets"></datalist>
+              <button class="btn" type="submit">Load</button>
+            </form>
+          </div>
+          <div class="section-label">Search an organization</div>
           <div class="row">
             <input class="input mono" id="org" list="orgPresets" spellcheck="false" aria-label="Organization" placeholder="organization or arcgis.com" title="An organization (e.g. zurich.maps.arcgis.com), or arcgis.com for all public layers of ArcGIS Online" />
             <datalist id="orgPresets">
@@ -75,12 +86,6 @@
             <span class="check"><button class="help" type="button" aria-label="How Search finds layers">?</button>
               <span class="pop right wide">Search finds public feature services tagged 3DObject in the organization, or across ArcGIS Online for arcgis.com. A layer is loadable when it allows queries and query3D returns models (USD when offered, else glb); others show the reason.</span></span>
           </div>
-          <form class="row" id="itemForm">
-            <input class="input mono" id="item" list="itemPresets" spellcheck="false"
-                   placeholder="3D object layer: FeatureServer URL, item id or item page" />
-            <datalist id="itemPresets"></datalist>
-            <button class="btn" type="submit">Load</button>
-          </form>
           <div class="row" style="margin-top: 10px">
             <input class="input" id="layerFilter" placeholder="filter by title or owner" />
             <span class="check switch"><label><input id="loadableOnly" type="checkbox" checked /> loadable</label><button class="help" type="button">?</button>
