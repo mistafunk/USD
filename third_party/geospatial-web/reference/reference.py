@@ -1214,6 +1214,27 @@ ARCGIS_ROLES = {
 }
 
 
+def grid_footprints(wkid, features):
+    """Footprints as ArcGIS computes them for a projected layer: the model's
+    box corners scaled, rotated (axis and angle in the glTF frame, right-
+    handed) and moved by the transform fields, read as grid metres east
+    (x) and north (-z) from the origin, then into Web Mercator: {oid:
+    [[xmin, ymin], [xmax, ymax]]}, the bounding box in EPSG:3857."""
+    to3857 = Transformer.from_crs(CRS(wkid), CRS(3857), always_xy=True)
+    out = {}
+    for oid, origin, size, t, s, axis, deg in features:
+        sx, sy, sz = size[0] / 2, size[1], size[2] / 2
+        corners = np.array([(x, y, z) for x in (-sx, sx) for y in (0, sy) for z in (-sz, sz)])
+        a = np.asarray(axis, float) / np.linalg.norm(axis)
+        c, si = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+        K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+        R = np.eye(3) * c + si * K + (1 - c) * np.outer(a, a)
+        model = (corners * np.asarray(s, float)) @ R.T + np.asarray(t, float)
+        x, y = to3857.transform(origin[0] + model[:, 0], origin[1] - model[:, 2])
+        out[str(oid)] = [[float(np.min(x)), float(np.min(y))], [float(np.max(x)), float(np.max(y))]]
+    return out
+
+
 def arcgis_mock():
     """Mock ArcGIS 3D object layers in the REST API's shape (the layer
     resource as layer.json, a query3D response as query3D.json, glb assets),
@@ -1243,6 +1264,15 @@ def arcgis_mock():
         "transform": ({"wkid": 4326, "latestWkid": 4326},
                       [feature(1, (8.51294297, 47.39215091, 427.0), (8.0, 4.0, 2.0),
                                t=(10, 2, -5), s=(2, 1.5, 1), axis=(0, 1, 0), deg=90.0)]),
+        # A projected layer (ETRS89 / UTM 32N) where grid and true north
+        # differ by 3.19 degrees: origin and rotation of an Urban3DOL layer in
+        # Bergen, a synthetic box with a translation. ArcGIS takes the model
+        # in grid directions and grid lengths (measured on that layer: the
+        # server's footprint matches only so, to 2 mm); footprint.json holds
+        # the footprint that rule gives, for the app's spec.
+        "bergen-utm": ({"wkid": 25832, "latestWkid": 25832},
+                       [feature(1, (298549.51254411, 6709780.34498452, 10.0), (100.0, 30.0, 60.0),
+                                t=(20, 0, -10), axis=(0, -1, 0), deg=21.03378632)]),
     }
     for name, (sr, features) in layers.items():
         d = ARCGIS_MOCK_DIR / name
@@ -1280,6 +1310,9 @@ def arcgis_mock():
                     "assetURL": "assets/{}.usdz".format(usdz)})
         (d / "layer.json").write_text(json.dumps(layer, indent=1) + "\n")
         (d / "query3D.json").write_text(json.dumps(out, indent=1) + "\n")
+        if sr["wkid"] != 4326:
+            (d / "footprint.json").write_text(json.dumps(
+                grid_footprints(sr["wkid"], features), indent=1) + "\n")
         print("wrote {}".format(d))
 
 

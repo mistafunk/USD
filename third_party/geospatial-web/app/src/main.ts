@@ -89,6 +89,11 @@ interface AppState {
   goto?: (preset: string) => Promise<unknown>;
   /** Render-space position (Float64) of a mesh-local point. */
   renderPoint?: (mesh: string, p: number[]) => number[] | null;
+  /** Bounding box of each mesh's placed vertices in render space, [min xyz,
+   *  max xyz] (specs: e.g. against a layer's footprints in a local view,
+   *  whose render space is its spatial reference). Boxes, not vertices: a
+   *  layer can have millions, too many to hand to a test. */
+  placedBounds?: () => Record<string, [number[], number[]]>;
   /** T6: screen error of a mesh point, float32 pipeline vs Float64. */
   screenError?: (mesh: string, p: number[]) => ScreenError | null;
   /** W2 harness: control point scoring for the current view. */
@@ -357,6 +362,23 @@ async function loadContent(): Promise<void> {
     return m ? transformPoint(m, p) : null;
   };
   state.screenError = (mesh, p) => pass.screenError(mesh, p);
+  state.placedBounds = () => {
+    const out: Record<string, [number[], number[]]> = {};
+    for (const m of scene?.meshes ?? []) {
+      const matrix = scene!.renderMatrices.get(m.name);
+      if (!matrix) continue;
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i + 2 < m.positions.length; i += 3) {
+        const p = transformPoint(matrix, [m.positions[i], m.positions[i + 1], m.positions[i + 2]]);
+        for (let k = 0; k < 3; k++) {
+          lo[k] = Math.min(lo[k], p[k]);
+          hi[k] = Math.max(hi[k], p[k]);
+        }
+      }
+      out[m.name] = [lo, hi];
+    }
+    return out;
+  };
   state.score = () => {
     const r = scene?.score?.() ?? null;
     if (r) r.renderer = state.renderer;

@@ -5,7 +5,7 @@
 // the view's spatial reference for a local one.
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import {
-  buildWrapper, crsDefinition, fetchObjectLayer, resolveObjectLayerUrl, type SpatialReferenceJson,
+  buildWrapper, crsDefinition, fetchObjectLayer, resolveObjectLayerUrl, type GridFactors, type SpatialReferenceJson,
 } from "./arcgis/objectLayer";
 import { formatBytes, LoadStatus } from "./loadStatus";
 import { placeScene, toLonLatH, type RecordedAnchor } from "./recorded";
@@ -92,7 +92,9 @@ export interface LiveData {
                   /** Exact duplicates: anchor path -> the first with the same model and transform. */
                   duplicates: Record<string, string>;
                   /** Translations as large as a position: anchor path -> warning. */
-                  suspicious: Record<string, string> };
+                  suspicious: Record<string, string>;
+                  /** Projected layers: grid correction per anchor path. */
+                  grid: Record<string, GridFactors> };
 }
 
 interface SceneIndex {
@@ -140,7 +142,27 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
     if (!crs.wkt) throw new Error(`CRS ${definition}: ${crs.error}`);
     log(`CRS ${definition}${promote3D ? " promoted to 3D" : ""}` +
         (assumed ? ` (the layer names no vertical CRS: z in ${assumed})` : ""));
-    const wrapper = buildWrapper(data, crs.wkt);
+    // Projected layer: models are in grid directions and lengths; the
+    // engine's projection factors at each origin turn them into the true
+    // frame (GridFactors). Geographic layers have none.
+    const roles = data.layer.infoFor3D.transformFieldRoles;
+    const origins = data.features.map((f) => [Number(f.attributes[roles.originX] ?? 0),
+                                              Number(f.attributes[roles.originY] ?? 0)]);
+    const factors = await usd.projectionFactors(definition, origins);
+    const gridFactors = factors.map((f) => (f.error ? null : f as GridFactors));
+    const gridErrors = [...new Set(factors.map((f) => f.error).filter((e) => e && e !== "not a projected CRS"))];
+    gridErrors.forEach((e) => status.add("warn", `projection factors: ${e}; those models are not corrected to the true frame`));
+    const placedGrid = gridFactors.filter((g): g is GridFactors => !!g);
+    if (placedGrid.length) {
+      const range = (v: number[], d: number) => {
+        const lo = Math.min(...v).toFixed(d), hi = Math.max(...v).toFixed(d);
+        return lo === hi ? lo : `${lo} to ${hi}`;
+      };
+      log(`projected layer: models turned from grid to true north by ` +
+          `${range(placedGrid.map((g) => g.meridianConvergence), 4)}° and scaled by 1/` +
+          `${range(placedGrid.map((g) => g.meridionalScale), 6)} (meridian convergence, point scale)`);
+    }
+    const wrapper = buildWrapper(data, crs.wkt, gridFactors);
     wrapper.skipped.forEach((s) => status.add("warn", s));
     for (const [dup, of] of Object.entries(wrapper.duplicates)) {
       status.add("warn", `${dup} is an exact duplicate of ${of} (same model and transform)`);
@@ -160,9 +182,8 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
                     spatialReference: data.layer.spatialReference, assumed,
                     crs: definition + (promote3D ? " (3D)" : ""), wrapper: wrapper.usda,
                     skipped: wrapper.skipped, duplicates: wrapper.duplicates,
-                    suspicious: wrapper.suspicious };
+                    suspicious: wrapper.suspicious, grid: wrapper.grid };
     const first = data.features[0]?.attributes;
-    const roles = data.layer.infoFor3D.transformFieldRoles;
     if (first && (data.layer.spatialReference.latestWkid ?? data.layer.spatialReference.wkid) === 4326) {
       fallbackTarget = [Number(first[roles.originX]), Number(first[roles.originY]),
                         Number(first[roles.originZ])];

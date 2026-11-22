@@ -276,3 +276,55 @@ test("absolute translation flagged", async ({ page }) => {
   expect(result.suspicious["/ObjectLayer/Feature_1"]).toContain("probably absolute coordinates");
   expect(result.translate).toBe(true);
 });
+
+// A projected layer's models are in grid directions and lengths: with the
+// engine's projection factors the wrapper turns each feature by the meridian
+// convergence (crs:orientation heading) and scales its Model by 1 / scale,
+// outermost so the translation (grid units too) is scaled as well.
+test("grid correction for projected layers", async ({ page }) => {
+  await page.goto("/?view=global&data=w0&terrain=0&buildings=0");
+  const usda: string = await page.evaluate(async () => {
+    const module = "/src/arcgis/objectLayer.ts";
+    const { buildWrapper } = await import(/* @vite-ignore */ module);
+    const roles = { originX: "OX", originY: "OY", originZ: "OZ", globalID: "GlobalID" };
+    const w = buildWrapper({
+      url: "test", format: "3D_glb",
+      layer: { spatialReference: { wkid: 25832 }, infoFor3D: { transformFieldRoles: roles } },
+      features: [{ attributes: { OBJECTID: 1, GlobalID: "a", OX: 298549.5, OY: 6709780.3, OZ: 0 } },
+                 { attributes: { OBJECTID: 2, GlobalID: "b", OX: 298600.0, OY: 6709800.0, OZ: 0 } }],
+      assetMaps: ["a", "b"].map((g) => ({ parentGlobalId: g, assetType: "3D_glb", assetHash: g,
+                                          assetURL: `https://example.invalid/${g}`, assetName: "m.glb" })),
+    }, "WKT", [{ meridianConvergence: -3.25, meridionalScale: 1.0001, parallelScale: 1.0001 }, null]);
+    return w.usda;
+  });
+  const [f1, f2] = usda.split('def Xform "Feature_2"');
+  expect(f1).toContain("double3 crs:orientation = (-3.25, 0.0, 0.0)");
+  expect(f1).toMatch(/double3 xformOp:scale:grid = \(0\.9999\d+, 1\.0, 0\.9999\d+\)/);
+  expect(f1).toContain('xformOpOrder = ["xformOp:scale:grid", "xformOp:translate", "xformOp:orient", "xformOp:scale"]');
+  expect(f2).not.toContain("crs:orientation");
+  expect(f2).not.toContain("scale:grid");
+});
+
+// Projected layer, placed: the bergen-utm mock (UTM 32N, 3.19 degrees
+// between grid and true north) in the local view, whose render space is
+// Web Mercator, against the footprint ArcGIS's grid rule gives (reference.py
+// arcgis-mock, pyproj): bounding boxes within 1 cm. Without the grid
+// correction the box is metres off.
+test("projected layer matches ArcGIS's footprint", async ({ page }) => {
+  await page.goto("/?view=local&data=live&terrain=0&buildings=0&layer=/usd/fixtures/arcgis/bergen-utm");
+  await page.waitForFunction(() => (globalThis as any).__app?.ready, null, { timeout: 90_000 });
+  await expect(page.locator("#log")).toContainText("projected layer: models turned from grid to true north by -3.1905°");
+  const expected: Record<string, number[][]> =
+    await (await page.request.get("/usd/fixtures/arcgis/bergen-utm/footprint.json")).json();
+  const bounds: Record<string, number[][]> = await page.evaluate(() => (globalThis as any).__app.placedBounds());
+  const box = Object.entries(bounds).filter(([mesh]) => mesh.includes("/Feature_1/")).map(([, b]) => b);
+  expect(box.length).toBeGreaterThan(0);
+  const lo = [0, 1].map((k) => Math.min(...box.map((b) => b[0][k])));
+  const hi = [0, 1].map((k) => Math.max(...box.map((b) => b[1][k])));
+  // Web Mercator units to metres at the layer's latitude.
+  const m = Math.cos(2 * Math.atan(Math.exp(expected["1"][0][1] / 6378137)) - Math.PI / 2);
+  for (const k of [0, 1]) {
+    expect(Math.abs(lo[k] - expected["1"][0][k]) * m).toBeLessThan(0.01);
+    expect(Math.abs(hi[k] - expected["1"][1][k]) * m).toBeLessThan(0.01);
+  }
+});

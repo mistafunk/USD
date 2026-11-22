@@ -338,12 +338,19 @@ function placementSection(a: RecordedAnchor, live: LiveData | null): HTMLElement
   const steps = (a.operation ?? "").split(/; then | \+ /).filter(Boolean);
   const missing = live?.anchors.find((x) => x.path === a.path)?.missingGrids ?? [];
   const skipped = a.skippedOperations ?? [];
+  const grid = live?.objectLayer?.grid[a.path];
   return sub("Placement", [],
     kv([
       // The coordinate operations from the layer CRS to the output CRS, in order.
       ["coord. operations", steps.length ? h("ol", { class: "oplist" }, steps.map((s) => h("li", null, s))) : undefined],
       ["status", a.status === "ok" ? undefined : h("span", { class: `t-${a.status === "error" ? "err" : "warn"}` },
                                                      a.reason ?? a.status)],
+      [labelHelp("grid → true", "The layer is projected, and ArcGIS takes a feature's model in the projection's " +
+                 "grid: its north is grid north and its lengths are grid lengths. Placement works in the true " +
+                 "east/north/up frame with physical lengths, so the model is turned by the meridian convergence " +
+                 "(written as the crs:orientation heading) and scaled by 1 / the point scale, both at the feature's origin."),
+       grid ? h("span", { class: "mono" }, `heading ${grid.meridianConvergence.toFixed(4)}°, ` +
+                                           `scale 1/${grid.meridionalScale.toFixed(6)}`) : undefined],
       [labelHelp("accuracy", "The accuracy the engine reports for each coordinate operation used (from the " +
                  "EPSG dataset, e.g. a datum shift's), summed over the steps above. Not measured: conversions " +
                  "such as map projections are exact (±0 m), and one step without a stated accuracy makes it unknown."),

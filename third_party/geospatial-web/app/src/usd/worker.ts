@@ -186,6 +186,7 @@ self.onmessage = async (event: MessageEvent) => {
       case "open": result = open(args.stage); break;
       case "crsWkt": result = need(module).crsWkt(args.definition, args.promote3D); break;
       case "describeCrs": result = need(module).describeCrs(args.definition); break;
+      case "projectionFactors": result = need(module).projectionFactors(args.definition, args.positions); break;
       case "anchorCrs": result = need(scene).anchorCrs(args.paths); break;
       case "ensureGrids": result = await ensureGrids(args.baseUrl, args.names); break;
       case "setOutput": result = setOutput(args.crs, args.measure, args.exact); break;

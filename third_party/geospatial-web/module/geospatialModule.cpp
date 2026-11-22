@@ -632,6 +632,41 @@ ResetEngines()
     UsdGeospatialEngineRegistry::GetInstance().ResetEngines();
 }
 
+/// The map projection factors of the projected CRS \p definition (or the
+/// projected part of a compound) at each of \p positions ([easting,
+/// northing] in its units), from the active engine: [{ meridianConvergence,
+/// meridionalScale, parallelScale } or { error }]. A 3D object layer's
+/// models are in grid directions and lengths; the app turns them into the
+/// placement's east/north/up frame with these.
+val
+ProjectionFactors(const std::string& definition, const val& positions)
+{
+    val out = val::array();
+    const UsdGeospatialCoordinateOperationEngineSharedPtr engine =
+        UsdGeospatialEngineRegistry::GetInstance().GetEngine();
+    const unsigned n = positions["length"].as<unsigned>();
+    for (unsigned i = 0; i < n; ++i) {
+        val o = val::object();
+        if (!engine) {
+            o.set("error", std::string("no coordinate operation engine"));
+        } else {
+            const UsdGeospatialProjectionFactors f =
+                engine->ComputeProjectionFactors(
+                    definition, GfVec3d(positions[i][0].as<double>(),
+                                        positions[i][1].as<double>(), 0.0));
+            if (f) {
+                o.set("meridianConvergence", f.meridianConvergence);
+                o.set("meridionalScale", f.meridionalScale);
+                o.set("parallelScale", f.parallelScale);
+            } else {
+                o.set("error", f.error);
+            }
+        }
+        out.call<void>("push", o);
+    }
+    return out;
+}
+
 /// Caps USD's work threads, e.g. to the module's pthread pool.
 void
 SetThreadLimit(int n)
@@ -661,5 +696,6 @@ EMSCRIPTEN_BINDINGS(geospatialModule)
     emscripten::function("crsWkt", &CrsWkt);
     emscripten::function("resetEngines", &ResetEngines);
     emscripten::function("describeCrs", &_DescribeCrs);
+    emscripten::function("projectionFactors", &ProjectionFactors);
     emscripten::function("setThreadLimit", &SetThreadLimit);
 }

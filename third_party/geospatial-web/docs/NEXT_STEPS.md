@@ -20,6 +20,17 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   dev server (module 3.8 MB, `proj.db` 1.3 MB). Still to measure: the `wasm32-minsize` preset (all of USD at `-Oz`).
 
 **Open items**
+- **Server footprints vs exact placement:** the server's footprints are smaller than ours by h/N (h the layer's
+  height, N the ellipsoid's radius: 1.000089 measured and predicted at 565 m, 0.99999 in Bergen at -56 m). Ours is
+  the exact point map (pyproj-checked, drawing matrix within 0.1 mm of it), with the model at its height; the server
+  behaves as if the model were scaled down by that much. Whether the Maps SDK draws it so too is open (1 cm per
+  100 m at 565 m).
+- **Implausible server footprints** (Zurich org): 3 features (EsriKon OID 20, New_3DOFL_WGS84_R3 OID 1,
+  Upload_Model_Non_IFC_Geolocate OID 1) have footprints hundreds to thousands of km away while their fields are normal
+  and our 30 to 70 m models sit at the origin: the server's footprint is wrong. 7 others are continent-sized models
+  (mis-scaled uploads), where one drawing matrix per mesh deviates by its linearization.
+- **Projected layers in non-metre units** (e.g. US feet): is the model in grid units (feet)? Needs a layer to measure;
+  the wrapper keeps metres. Vertical grid scale: assumed 1.
 - **Switch the panel to Calcite components** (D27 follow-up): `@esri/calcite-components` as a direct pinned
   dependency, its assets self-hosted (COEP), and the specs' checkbox handling for shadow DOM.
 - **Threads.** The module runs without a pre-started pthread pool and reports 24 work threads. With real models
@@ -82,6 +93,12 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   (engine: geographic compound outputs, via the output's geographic 3D CRS; native test against pyproj for all
   anchors); the app's display correction (D25) is gone; switching terrain places the content again. Native 8 and
   WASM 4 geospatial tests, 22 browser specs pass; an EGM96 layer is placed at its own heights (427.18 m).
+
+- **Projected 3D object layers (D29, 2026-11-22):** footprint comparison (our placed vertices against the server's
+  footprints, `outSR=3857`, bounding boxes) on 13 Zurich layers (EPSG:4326, mm for normal-sized models) and an ETRS89 /
+  UTM 32N layer in Bergen (8.9 m off). Only grid north and grid lengths reproduce the server (2 mm); the engine got
+  `ComputeProjectionFactors` (native test against pyproj, also in WASM), the wrapper writes `crs:orientation` and a
+  grid scale. Native 8, WASM 4 geospatial tests, 26 browser specs pass; Bergen 3 mm in the app.
 
 ## Findings
 

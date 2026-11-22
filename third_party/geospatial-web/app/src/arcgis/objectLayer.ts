@@ -218,6 +218,24 @@ export interface Wrapper {
    *  absolute coordinates, so origin plus translation counts the position
    *  twice. Placed as the layer says anyway. */
   suspicious: Record<string, string>;
+  /** Projected layers: the grid correction per anchor path (see GridFactors). */
+  grid: Record<string, GridFactors>;
+}
+
+/**
+ * Map projection factors at a feature's origin (from the engine). In a
+ * projected layer ArcGIS takes a feature's model in grid directions and grid
+ * lengths: its "north" is grid north and its metres are grid metres
+ * (measured: an ETRS89 / UTM 32N layer in Bergen matches the server's
+ * footprints to 2 mm only with this). Placement uses the true east/north/up
+ * frame and physical lengths, so the wrapper turns the model by the meridian
+ * convergence (crs:orientation heading) and scales it by 1 / scale.
+ */
+export interface GridFactors {
+  /** Degrees from true north to grid north, clockwise positive. */
+  meridianConvergence: number;
+  meridionalScale: number;
+  parallelScale: number;
 }
 
 /** A translation longer than this (field units) is not a model offset. */
@@ -231,7 +249,8 @@ export const SUSPICIOUS_TRANSLATION = 10_000;
  * glTF, so the proposal's Y-up axis mapping places the models' x east, y up,
  * z south.
  */
-export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
+export function buildWrapper(data: ObjectLayerData, crsWkt: string,
+                             gridFactors?: (GridFactors | null)[]): Wrapper {
   const roles = data.layer.infoFor3D.transformFieldRoles;
   const num = (attrs: Record<string, unknown>, role: string, fallback: number) => {
     const v = attrs[roles[role] ?? ""];
@@ -240,10 +259,11 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
   const models: Wrapper["models"] = [];
   const duplicates: Wrapper["duplicates"] = {};
   const suspicious: Wrapper["suspicious"] = {};
+  const grid: Wrapper["grid"] = {};
   const firstOf = new Map<string, string>();
   const skipped: string[] = [];
   const prims: string[] = [];
-  for (const f of data.features) {
+  for (const [index, f] of data.features.entries()) {
     const a = f.attributes;
     const globalId = String(a[roles.globalID ?? "GlobalID"] ?? "").replace(/[{}]/g, "").toLowerCase();
     const oid = String(a.OBJECTID ?? a.objectid ?? prims.length + 1);
@@ -276,23 +296,33 @@ export function buildWrapper(data: ObjectLayerData, crsWkt: string): Wrapper {
     const s = [num(a, "scaleX", 1), num(a, "scaleY", 1), num(a, "scaleZ", 1)];
     const axis = [num(a, "rotationX", 0), num(a, "rotationY", 1), num(a, "rotationZ", 0)];
     const q = quaternion(axis, num(a, "rotationDeg", 0));
+    // Projected layer: grid north and grid lengths to the true frame (see
+    // GridFactors). The grid scale is the Model's outermost op, so it also
+    // scales the translation (grid units too); x and z are horizontal.
+    const g = gridFactors?.[index] ?? null;
+    if (g) grid[anchor] = g;
+    const orientation = g ? `
+        double3 crs:orientation = (${fmt(g.meridianConvergence)}, 0.0, 0.0)` : "";
+    const gridScale = g ? `
+            double3 xformOp:scale:grid = (${fmt(1 / g.parallelScale)}, 1.0, ${fmt(1 / g.meridionalScale)})` : "";
+    const opOrder = `${g ? '"xformOp:scale:grid", ' : ""}"xformOp:translate", "xformOp:orient", "xformOp:scale"`;
     prims.push(`
     def Xform "Feature_${oid}" (
         prepend apiSchemas = ["GeospatialCRSBindingAPI"]
         prepend references = </ObjectLayer/CRS>
     )
     {
-        double3 crs:position = (${origin.map(fmt).join(", ")})
+        double3 crs:position = (${origin.map(fmt).join(", ")})${orientation}
         custom string arcgis:globalId = "${globalId}"
 
         def Xform "Model" (
             prepend references = @./${path}@
         )
-        {
+        {${gridScale}
             double3 xformOp:translate = (${t.map(fmt).join(", ")})
             quatd xformOp:orient = (${q.map(fmt).join(", ")})
             double3 xformOp:scale = (${s.map(fmt).join(", ")})
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+            uniform token[] xformOpOrder = [${opOrder}]
         }
     }`);
   }
@@ -313,7 +343,7 @@ def Xform "ObjectLayer"
 ${prims.join("\n")}
 }
 `;
-  return { usda, models, skipped, duplicates, suspicious };
+  return { usda, models, skipped, duplicates, suspicious, grid };
 }
 
 /** Unit quaternion (w, x, y, z) of a right-handed rotation about `axis`. */

@@ -1,5 +1,5 @@
 // Main-thread side of the OpenUSD worker: promise-based calls.
-import type { CrsDescription, FileSpec, ModuleInfo, Resolved, SceneState, StageTestData, Vec3 } from "./types";
+import type { CrsDescription, FileSpec, ModuleInfo, ProjectionFactors, Resolved, SceneState, StageTestData, Vec3 } from "./types";
 
 /** Where the dev server (vite.config.ts) and nginx serve the install. */
 export const USD_BASE = "/usd";
@@ -89,6 +89,12 @@ export class UsdClient {
   /** A CRS definition (WKT, "EPSG:..."), described for diagnostics (D27). */
   describeCrs(definition: string): Promise<CrsDescription> {
     return this.call("describeCrs", { definition });
+  }
+
+  /** Map projection factors of a projected CRS at positions ([easting,
+   *  northing] in its units), from the engine; non-projected CRSs give errors. */
+  projectionFactors(definition: string, positions: number[][]): Promise<ProjectionFactors[]> {
+    return this.call("projectionFactors", { definition, positions });
   }
 
   /** The source CRS of each anchor, from its composed crs:wkt (D27). */

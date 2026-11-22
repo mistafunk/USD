@@ -116,3 +116,13 @@ export interface CrsDescription {
   defaultHeight?: string;
   areaOfUse?: { name: string; west: number; south: number; east: number; north: number };
 }
+
+/** Map projection factors at a position (engine), or why there are none. */
+export interface ProjectionFactors {
+  error?: string;
+  /** Degrees from true north to grid north, clockwise positive. */
+  meridianConvergence?: number;
+  /** Grid length over ellipsoid length along the meridian and the parallel. */
+  meridionalScale?: number;
+  parallelScale?: number;
+}
