@@ -4,7 +4,7 @@
 // data shows what its manifest has.
 import type { HarnessReport } from "../harness";
 import { GRAVITY_VCS, type LiveData } from "../live";
-import type { RecordedAnchor } from "../recorded";
+import type { AnchorPlacement } from "../render";
 import type { Scene } from "../scene";
 import type { CrsDescription } from "../usd/types";
 import { copyablePre, epsgLinks, h, kv } from "./dom";
@@ -195,7 +195,7 @@ export class FeaturesTab {
   private renderAnchors({ global, scene, live, report }: FeaturesData) {
     const list = $("anchorList");
     const details = scene?.details;
-    const anchors = (live?.anchors as RecordedAnchor[] | undefined) ?? details?.anchors ?? [];
+    const anchors = (live?.anchors as AnchorPlacement[] | undefined) ?? details?.anchors ?? [];
     if (!anchors.length) {
       list.replaceChildren(h("div", { class: "empty muted small" },
         scene ? "No anchors: this content has no placement data." : "loading…"));
@@ -210,7 +210,7 @@ export class FeaturesTab {
     list.replaceChildren(...sorted.map((a) => this.anchorRow(a, global, scene, live, report)));
   }
 
-  private anchorRow(a: RecordedAnchor, global: boolean, scene: Scene | null,
+  private anchorRow(a: AnchorPlacement, global: boolean, scene: Scene | null,
                     live: LiveData | null, report: HarnessReport | null): HTMLElement {
     const details = scene?.details;
     // A suspicious transform (e.g. an absolute translation): "!" in the row,
@@ -334,7 +334,7 @@ function badge(text: string, cls = ""): HTMLElement {
   return h("span", { class: `badge ${cls}`.trim() }, text);
 }
 
-function placementSection(a: RecordedAnchor, live: LiveData | null): HTMLElement {
+function placementSection(a: AnchorPlacement, live: LiveData | null): HTMLElement {
   const steps = (a.operation ?? "").split(/; then | \+ /).filter(Boolean);
   const missing = live?.anchors.find((x) => x.path === a.path)?.missingGrids ?? [];
   const skipped = a.skippedOperations ?? [];

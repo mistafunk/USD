@@ -43,7 +43,7 @@ import { initAbout } from "./ui/about";
 import { FeaturesTab } from "./ui/features";
 import { LayersTab, TEST_LAYERS } from "./ui/layers";
 import { bindDiagnostics, bindLoadStatus, initPanel, showTab } from "./ui/panel";
-import { w0Scene } from "./w0Scene";
+import { w0Scene } from "./spike/w0Scene";
 
 // Self-hosted SDK assets (see vite.config.ts); the CDN worker is blocked by COEP.
 esriConfig.assetsPath = __ARCGIS_ASSETS__;

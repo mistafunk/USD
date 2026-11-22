@@ -5,9 +5,9 @@
 import SpatialReference from "@arcgis/core/geometry/SpatialReference.js";
 import type SceneView from "@arcgis/core/views/SceneView.js";
 import { renderCoordinateTransformAt } from "@arcgis/core/views/3d/webgl.js";
-import { identity, splitOrigin } from "./mat4";
-import type { PlacedMesh } from "./meshPass";
-import type { CameraPreset, Scene } from "./scene";
+import { identity, splitOrigin } from "../mat4";
+import type { PlacedMesh } from "../meshPass";
+import type { CameraPreset, Scene } from "../scene";
 import { box, type LocalMesh } from "./shapes";
 
 // Zurich main station square; height 0 (no elevation layer).

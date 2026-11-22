@@ -83,7 +83,7 @@ The reference writes flat-shaded, de-indexed triangles (indices are 0..n-1); the
 
 ## How the app uses it
 
-`app/src/recorded.ts`, per mesh, all in Float64 until the final cast:
+`app/src/render.ts` (recorded and live data alike), per mesh, all in Float64 until the final cast:
 
 - `enu` (global view): `frame` = derivative of the SDK's geographic-to-render mapping at `origin`, from
   `toRenderCoordinates` at +-1 m along WGS84 east, north and up. Not `renderCoordinateTransformAt`: that frame is metric

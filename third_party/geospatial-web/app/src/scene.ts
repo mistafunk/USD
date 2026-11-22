@@ -3,7 +3,7 @@
 
 import type { HarnessReport, TestCase } from "./harness";
 import type { PlacedMesh } from "./meshPass";
-import type { RecordedAnchor } from "./recorded";
+import type { AnchorPlacement } from "./render";
 
 /** Camera offset from the scene target, in metres east/north/up. */
 export interface CameraPreset {
@@ -27,7 +27,7 @@ export interface AnchorStatus {
 export interface SceneDetails {
   output: { name: string; crs: string; frame: "enu" | "crs" };
   engine: string;
-  anchors: RecordedAnchor[];
+  anchors: AnchorPlacement[];
   /** Mesh path -> anchor path, for drawn meshes. */
   meshAnchor: Map<string, string>;
   testCases: TestCase[];

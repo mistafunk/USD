@@ -8,7 +8,7 @@ import {
   buildWrapper, crsDefinition, fetchObjectLayer, resolveObjectLayerUrl, type GridFactors, type SpatialReferenceJson,
 } from "./arcgis/objectLayer";
 import { formatBytes, LoadStatus } from "./loadStatus";
-import { placeScene, toLonLatH, type RecordedAnchor } from "./recorded";
+import { placeScene, toLonLatH, type AnchorPlacement } from "./render";
 import type { Scene } from "./scene";
 import { USD_BASE, UsdClient } from "./usd/client";
 import type { CrsDescription, ModuleInfo, SceneState, StageTestData } from "./usd/types";
@@ -280,7 +280,7 @@ export async function loadLiveScene(view: SceneView, options: LiveOptions): Prom
   usd.terminate();
 
   const engine = state.anchors.find((a) => a.engine)?.engine ?? info.engine;
-  const anchors: RecordedAnchor[] = state.anchors.map((a) => ({
+  const anchors: AnchorPlacement[] = state.anchors.map((a) => ({
     ...a,
     reason: a.reason || undefined,
   }));
