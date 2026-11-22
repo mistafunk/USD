@@ -20,6 +20,14 @@ results agree to 0.000 mm on every case both can place. How to build and test: `
   dev server (module 3.8 MB, `proj.db` 1.3 MB). Still to measure: the `wasm32-minsize` preset (all of USD at `-Oz`).
 
 **Open items**
+- **Full C++ Hydra render delegate** (needs D2 and hard rule 2 revised first): render the placed stage with a Hydra
+  delegate in the WASM module instead of the observer plus the JS mesh pass, for full fidelity (UsdPreviewSurface and
+  MaterialX materials, textures, lights, instancing, curves, points, volumes) and less data copying (no export out of
+  WASM memory, no worker transfer, no full re-upload per change: Hydra's change tracking updates incrementally).
+  Starting points: Autodesk's `adsk/hgiWebGPU` (Storm on WebGPU) and `hdEmscripten` delegate (`WASM_GAP.md`, out of
+  scope so far). Open questions: sharing depth and camera with the Maps SDK's WebGL2 context (occlusion by terrain and
+  buildings, one frame), render-space precision without the SDK's `toRenderCoordinates` in the worker (D13), picking
+  and highlighting across the context boundary, module size. The placement scene index stays as it is.
 - **Server footprints vs exact placement:** the server's footprints are smaller than ours by h/N (h the layer's
   height, N the ellipsoid's radius: 1.000089 measured and predicted at 565 m, 0.99999 in Bergen at -56 m). Ours is
   the exact point map (pyproj-checked, drawing matrix within 0.1 mm of it), with the model at its height; the server
